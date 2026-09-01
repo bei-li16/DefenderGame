@@ -1,0 +1,18 @@
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.user
+*.suo
+*.tmp
+*.log
+.vs/
+.vscode/
+.idea/
+
+# Local build and test output
+Build/
+Builds/
+Artifacts/
+TestResults/
+Coverage/
