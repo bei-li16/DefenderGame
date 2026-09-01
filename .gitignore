@@ -1,18 +1,22 @@
-# Operating system and editor files
-.DS_Store
-Thumbs.db
-Desktop.ini
-*.user
-*.suo
-*.tmp
-*.log
-.vs/
+# Godot generated cache (Godot 4.x)
+.godot/
+.import/
+
+# Local editor settings
 .vscode/
 .idea/
 
-# Local build and test output
+# Export and test output
 Build/
 Builds/
+Export/
 Artifacts/
 TestResults/
 Coverage/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.log
