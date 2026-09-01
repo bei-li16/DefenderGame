@@ -1,18 +1,39 @@
-# Operating system and editor files
-.DS_Store
-Thumbs.db
-Desktop.ini
-*.user
-*.suo
-*.tmp
-*.log
+# Unity generated directories
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# IDE generated files
 .vs/
 .vscode/
 .idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
 
-# Local build and test output
-Build/
-Builds/
+# Test and build artifacts
 Artifacts/
 TestResults/
 Coverage/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.log
