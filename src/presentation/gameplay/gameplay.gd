@@ -24,6 +24,7 @@ var _pause_overlay: Control
 var _settings_overlay: Control
 var _result_overlay: Control
 var _tutorial_hint: Control
+var _quick_settings_note: Label
 var _settled: bool = false
 var _shake_strength: float = 0.0
 var _feedback_timer: float = 0.0
@@ -46,7 +47,7 @@ func _ready() -> void:
 	if not bool(prepared.get("ok", false)):
 		GameApp.return_to_menu()
 		return
-	var start_result := session.start(prepared["config"], prepared["stage_id"], prepared["seed"], prepared["profile_snapshot"])
+	var start_result := session.start(prepared["config"], prepared["stage_id"], prepared["seed"], prepared["profile_snapshot"], GameApp.current_run_id)
 	if not bool(start_result.get("ok", false)):
 		GameApp.return_to_menu()
 		return
@@ -84,32 +85,28 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if session == null or _result_overlay != null:
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_1:
-				_select_skill("fire_ball")
-			KEY_2:
-				_select_skill("glacial_spike")
-			KEY_3:
-				_select_skill("lightning_strike")
-			KEY_ESCAPE:
-				if not str(snapshot.get("selected_skill", "")).is_empty():
-					session.queue_command({"type": "cancel_skill"})
-				else:
-					_toggle_pause()
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+	if event.is_action_pressed("combat_select_fire"):
+		_select_skill("fire_ball")
+	elif event.is_action_pressed("combat_select_ice"):
+		_select_skill("glacial_spike")
+	elif event.is_action_pressed("combat_select_lightning"):
+		_select_skill("lightning_strike")
+	elif event.is_action_pressed("game_pause"):
+		if not str(snapshot.get("selected_skill", "")).is_empty():
 			session.queue_command({"type": "cancel_skill"})
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				var selected := str(snapshot.get("selected_skill", ""))
-				if selected.is_empty():
-					session.queue_command({"type": "fire_started"})
-				else:
-					var mouse := get_global_mouse_position()
-					session.queue_command({"type": "cast_skill", "skill_id": selected, "x_milli": int(mouse.x * 1000.0), "y_milli": int(mouse.y * 1000.0)})
-			else:
-				session.queue_command({"type": "fire_stopped"})
+		else:
+			_toggle_pause()
+	elif event.is_action_pressed("combat_cancel_cast"):
+		session.queue_command({"type": "cancel_skill"})
+	elif event.is_action_pressed("combat_fire") or event.is_action_pressed("combat_cast"):
+		var selected := str(snapshot.get("selected_skill", ""))
+		if selected.is_empty():
+			session.queue_command({"type": "fire_started"})
+		else:
+			var mouse := get_global_mouse_position()
+			session.queue_command({"type": "cast_skill", "skill_id": selected, "x_milli": int(mouse.x * 1000.0), "y_milli": int(mouse.y * 1000.0)})
+	elif event.is_action_released("combat_fire"):
+		session.queue_command({"type": "fire_stopped"})
 
 
 func _on_snapshot(value: Dictionary) -> void:
@@ -124,7 +121,7 @@ func _on_snapshot(value: Dictionary) -> void:
 	_mana_bar.value = int(snapshot.get("mana", 0))
 	_mana_bar.tooltip_text = "%s %d / %d" % [GameApp.text("hud.mana"), int(snapshot.get("mana", 0)), int(snapshot.get("max_mana", 0))]
 	_mana_value_label.text = "%s  %d / %d" % [GameApp.text("hud.mana"), int(snapshot.get("mana", 0)), int(snapshot.get("max_mana", 0))]
-	_stage_label.text = "STAGE  %02d" % int(snapshot.get("stage_number", 0))
+	_stage_label.text = "%s  %02d" % [GameApp.text("common.stage"), int(snapshot.get("stage_number", 0))]
 	_enemy_label.text = "%s  %d / %d" % [GameApp.text("hud.wave"), int(snapshot.get("kills", 0)), int(snapshot.get("spawn_total", 0))]
 	_coin_label.text = "◆  %d" % int(snapshot.get("coins_earned", 0))
 	_update_skill_buttons()
@@ -139,12 +136,11 @@ func _on_events(events_value: Array) -> void:
 		match str(event.get("type", "")):
 			"skill_cast":
 				var position := Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0)
-				effects.append({"kind": str(event.get("skill_id", "")), "position": position, "age": 0.0, "duration": 0.72})
-				if bool(GameApp.settings.get("screen_shake", true)):
-					_shake_strength = 10.0
+				_append_effect({"kind": str(event.get("skill_id", "")), "position": position, "age": 0.0, "duration": 0.72})
+				_shake_strength = _quality_shake(10.0)
 			"hit":
 				var hit_position := _entity_position(int(event.get("entity_id", 0)))
-				effects.append({"kind": "hit", "position": hit_position, "age": 0.0, "duration": 0.22})
+				_append_effect({"kind": "hit", "position": hit_position, "age": 0.0, "duration": 0.22})
 				if bool(event.get("fatal", false)):
 					_add_float(GameApp.text("feedback.fatal"), hit_position, Color("ffd166"), 30)
 				if bool(event.get("power", false)):
@@ -152,26 +148,26 @@ func _on_events(events_value: Array) -> void:
 			"damage":
 				_add_float("-%d" % int(event.get("amount", 0)), _entity_position(int(event.get("entity_id", 0))), _damage_color(str(event.get("source", ""))), 21)
 			"death":
-				effects.append({"kind": "death", "position": _entity_position(int(event.get("entity_id", 0))), "age": 0.0, "duration": 0.55})
+				_append_effect({"kind": "death", "position": _entity_position(int(event.get("entity_id", 0))), "age": 0.0, "duration": 0.55})
 			"wall_damage":
-				_shake_strength = 13.0 if bool(GameApp.settings.get("screen_shake", true)) else 0.0
-				_feedback("⚠  -%d WALL" % int(event.get("amount", 0)), Color("ff7b6b"))
+				_shake_strength = _quality_shake(13.0)
+				_feedback("⚠  " + (GameApp.text("feedback.wall_damage") % int(event.get("amount", 0))), Color("ff7b6b"))
 			"skill_rejected":
 				var key := "feedback.no_mana" if str(event.get("reason", "")) == "no_mana" else "feedback.cooldown"
 				_feedback("✕  " + GameApp.text(key), Color("ff9b7b"))
 			"boss_warning":
 				_feedback("⚠  " + GameApp.text("feedback.boss") + "  ⚠", Color("ff587d"), 3.5)
 			"boss_special":
-				_shake_strength = 18.0 if bool(GameApp.settings.get("screen_shake", true)) else 0.0
-				effects.append({"kind": "boss_wave", "position": Vector2(780, 540), "age": 0.0, "duration": 0.8})
+				_shake_strength = _quality_shake(18.0)
+				_append_effect({"kind": "boss_wave", "position": Vector2(780, 540), "age": 0.0, "duration": 0.8})
 
 
 func _on_run_finished(result: Dictionary) -> void:
 	if _settled:
 		return
 	_settled = true
-	GameApp.settle_run(result)
-	_show_result(result)
+	var settlement := GameApp.settle_run(result)
+	_show_result(result, settlement)
 
 
 func _build_hud() -> void:
@@ -197,7 +193,7 @@ func _build_hud() -> void:
 	var top_row := HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", 22)
 	top_panel.add_child(top_row)
-	_stage_label = _hud_label("STAGE", 28, Color("ffd166"), 170)
+	_stage_label = _hud_label(GameApp.text("common.stage"), 28, Color("ffd166"), 170)
 	top_row.add_child(_stage_label)
 	var wall_stack := VBoxContainer.new()
 	wall_stack.custom_minimum_size.x = 420
@@ -304,11 +300,13 @@ func _show_tutorial_hint() -> void:
 	var close := Button.new()
 	close.text = GameApp.text("hud.resume")
 	close.pressed.connect(func() -> void:
+		var save_result := GameApp.complete_tutorial()
+		if not bool(save_result.get("ok", false)):
+			body.text = GameApp.text("tutorial.body") + "\n\n" + GameApp.text("feedback.save_failed")
+			return
 		get_tree().paused = false
 		_tutorial_hint.queue_free()
 		_tutorial_hint = null
-		GameApp.profile["tutorial_complete"] = true
-		GameApp.save_service.save_profile(GameApp.profile, int(GameApp.content.rules["config_version"]))
 	)
 	stack.add_child(close)
 	get_tree().paused = true
@@ -326,6 +324,8 @@ func _toggle_pause() -> void:
 func _show_pause() -> void:
 	if _pause_overlay != null:
 		return
+	if session != null:
+		session.queue_command({"type": "fire_stopped"})
 	_pause_overlay = _overlay_panel(Vector2(520, 560))
 	var stack := _pause_overlay.get_meta("stack") as VBoxContainer
 	var title := _overlay_title(GameApp.text("hud.pause"))
@@ -353,6 +353,7 @@ func _resume_game() -> void:
 	if _settings_overlay != null:
 		_settings_overlay.queue_free()
 		_settings_overlay = null
+		_quick_settings_note = null
 	if _pause_overlay != null:
 		_pause_overlay.queue_free()
 		_pause_overlay = null
@@ -361,7 +362,7 @@ func _resume_game() -> void:
 func _show_quick_settings() -> void:
 	if _settings_overlay != null:
 		return
-	_settings_overlay = _overlay_panel(Vector2(560, 430))
+	_settings_overlay = _overlay_panel(Vector2(560, 520))
 	var stack := _settings_overlay.get_meta("stack") as VBoxContainer
 	stack.add_child(_overlay_title(GameApp.text("settings.title")))
 	for setting in [["settings.master", "master_volume"], ["settings.sfx", "sfx_volume"]]:
@@ -376,18 +377,36 @@ func _show_quick_settings() -> void:
 		slider.max_value = 1.0
 		slider.step = 0.05
 		slider.value = float(GameApp.settings.get(setting[1], 0.8))
-		slider.value_changed.connect(func(value: float) -> void: GameApp.update_setting(str(setting[1]), value))
+		slider.value_changed.connect(func(value: float) -> void: _save_quick_setting(str(setting[1]), value))
 		row.add_child(slider)
 		stack.add_child(row)
 	var shake := CheckButton.new()
 	shake.text = GameApp.text("settings.shake")
 	shake.button_pressed = bool(GameApp.settings.get("screen_shake", true))
-	shake.toggled.connect(func(value: bool) -> void: GameApp.update_setting("screen_shake", value))
+	shake.toggled.connect(func(value: bool) -> void: _save_quick_setting("screen_shake", value))
 	stack.add_child(shake)
+	var quality_row := HBoxContainer.new()
+	var quality_label := Label.new()
+	quality_label.text = GameApp.text("settings.quality")
+	quality_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quality_row.add_child(quality_label)
+	var quality := OptionButton.new()
+	var quality_values := ["low", "medium", "high"]
+	for quality_value in quality_values:
+		quality.add_item(GameApp.text("quality." + quality_value))
+	quality.selected = maxi(0, quality_values.find(str(GameApp.settings.get("quality", "medium"))))
+	quality.item_selected.connect(func(index: int) -> void: _save_quick_setting("quality", quality_values[index]))
+	quality_row.add_child(quality)
+	stack.add_child(quality_row)
+	_quick_settings_note = Label.new()
+	_quick_settings_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_quick_settings_note.add_theme_color_override("font_color", Color("9fb2c8"))
+	stack.add_child(_quick_settings_note)
 	var close := _overlay_button(GameApp.text("menu.back"))
 	close.pressed.connect(func() -> void:
 		_settings_overlay.queue_free()
 		_settings_overlay = null
+		_quick_settings_note = null
 	)
 	stack.add_child(close)
 
@@ -396,7 +415,7 @@ func _confirm_return_to_menu() -> void:
 	var dialog := ConfirmationDialog.new()
 	dialog.process_mode = Node.PROCESS_MODE_ALWAYS
 	dialog.title = GameApp.text("hud.main_menu")
-	dialog.dialog_text = "本局进度将丢失，确定返回？" if str(GameApp.settings.get("language", "zh_CN")) == "zh_CN" else "This run will be abandoned. Return to menu?"
+	dialog.dialog_text = GameApp.text("dialog.abandon_run")
 	dialog.ok_button_text = GameApp.text("hud.main_menu")
 	dialog.cancel_button_text = GameApp.text("menu.back")
 	dialog.confirmed.connect(func() -> void: GameApp.return_to_menu())
@@ -404,16 +423,17 @@ func _confirm_return_to_menu() -> void:
 	dialog.popup_centered(Vector2i(520, 220))
 
 
-func _show_result(result: Dictionary) -> void:
-	_result_overlay = _overlay_panel(Vector2(720, 650))
+func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> void:
+	_result_overlay = _overlay_panel(Vector2(720, 760 if not bool(settlement.get("ok", false)) else 680))
 	var stack := _result_overlay.get_meta("stack") as VBoxContainer
 	var victory := str(result.get("status", "")) == "victory"
 	var title := _overlay_title(GameApp.text("result.victory") if victory else GameApp.text("result.defeat"))
 	title.add_theme_color_override("font_color", Color("ffd166") if victory else Color("ff7697"))
 	stack.add_child(title)
 	var summary := Label.new()
-	summary.text = "STAGE %02d\n\n%s        %d\n%s        %d%%\n%s     +%d\n%s       +%d" % [
-		int(result.get("stage_number", 0)),
+	summary.text = "%s %02d\n\n%s        %d / %d\n%s        %d\n%s        %d%%\n%s     +%d\n%s       +%d" % [
+		GameApp.text("common.stage"), int(result.get("stage_number", 0)),
+		GameApp.text("result.wave"), int(result.get("wave", 0)), int(result.get("wave_total", 0)),
 		GameApp.text("result.kills"), int(result.get("kills", 0)),
 		GameApp.text("result.wall"), int(result.get("wall_percent", 0)),
 		GameApp.text("result.coins"), int(result.get("coins", 0)),
@@ -422,9 +442,18 @@ func _show_result(result: Dictionary) -> void:
 	summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	summary.add_theme_font_size_override("font_size", 26)
 	stack.add_child(summary)
+	if not bool(settlement.get("ok", false)):
+		var save_error := Label.new()
+		save_error.text = GameApp.text("feedback.save_failed")
+		save_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		save_error.add_theme_color_override("font_color", Color("ff8d7a"))
+		stack.add_child(save_error)
+		var retry_save := _overlay_button(GameApp.text("result.retry_save"))
+		retry_save.pressed.connect(func() -> void: _retry_settlement(result))
+		stack.add_child(retry_save)
 	if victory and int(result.get("stage_number", 0)) < 10:
 		var unlocked := Label.new()
-		unlocked.text = "✦  STAGE %02d UNLOCKED  ✦" % (int(result.get("stage_number", 0)) + 1)
+		unlocked.text = "✦  " + (GameApp.text("result.stage_unlocked") % (int(result.get("stage_number", 0)) + 1)) + "  ✦"
 		unlocked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		unlocked.add_theme_color_override("font_color", Color("8ce99a"))
 		stack.add_child(unlocked)
@@ -439,6 +468,26 @@ func _show_result(result: Dictionary) -> void:
 	next.custom_minimum_size.x = 260
 	next.pressed.connect(func() -> void: GameApp.return_to_menu())
 	actions.add_child(next)
+
+
+func _retry_settlement(result: Dictionary) -> void:
+	var settlement := GameApp.settle_run(result)
+	if bool(settlement.get("ok", false)):
+		_result_overlay.free()
+		_result_overlay = null
+		_show_result(result, settlement)
+
+
+func _save_quick_setting(key: String, value: Variant) -> void:
+	var save_result := GameApp.update_setting(key, value)
+	if _quick_settings_note == null or not is_instance_valid(_quick_settings_note):
+		return
+	if bool(save_result.get("ok", false)):
+		_quick_settings_note.text = GameApp.text("settings.applied")
+		_quick_settings_note.add_theme_color_override("font_color", Color("9fb2c8"))
+	else:
+		_quick_settings_note.text = GameApp.text("feedback.save_failed")
+		_quick_settings_note.add_theme_color_override("font_color", Color("ff8d7a"))
 
 
 func _overlay_panel(panel_size: Vector2) -> Control:
@@ -512,7 +561,7 @@ func _update_skill_buttons() -> void:
 		button.modulate = Color.WHITE if selected == skill_id else Color(0.78, 0.82, 0.9, 1.0)
 		button.disabled = cooldown > 0
 		if cooldown > 0:
-			button.tooltip_text = "%.1fs" % (float(cooldown) / 30.0)
+			button.tooltip_text = GameApp.text("common.seconds_short") % (float(cooldown) / 30.0)
 		else:
 			button.tooltip_text = GameApp.text("skill.fire" if skill_id == "fire_ball" else ("skill.ice" if skill_id == "glacial_spike" else "skill.lightning"))
 
@@ -537,7 +586,54 @@ func _feedback(value: String, color: Color, duration: float = 1.7) -> void:
 
 
 func _add_float(value: String, position: Vector2, color: Color, font_size: int) -> void:
+	var limit := int(_quality_profile()["floating_text_limit"])
+	while floating_texts.size() >= limit:
+		floating_texts.pop_front()
 	floating_texts.append({"text": value, "x": position.x, "y": position.y, "color": color, "font_size": font_size, "age": 0.0})
+
+
+func _append_effect(effect: Dictionary) -> void:
+	var limit := int(_quality_profile()["effect_limit"])
+	while effects.size() >= limit:
+		effects.pop_front()
+	effects.append(effect)
+
+
+func _quality_shake(base_strength: float) -> float:
+	if not bool(GameApp.settings.get("screen_shake", true)):
+		return 0.0
+	return base_strength * float(_quality_profile()["shake_multiplier"])
+
+
+func _quality_profile() -> Dictionary:
+	match str(GameApp.settings.get("quality", "medium")):
+		"low":
+			return {
+				"background_bands": 6,
+				"background_stones": 10,
+				"effect_limit": 12,
+				"floating_text_limit": 8,
+				"effect_detail": 0.45,
+				"shake_multiplier": 0.0
+			}
+		"high":
+			return {
+				"background_bands": 12,
+				"background_stones": 34,
+				"effect_limit": 64,
+				"floating_text_limit": 32,
+				"effect_detail": 1.0,
+				"shake_multiplier": 1.0
+			}
+		_:
+			return {
+				"background_bands": 9,
+				"background_stones": 22,
+				"effect_limit": 32,
+				"floating_text_limit": 18,
+				"effect_detail": 0.7,
+				"shake_multiplier": 0.65
+			}
 
 
 func _entity_position(entity_id: int) -> Vector2:
@@ -570,8 +666,10 @@ func _draw() -> void:
 
 
 func _draw_background() -> void:
-	for band in range(12):
-		var ratio := float(band) / 11.0
+	var quality := _quality_profile()
+	var background_bands := int(quality["background_bands"])
+	for band in range(background_bands):
+		var ratio := float(band) / float(background_bands - 1)
 		draw_rect(Rect2(0, ratio * 720.0, 1920, 68), Color("173452").lerp(Color("31516a"), ratio))
 	draw_circle(Vector2(1530, 220), 92, Color(1.0, 0.83, 0.52, 0.14))
 	var far_mountains := PackedVector2Array([Vector2(0, 560), Vector2(260, 320), Vector2(480, 560), Vector2(760, 280), Vector2(1020, 560), Vector2(1330, 340), Vector2(1600, 560), Vector2(1920, 300), Vector2(1920, 760), Vector2(0, 760)])
@@ -582,7 +680,7 @@ func _draw_background() -> void:
 	for row in range(7):
 		var y := 700.0 + float(row) * 58.0
 		draw_line(Vector2(0, y), Vector2(1920, y + 24), Color(0.66, 0.53, 0.38, 0.12), 2)
-	for stone in range(34):
+	for stone in range(int(quality["background_stones"])):
 		var x := 390.0 + fmod(float(stone * 137), 1500.0)
 		var y := 710.0 + fmod(float(stone * 83), 330.0)
 		draw_circle(Vector2(x, y), 4.0 + float(stone % 5), Color(0.72, 0.58, 0.42, 0.18))
@@ -654,34 +752,40 @@ func _draw_effect(effect: Dictionary) -> void:
 	var kind := str(effect.get("kind", ""))
 	var position: Vector2 = effect.get("position", Vector2.ZERO)
 	var progress := clampf(float(effect.get("age", 0.0)) / maxf(0.01, float(effect.get("duration", 1.0))), 0.0, 1.0)
+	var detail := float(_quality_profile()["effect_detail"])
 	match kind:
 		"fire_ball":
 			draw_circle(position, 40.0 + progress * 165.0, Color(1.0, 0.25, 0.04, (1.0 - progress) * 0.34))
-			draw_arc(position, 55.0 + progress * 135.0, 0, TAU, 48, Color(1.0, 0.78, 0.18, 1.0 - progress), 12)
-			for ray in range(10):
-				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / 10.0)
+			var fire_rays := maxi(4, int(round(10.0 * detail)))
+			draw_arc(position, 55.0 + progress * 135.0, 0, TAU, maxi(16, int(round(48.0 * detail))), Color(1.0, 0.78, 0.18, 1.0 - progress), 12)
+			for ray in range(fire_rays):
+				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / float(fire_rays))
 				draw_line(position + direction * 28.0, position + direction * (70.0 + progress * 130.0), Color(1.0, 0.48, 0.08, 1.0 - progress), 8)
 		"glacial_spike":
-			for ray in range(12):
-				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / 12.0)
+			var ice_rays := maxi(5, int(round(12.0 * detail)))
+			for ray in range(ice_rays):
+				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / float(ice_rays))
 				var side := direction.rotated(0.32)
 				draw_colored_polygon(PackedVector2Array([position + side * 15.0, position + direction * (70.0 + 150.0 * (1.0 - progress)), position - side * 15.0]), Color(0.42, 0.88, 1.0, 0.85 * (1.0 - progress)))
 		"lightning_strike":
-			for bolt in range(5):
+			var lightning_bolts := maxi(2, int(round(5.0 * detail)))
+			var lightning_segments := maxi(5, int(round(8.0 * detail)))
+			for bolt in range(lightning_bolts):
 				var points := PackedVector2Array()
-				for segment in range(8):
-					var y := position.y - 460.0 + float(segment) * 66.0
+				for segment in range(lightning_segments):
+					var y := position.y - 460.0 + float(segment) * (462.0 / float(lightning_segments - 1))
 					var x := position.x + sin(float(segment * 13 + bolt * 7)) * (34.0 + bolt * 5.0)
 					points.append(Vector2(x, y))
 				draw_polyline(points, Color(0.84, 0.72, 1.0, 1.0 - progress), 7.0 - float(bolt))
 		"hit":
-			for ray in range(6):
-				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / 6.0)
+			var hit_rays := maxi(3, int(round(6.0 * detail)))
+			for ray in range(hit_rays):
+				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / float(hit_rays))
 				draw_line(position, position + direction * (18.0 + 34.0 * (1.0 - progress)), Color(1.0, 0.93, 0.55, 1.0 - progress), 4)
 		"death":
-			draw_arc(position, 24.0 + progress * 70.0, 0, TAU, 24, Color(1.0, 0.43, 0.22, 1.0 - progress), 8)
+			draw_arc(position, 24.0 + progress * 70.0, 0, TAU, maxi(10, int(round(24.0 * detail))), Color(1.0, 0.43, 0.22, 1.0 - progress), 8)
 		"boss_wave":
-			draw_arc(position, 80.0 + progress * 620.0, -1.2, 1.2, 48, Color(0.9, 0.16, 0.36, 1.0 - progress), 14)
+			draw_arc(position, 80.0 + progress * 620.0, -1.2, 1.2, maxi(16, int(round(48.0 * detail))), Color(0.9, 0.16, 0.36, 1.0 - progress), 14)
 
 
 func _draw_crosshair() -> void:

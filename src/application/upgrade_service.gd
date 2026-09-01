@@ -25,17 +25,19 @@ func purchase(profile: Dictionary, config: Dictionary, upgrade_id: String) -> Di
 
 
 func apply_run_reward(profile: Dictionary, result: Dictionary) -> Dictionary:
-	var key := str(result.get("run_id", "")) + ":" + str(result.get("reward_version", ""))
+	var run_id := str(result.get("run_id", ""))
+	var reward_version := str(result.get("reward_version", ""))
+	if run_id.is_empty() or reward_version.is_empty():
+		return {"ok": false, "error_code": "missing_reward_identity", "profile": profile.duplicate(true)}
+	var key := run_id + ":" + reward_version
 	var ledger: Array = profile.get("reward_ledger", [])
-	if key.is_empty() or ledger.has(key):
+	if ledger.has(key):
 		return {"ok": true, "duplicate": true, "profile": profile.duplicate(true)}
 	var updated := profile.duplicate(true)
 	updated["coins"] = int(updated.get("coins", 0)) + int(result.get("coins", 0))
 	updated["xp"] = int(updated.get("xp", 0)) + int(result.get("xp", 0))
 	var updated_ledger: Array = updated.get("reward_ledger", []).duplicate()
 	updated_ledger.append(key)
-	if updated_ledger.size() > 200:
-		updated_ledger = updated_ledger.slice(updated_ledger.size() - 200)
 	updated["reward_ledger"] = updated_ledger
 	return {"ok": true, "duplicate": false, "profile": updated}
 
@@ -53,4 +55,3 @@ static func _find_upgrade(upgrades: Array, upgrade_id: String) -> Dictionary:
 		if definition is Dictionary and str(definition.get("id", "")) == upgrade_id:
 			return definition
 	return {}
-

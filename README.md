@@ -29,6 +29,7 @@ git switch windows-godot
 - 简体中文/英文、窗口/无边框/全屏、分辨率和 UI 缩放。
 - JSON 配置、固定 30 tick、确定性随机、回放事件 hash。
 - `user://` JSON 存档、临时写入、hash 校验、备份与 v1→v3 迁移。
+- 本地轮转日志和玩家主动导出的隐私安全诊断 ZIP，不进行网络上传。
 - 原创程序绘制视觉和程序合成音频；`参考/` 图片不会进入导出包。
 
 运行游戏：
@@ -44,6 +45,12 @@ git switch windows-godot
 & 'D:\Software\Godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script res://tests/stage_autoplay.gd
 & 'D:\Software\Godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script res://tests/performance_stress.gd
 & 'D:\Software\Godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script res://tests/resolution_layout.gd
+& 'D:\Software\Godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script res://tests/settings_acceptance.gd
+& 'D:\Software\Godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script res://tests/application_transaction_acceptance.gd
+& 'D:\Software\Godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script res://tests/inputmap_acceptance.gd
+& 'D:\Software\Godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script res://tests/diagnostic_acceptance.gd
+& .\tools\run_save_crash_acceptance.ps1
+& .\tools\run_windows_runtime_acceptance.ps1
 ```
 
-更完整的状态、证据和剩余发布门禁见 [`docs/implementation-status.md`](docs/implementation-status.md)；开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。
+当前源码验收 AT-001～AT-018 已通过；EXE/PCK 发布仍等待 export templates 和项目许可决定。完整证据与门禁见 [`docs/implementation-status.md`](docs/implementation-status.md)，开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。

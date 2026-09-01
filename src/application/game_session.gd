@@ -16,8 +16,8 @@ var _started: bool = false
 var _finished_emitted: bool = false
 
 
-func start(config: Dictionary, stage_id: String, seed: int, profile: Dictionary) -> Dictionary:
-	var result := _model.setup(config, stage_id, seed, profile)
+func start(config: Dictionary, stage_id: String, seed: int, profile: Dictionary, run_instance_id: String = "") -> Dictionary:
+	var result := _model.setup(config, stage_id, seed, profile, run_instance_id)
 	_started = bool(result.get("ok", false))
 	_finished_emitted = false
 	_pending_commands.clear()
@@ -70,4 +70,3 @@ func _physics_process(_delta: float) -> void:
 	if _model.status != "running" and not _finished_emitted:
 		_finished_emitted = true
 		run_finished.emit(_model.result())
-

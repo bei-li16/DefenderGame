@@ -8,6 +8,7 @@ var _content_margin: MarginContainer
 var _coins_label: Label
 var _xp_label: Label
 var _stage_label: Label
+var _settings_note: Label
 
 
 func _ready() -> void:
@@ -87,7 +88,7 @@ func _build_layout() -> void:
 	heading.add_theme_color_override("font_color", Color("ffe2a8"))
 	identity_stack.add_child(heading)
 	var subtitle := Label.new()
-	subtitle.text = "HOLD THE LAST WALL" if str(GameApp.settings.get("language", "zh_CN")) == "en_US" else "守住最后一道城墙"
+	subtitle.text = GameApp.text("app.subtitle")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_font_size_override("font_size", 24)
 	subtitle.add_theme_color_override("font_color", Color("9bc5e6"))
@@ -96,7 +97,7 @@ func _build_layout() -> void:
 	rule.custom_minimum_size.y = 16
 	identity_stack.add_child(rule)
 	var hint := Label.new()
-	hint.text = "Mouse  •  1 / 2 / 3  •  Esc"
+	hint.text = GameApp.text("controls.hint")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_color_override("font_color", Color("98aabd"))
 	identity_stack.add_child(hint)
@@ -116,7 +117,7 @@ func _build_layout() -> void:
 func _show_main_navigation() -> void:
 	var stack := _new_content_stack(GameApp.text("menu.continue"))
 	var current_stage := int(GameApp.profile.get("highest_unlocked_stage", 1))
-	var continue_button := _button(GameApp.text("menu.continue") + "  ·  Stage %02d" % current_stage, 76)
+	var continue_button := _button(GameApp.text("menu.continue") + "  ·  %s %02d" % [GameApp.text("common.stage"), current_stage], 76)
 	continue_button.pressed.connect(func() -> void: GameApp.start_stage("stage_%03d" % current_stage))
 	stack.add_child(continue_button)
 	for entry in [
@@ -152,17 +153,17 @@ func _show_stage_select() -> void:
 	for stage in GameApp.content.rules.get("stages", []):
 		var number := int(stage.get("number", 0))
 		var stage_id := str(stage.get("id", ""))
-		var label := "Stage %02d" % number
+		var label := "%s %02d" % [GameApp.text("common.stage"), number]
 		if bool(stage.get("boss", false)):
-			label += "  ⚠ BOSS"
+			label += "  ⚠ " + GameApp.text("common.boss")
 		var best: Dictionary = best_results.get(stage_id, {})
 		if not best.is_empty():
-			label += "\n★ %d%%  ·  %d K" % [int(best.get("wall_percent", 0)), int(best.get("kills", 0))]
+			label += "\n★ %d%%  ·  %s %d" % [int(best.get("wall_percent", 0)), GameApp.text("result.kills"), int(best.get("kills", 0))]
 		elif number > unlocked:
 			label += "\n🔒 " + GameApp.text("menu.locked")
 		else:
 			var reward: Dictionary = stage.get("clear_reward", {})
-			label += "\n◆ %d   XP %d" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))]
+			label += "\n◆ %d   %s %d" % [int(reward.get("coins", 0)), GameApp.text("common.xp"), int(reward.get("xp", 0))]
 		var stage_button := _button(label, 96)
 		stage_button.disabled = number > unlocked
 		stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -178,6 +179,10 @@ func _show_upgrades() -> void:
 	wallet.add_theme_font_size_override("font_size", 26)
 	wallet.add_theme_color_override("font_color", Color("ffd166"))
 	stack.add_child(wallet)
+	var operation_error := Label.new()
+	operation_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	operation_error.add_theme_color_override("font_color", Color("ff8d7a"))
+	stack.add_child(operation_error)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(scroll)
@@ -191,6 +196,19 @@ func _show_upgrades() -> void:
 		var level := int(upgrades.get(upgrade_id, 0))
 		var max_level := int(definition.get("max_level", 0))
 		var price := GameApp.upgrade_service.price_for_level(definition, level)
+		var effect_per_level := int(definition.get("effect_per_level", 0))
+		var current_effect := level * effect_per_level
+		var effect_text := GameApp.text("upgrade.effect_current") % current_effect
+		if level < max_level:
+			effect_text = GameApp.text("upgrade.effect_next") % [current_effect, (level + 1) * effect_per_level]
+		var prerequisite_names: Array[String] = []
+		var prerequisites_met := true
+		for prerequisite in definition.get("prerequisites", []):
+			var prerequisite_id := str(prerequisite)
+			prerequisite_names.append(_upgrade_display_name(prerequisite_id))
+			if int(upgrades.get(prerequisite_id, 0)) <= 0:
+				prerequisites_met = false
+		var prerequisite_text := GameApp.text("upgrade.none") if prerequisite_names.is_empty() else ", ".join(prerequisite_names)
 		var card := PanelContainer.new()
 		list.add_child(card)
 		var row := HBoxContainer.new()
@@ -200,20 +218,28 @@ func _show_upgrades() -> void:
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
 		var name := Label.new()
-		name.text = "%s   Lv.%d / %d" % [GameApp.text(str(definition.get("name_key", upgrade_id))), level, max_level]
+		name.text = "%s   %s%d / %d" % [GameApp.text(str(definition.get("name_key", upgrade_id))), GameApp.text("common.level"), level, max_level]
 		name.add_theme_font_size_override("font_size", 25)
 		name.add_theme_color_override("font_color", _upgrade_color(upgrade_id))
 		info.add_child(name)
 		var description := Label.new()
-		description.text = GameApp.text(str(definition.get("description_key", "")))
+		description.text = "%s\n%s  ·  %s: %s" % [
+			GameApp.text(str(definition.get("description_key", ""))),
+			effect_text,
+			GameApp.text("upgrade.prerequisites"),
+			prerequisite_text
+		]
 		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		description.add_theme_font_size_override("font_size", 17)
 		info.add_child(description)
-		var purchase := _button("MAX" if level >= max_level else "◆ %d\nUPGRADE" % price, 66)
+		var purchase := _button(GameApp.text("common.max") if level >= max_level else "◆ %d\n%s" % [price, GameApp.text("common.upgrade")], 66)
 		purchase.custom_minimum_size.x = 146
-		purchase.disabled = level >= max_level or int(GameApp.profile.get("coins", 0)) < price
+		purchase.disabled = level >= max_level or int(GameApp.profile.get("coins", 0)) < price or not prerequisites_met
 		purchase.pressed.connect(func() -> void:
-			GameApp.purchase_upgrade(upgrade_id)
+			var purchase_result := GameApp.purchase_upgrade(upgrade_id)
+			if not bool(purchase_result.get("ok", false)):
+				operation_error.text = GameApp.text("feedback.save_failed")
+				return
 			_refresh_header()
 			_show_upgrades()
 		)
@@ -223,48 +249,59 @@ func _show_upgrades() -> void:
 
 func _show_settings() -> void:
 	var stack := _new_content_stack(GameApp.text("settings.title"))
-	_add_slider_row(stack, "settings.master", "master_volume")
-	_add_slider_row(stack, "settings.music", "music_volume")
-	_add_slider_row(stack, "settings.sfx", "sfx_volume")
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(scroll)
+	var settings_content := VBoxContainer.new()
+	settings_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_content.add_theme_constant_override("separation", 10)
+	scroll.add_child(settings_content)
+	_add_slider_row(settings_content, "settings.master", "master_volume")
+	_add_slider_row(settings_content, "settings.music", "music_volume")
+	_add_slider_row(settings_content, "settings.sfx", "sfx_volume")
 	var language_row := _setting_row(GameApp.text("settings.language"))
 	var language := OptionButton.new()
 	language.add_item("简体中文")
 	language.add_item("English")
 	language.selected = 1 if str(GameApp.settings.get("language", "zh_CN")) == "en_US" else 0
 	language.item_selected.connect(func(index: int) -> void:
-		GameApp.update_setting("language", "en_US" if index == 1 else "zh_CN")
-		_refresh_after_language_change()
+		if _save_setting("language", "en_US" if index == 1 else "zh_CN"):
+			_refresh_after_language_change()
 	)
 	language_row.add_child(language)
-	stack.add_child(language_row)
-	var resolution_row := _setting_row("Resolution" if str(GameApp.settings.get("language", "zh_CN")) == "en_US" else "分辨率")
+	settings_content.add_child(language_row)
+	var resolution_row := _setting_row(GameApp.text("settings.resolution"))
 	var resolution := OptionButton.new()
 	var resolutions := ["1280x720", "1366x768", "1920x1080", "2560x1440"]
 	for value in resolutions:
 		resolution.add_item(value)
 	resolution.selected = maxi(0, resolutions.find(str(GameApp.settings.get("resolution", "1920x1080"))))
-	resolution.item_selected.connect(func(index: int) -> void: GameApp.update_setting("resolution", resolutions[index]))
+	resolution.item_selected.connect(func(index: int) -> void: _save_setting("resolution", resolutions[index]))
 	resolution_row.add_child(resolution)
-	stack.add_child(resolution_row)
-	_add_toggle_row(stack, "settings.fullscreen", "fullscreen")
-	_add_toggle_row(stack, "settings.borderless", "borderless")
-	_add_toggle_row(stack, "settings.aim_assist", "aim_assist")
-	_add_toggle_row(stack, "settings.shake", "screen_shake")
-	_add_range_slider_row(stack, "settings.ui_scale", "ui_scale", 0.85, 1.25, 0.05)
+	settings_content.add_child(resolution_row)
+	_add_toggle_row(settings_content, "settings.fullscreen", "fullscreen")
+	_add_toggle_row(settings_content, "settings.borderless", "borderless")
+	_add_toggle_row(settings_content, "settings.aim_assist", "aim_assist")
+	_add_toggle_row(settings_content, "settings.shake", "screen_shake")
+	_add_range_slider_row(settings_content, "settings.ui_scale", "ui_scale", 0.85, 1.25, 0.05)
 	var quality_row := _setting_row(GameApp.text("settings.quality"))
 	var quality := OptionButton.new()
 	var qualities := ["low", "medium", "high"]
 	for value in qualities:
-		quality.add_item(value.capitalize())
+		quality.add_item(GameApp.text("quality." + value))
 	quality.selected = maxi(0, qualities.find(str(GameApp.settings.get("quality", "medium"))))
-	quality.item_selected.connect(func(index: int) -> void: GameApp.update_setting("quality", qualities[index]))
+	quality.item_selected.connect(func(index: int) -> void: _save_setting("quality", qualities[index]))
 	quality_row.add_child(quality)
-	stack.add_child(quality_row)
+	settings_content.add_child(quality_row)
 	var note := Label.new()
-	note.text = "设置立即生效并保存。" if str(GameApp.settings.get("language", "zh_CN")) == "zh_CN" else "Changes apply and save immediately."
+	note.text = GameApp.text("settings.applied")
 	note.add_theme_font_size_override("font_size", 16)
 	note.add_theme_color_override("font_color", Color("9fb2c8"))
-	stack.add_child(note)
+	settings_content.add_child(note)
+	_settings_note = note
+	var export_diagnostics := _button(GameApp.text("settings.export_diagnostics"), 54)
+	export_diagnostics.pressed.connect(_export_diagnostics)
+	settings_content.add_child(export_diagnostics)
 	_add_back_button(stack)
 
 
@@ -282,10 +319,16 @@ func _show_tutorial() -> void:
 	body.add_theme_font_size_override("font_size", 24)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(body)
-	var training := _button(GameApp.text("menu.start") + " · Stage 01", 68)
+	var save_error := Label.new()
+	save_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	save_error.add_theme_color_override("font_color", Color("ff8d7a"))
+	stack.add_child(save_error)
+	var training := _button(GameApp.text("menu.start") + " · %s 01" % GameApp.text("common.stage"), 68)
 	training.pressed.connect(func() -> void:
-		GameApp.profile["tutorial_complete"] = true
-		GameApp.save_service.save_profile(GameApp.profile, int(GameApp.content.rules["config_version"]))
+		var save_result := GameApp.complete_tutorial()
+		if not bool(save_result.get("ok", false)):
+			save_error.text = GameApp.text("feedback.save_failed")
+			return
 		GameApp.start_stage("stage_001", 1001)
 	)
 	stack.add_child(training)
@@ -307,6 +350,7 @@ func _new_content_stack(title_text: String) -> VBoxContainer:
 
 
 func _clear_content() -> void:
+	_settings_note = null
 	for child in _content_margin.get_children():
 		_content_margin.remove_child(child)
 		child.queue_free()
@@ -347,7 +391,7 @@ func _add_range_slider_row(stack: VBoxContainer, label_key: String, setting_key:
 	slider.max_value = maximum
 	slider.step = increment
 	slider.value = float(GameApp.settings.get(setting_key, 0.8))
-	slider.value_changed.connect(func(value: float) -> void: GameApp.update_setting(setting_key, value))
+	slider.value_changed.connect(func(value: float) -> void: _save_setting(setting_key, value))
 	row.add_child(slider)
 	stack.add_child(row)
 
@@ -356,7 +400,7 @@ func _add_toggle_row(stack: VBoxContainer, label_key: String, setting_key: Strin
 	var row := _setting_row(GameApp.text(label_key))
 	var toggle := CheckButton.new()
 	toggle.button_pressed = bool(GameApp.settings.get(setting_key, true))
-	toggle.toggled.connect(func(value: bool) -> void: GameApp.update_setting(setting_key, value))
+	toggle.toggled.connect(func(value: bool) -> void: _save_setting(setting_key, value))
 	row.add_child(toggle)
 	stack.add_child(row)
 
@@ -364,9 +408,9 @@ func _add_toggle_row(stack: VBoxContainer, label_key: String, setting_key: Strin
 func _refresh_header() -> void:
 	if _stage_label == null:
 		return
-	_stage_label.text = "STAGE  %02d" % int(GameApp.profile.get("highest_unlocked_stage", 1))
+	_stage_label.text = "%s  %02d" % [GameApp.text("common.stage"), int(GameApp.profile.get("highest_unlocked_stage", 1))]
 	_coins_label.text = "◆  %d" % int(GameApp.profile.get("coins", 0))
-	_xp_label.text = "XP  %d" % int(GameApp.profile.get("xp", 0))
+	_xp_label.text = "%s  %d" % [GameApp.text("common.xp"), int(GameApp.profile.get("xp", 0))]
 
 
 func _refresh_after_language_change() -> void:
@@ -375,6 +419,38 @@ func _refresh_after_language_change() -> void:
 		child.queue_free()
 	_build_layout()
 	_show_settings()
+
+
+func _save_setting(key: String, value: Variant) -> bool:
+	var result := GameApp.update_setting(key, value)
+	if _settings_note != null and is_instance_valid(_settings_note):
+		if bool(result.get("ok", false)):
+			_settings_note.text = GameApp.text("settings.applied")
+			_settings_note.add_theme_color_override("font_color", Color("9fb2c8"))
+		else:
+			_settings_note.text = GameApp.text("feedback.save_failed")
+			_settings_note.add_theme_color_override("font_color", Color("ff8d7a"))
+	return bool(result.get("ok", false))
+
+
+func _export_diagnostics() -> void:
+	var result := GameApp.export_diagnostics()
+	if _settings_note == null or not is_instance_valid(_settings_note):
+		return
+	if bool(result.get("ok", false)):
+		_settings_note.text = GameApp.text("settings.diagnostics_exported")
+		_settings_note.add_theme_color_override("font_color", Color("8ce99a"))
+		OS.shell_show_in_file_manager(ProjectSettings.globalize_path(str(result.get("path", ""))), true)
+	else:
+		_settings_note.text = GameApp.text("feedback.save_failed")
+		_settings_note.add_theme_color_override("font_color", Color("ff8d7a"))
+
+
+func _upgrade_display_name(upgrade_id: String) -> String:
+	for definition in GameApp.content.rules.get("upgrades", []):
+		if str(definition.get("id", "")) == upgrade_id:
+			return GameApp.text(str(definition.get("name_key", upgrade_id)))
+	return upgrade_id
 
 
 static func _upgrade_color(upgrade_id: String) -> Color:

@@ -1,6 +1,6 @@
 {
-  "config_version": 1,
-  "ruleset_version": "aegis-mvp-v1",
+  "config_version": 2,
+  "ruleset_version": "aegis-mvp-v2",
   "source": "Original tuning derived from the Windows MVP requirements",
   "simulation_tick_rate": 30,
   "world": {
@@ -10,7 +10,9 @@
     "enemy_spawn_x_milli": 1880000,
     "enemy_attack_x_milli": 350000,
     "enemy_y_min_milli": 250000,
-    "enemy_y_max_milli": 920000
+    "enemy_y_max_milli": 920000,
+    "spawn_start_tick": 24,
+    "spawn_group_gap_ticks": 45
   },
   "player": {
     "wall_hp": 650,
@@ -19,6 +21,12 @@
     "mana_regen_amount": 1,
     "bow_origin_x_milli": 245000,
     "bow_origin_y_milli": 555000
+  },
+  "difficulty_scaling": {
+    "hp_per_stage_permille": 75,
+    "damage_per_stage_permille": 45,
+    "max_hp_scale_permille": 1750,
+    "max_damage_scale_permille": 1450
   },
   "weapons": [
     {
@@ -84,7 +92,8 @@
       "collision_radius_milli": 33000,
       "attack_x_milli": 350000,
       "tags": ["ground", "melee"],
-      "status_resistance_permille": 0
+      "status_resistance_permille": 0,
+      "knockback_resistance_permille": 0
     },
     {
       "id": "fast_raider",
@@ -99,7 +108,8 @@
       "collision_radius_milli": 28000,
       "attack_x_milli": 350000,
       "tags": ["ground", "fast"],
-      "status_resistance_permille": 80
+      "status_resistance_permille": 80,
+      "knockback_resistance_permille": 0
     },
     {
       "id": "ranged_hexer",
@@ -114,7 +124,8 @@
       "collision_radius_milli": 35000,
       "attack_x_milli": 720000,
       "tags": ["ground", "ranged"],
-      "status_resistance_permille": 150
+      "status_resistance_permille": 150,
+      "knockback_resistance_permille": 150
     },
     {
       "id": "ember_warlord",
@@ -130,7 +141,10 @@
       "attack_x_milli": 390000,
       "tags": ["ground", "boss"],
       "status_resistance_permille": 550,
-      "special": "war_cry"
+      "knockback_resistance_permille": 1000,
+      "special": "war_cry",
+      "special_interval_ticks": 180,
+      "special_damage": 20
     }
   ],
   "upgrades": [
@@ -198,4 +212,3 @@
     {"id":"stage_010","number":10,"name_key":"stage.010","boss":true,"groups":[{"enemy_id":"melee_basic","count":18,"interval_ticks":18},{"enemy_id":"fast_raider","count":18,"interval_ticks":16},{"enemy_id":"ranged_hexer","count":12,"interval_ticks":24},{"enemy_id":"ember_warlord","count":1,"interval_ticks":1}],"clear_reward":{"coins":700,"xp":250}}
   ]
 }
-

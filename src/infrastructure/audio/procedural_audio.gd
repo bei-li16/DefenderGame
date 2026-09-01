@@ -73,6 +73,12 @@ func stop_all() -> void:
 		player.stream = null
 
 
+func shutdown() -> void:
+	stop_all()
+	_sounds.clear()
+	_music_streams.clear()
+
+
 func play_event(event: Dictionary, volume_linear: float = 1.0) -> void:
 	if _disabled:
 		return

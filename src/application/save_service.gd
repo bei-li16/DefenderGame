@@ -50,12 +50,21 @@ func _save_envelope(file_name: String, payload: Dictionary, config_version: int)
 	var verification := _read_and_validate(temporary_path)
 	if not bool(verification.get("ok", false)):
 		return {"ok": false, "error_code": "temporary_verification_failed", "field_path": temporary_path}
-	if FileAccess.file_exists(backup_path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(backup_path))
 	if FileAccess.file_exists(main_path):
-		var backup_error := DirAccess.rename_absolute(ProjectSettings.globalize_path(main_path), ProjectSettings.globalize_path(backup_path))
-		if backup_error != OK:
-			return {"ok": false, "error_code": "backup_replace_failed", "field_path": main_path}
+		var current_main := _read_and_validate(main_path)
+		if bool(current_main.get("ok", false)):
+			if FileAccess.file_exists(backup_path):
+				var remove_backup_error := DirAccess.remove_absolute(ProjectSettings.globalize_path(backup_path))
+				if remove_backup_error != OK:
+					return {"ok": false, "error_code": "backup_remove_failed", "field_path": backup_path}
+			var backup_error := DirAccess.rename_absolute(ProjectSettings.globalize_path(main_path), ProjectSettings.globalize_path(backup_path))
+			if backup_error != OK:
+				return {"ok": false, "error_code": "backup_replace_failed", "field_path": main_path}
+		else:
+			_preserve_corrupt(main_path)
+			var remove_corrupt_error := DirAccess.remove_absolute(ProjectSettings.globalize_path(main_path))
+			if remove_corrupt_error != OK:
+				return {"ok": false, "error_code": "corrupt_main_remove_failed", "field_path": main_path}
 	var replace_error := DirAccess.rename_absolute(ProjectSettings.globalize_path(temporary_path), ProjectSettings.globalize_path(main_path))
 	if replace_error != OK:
 		if FileAccess.file_exists(backup_path):
@@ -77,17 +86,17 @@ func _load_envelope(file_name: String, default_payload: Dictionary) -> Dictionar
 		if FileAccess.file_exists(backup_path):
 			var backup_only := _read_and_validate(backup_path)
 			if bool(backup_only.get("ok", false)):
-				return _migrate_loaded(backup_only["envelope"], "backup", true)
+				return _migrate_loaded(backup_only["envelope"], "backup", true, default_payload)
 		return {"ok": true, "payload": default_payload.duplicate(true), "source": "default", "needs_save": true}
 	var main_result := _read_and_validate(main_path)
 	if bool(main_result.get("ok", false)):
-		var migrated_main := _migrate_loaded(main_result["envelope"], "main", false)
+		var migrated_main := _migrate_loaded(main_result["envelope"], "main", false, default_payload)
 		if bool(migrated_main.get("ok", false)):
 			return migrated_main
 		if FileAccess.file_exists(backup_path):
 			var migration_backup := _read_and_validate(backup_path)
 			if bool(migration_backup.get("ok", false)):
-				var migrated_backup := _migrate_loaded(migration_backup["envelope"], "backup", true)
+				var migrated_backup := _migrate_loaded(migration_backup["envelope"], "backup", true, default_payload)
 				if bool(migrated_backup.get("ok", false)):
 					return migrated_backup
 		migrated_main["default_payload"] = default_payload.duplicate(true)
@@ -96,7 +105,7 @@ func _load_envelope(file_name: String, default_payload: Dictionary) -> Dictionar
 	if FileAccess.file_exists(backup_path):
 		var backup_result := _read_and_validate(backup_path)
 		if bool(backup_result.get("ok", false)):
-			return _migrate_loaded(backup_result["envelope"], "backup", true)
+			return _migrate_loaded(backup_result["envelope"], "backup", true, default_payload)
 	return {
 		"ok": false,
 		"error_code": "no_valid_save",
@@ -105,16 +114,27 @@ func _load_envelope(file_name: String, default_payload: Dictionary) -> Dictionar
 	}
 
 
-func _migrate_loaded(envelope: Dictionary, source: String, recovered: bool) -> Dictionary:
+func _migrate_loaded(envelope: Dictionary, source: String, recovered: bool, default_payload: Dictionary) -> Dictionary:
 	var migration := migrate_envelope(envelope)
 	if not bool(migration.get("ok", false)):
 		return migration
+	var migrated_envelope: Dictionary = migration["envelope"]
+	var payload: Dictionary = migrated_envelope.get("payload", {}).duplicate(true)
+	var defaults_added := false
+	for key in default_payload.keys():
+		if not payload.has(key):
+			payload[key] = default_payload[key].duplicate(true) if default_payload[key] is Array or default_payload[key] is Dictionary else default_payload[key]
+			defaults_added = true
+	if defaults_added:
+		migrated_envelope["payload"] = payload
+		migrated_envelope["payload_hash"] = _payload_hash(payload)
 	return {
 		"ok": true,
-		"payload": migration["envelope"]["payload"],
+		"payload": payload,
 		"source": source,
 		"recovered": recovered,
 		"migrated": bool(migration.get("migrated", false)),
+		"needs_save": defaults_added or recovered,
 		"schema_version": CURRENT_SCHEMA_VERSION
 	}
 

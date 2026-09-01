@@ -25,17 +25,25 @@ func _run() -> void:
 	if bool(load_result.get("ok", false)):
 		_test_rng()
 		_test_deterministic_run(content.rules)
+		_test_run_instance_identity(content.rules)
 		_test_mana_rejection(content.rules)
+		_test_skill_rejections_and_mana_bounds(content.rules)
 		_test_fatal_blow_snapshot(content.rules)
 		_test_defeat_priority(content.rules)
+		_test_simultaneous_outcome_priority(content.rules)
 		_test_failure_keeps_kill_reward(content.rules)
 		_test_reward_idempotency()
+		_test_reward_event_identity(content.rules)
 		_test_upgrade_atomicity(content.rules)
+		_test_data_driven_upgrade_effects(content.rules)
+		_test_power_shot_resistance_and_boundary(content.rules)
 		_test_migration()
+		_test_current_schema_default_completion()
 		_test_save_backup_recovery()
 		_test_migration_backup_recovery()
 		_test_replay_export()
 		_test_bad_config_reports_path(content.rules)
+		_test_missing_translation_reports_path(content.rules, content.localization)
 		_test_scene_smoke()
 		_test_core_dependency_boundary()
 		_test_offline_dependency_boundary()
@@ -65,6 +73,8 @@ func _test_deterministic_run(source_config: Dictionary) -> void:
 	_expect(first["status"] == "victory", "tiny run reaches victory")
 	_expect(first["hash"] == second["hash"], "fixed seed and commands produce identical event hash")
 	_expect(int(first["result"]["coins"]) > 0, "victory includes kill and clear rewards")
+	_expect(int(first["result"]["wave"]) == 1 and int(first["result"]["wave_total"]) == 1, "run result records current and total waves")
+	_expect(str(first["result"]["reward_source"]) == "run_settlement" and not str(first["result"]["idempotency_key"]).is_empty(), "run result carries reward source and idempotency identity")
 
 
 func _execute_tiny_victory(source_config: Dictionary, run_seed: int) -> Dictionary:
@@ -90,6 +100,14 @@ func _execute_tiny_victory(source_config: Dictionary, run_seed: int) -> Dictiona
 	return {"status": model.status, "result": model.result(), "hash": EventHasher.hash_events(event_log)}
 
 
+func _test_run_instance_identity(source_config: Dictionary) -> void:
+	var first := RunModel.new()
+	var second := RunModel.new()
+	first.setup(source_config, "stage_001", 4444, {"upgrades": {}}, "run-instance-a")
+	second.setup(source_config, "stage_001", 4444, {"upgrades": {}}, "run-instance-b")
+	_expect(first.seed == second.seed and first.run_id != second.run_id and first.result()["idempotency_key"] != second.result()["idempotency_key"], "application-injected run identity keeps same-seed attempts independently rewardable")
+
+
 func _test_mana_rejection(source_config: Dictionary) -> void:
 	var model := RunModel.new()
 	model.setup(source_config, "stage_001", 99, {"upgrades": {}})
@@ -103,6 +121,37 @@ func _test_mana_rejection(source_config: Dictionary) -> void:
 		if event["type"] == "skill_rejected" and event.get("reason", "") == "no_mana":
 			rejected = true
 	_expect(rejected and model.mana == 0, "insufficient Mana rejects cast without spending")
+
+
+func _test_skill_rejections_and_mana_bounds(source_config: Dictionary) -> void:
+	var config := source_config.duplicate(true)
+	config["player"]["mana_regen_interval_ticks"] = 1
+	config["player"]["mana_regen_amount"] = 10
+	var model := RunModel.new()
+	model.setup(config, "stage_001", 100, {"upgrades": {}})
+	var initial_mana := model.mana
+	var invalid_events := model.step([
+		{"type": "select_skill", "skill_id": "fire_ball"},
+		{"type": "cast_skill", "x_milli": 0, "y_milli": 500000}
+	])
+	var invalid_rejected := false
+	for event in invalid_events:
+		invalid_rejected = invalid_rejected or (event["type"] == "skill_rejected" and event.get("reason", "") == "invalid_target")
+	var mana_after_invalid := model.mana
+	var valid_events := model.step([{"type": "cast_skill", "skill_id": "fire_ball", "x_milli": 1200000, "y_milli": 500000}])
+	var cast_happened := false
+	for event in valid_events:
+		cast_happened = cast_happened or event["type"] == "skill_cast"
+	var mana_after_cast := model.mana
+	var cooldown_events := model.step([{"type": "cast_skill", "skill_id": "fire_ball", "x_milli": 1200000, "y_milli": 500000}])
+	var cooldown_rejected := false
+	for event in cooldown_events:
+		cooldown_rejected = cooldown_rejected or (event["type"] == "skill_rejected" and event.get("reason", "") == "cooldown")
+	model.mana = model.max_mana - 1
+	model.step([])
+	_expect(invalid_rejected and mana_after_invalid == initial_mana and model.max_mana == initial_mana, "invalid spell target is rejected without spending Mana")
+	_expect(cast_happened and cooldown_rejected and mana_after_cast < initial_mana, "successful cast spends Mana and an immediate recast is rejected by cooldown")
+	_expect(model.mana == model.max_mana, "Mana regeneration clamps at max_mana")
 
 
 func _test_fatal_blow_snapshot(source_config: Dictionary) -> void:
@@ -150,6 +199,41 @@ func _test_defeat_priority(source_config: Dictionary) -> void:
 	_expect(model.step([]).is_empty(), "finished run cannot settle twice")
 
 
+func _test_simultaneous_outcome_priority(source_config: Dictionary) -> void:
+	var config := source_config.duplicate(true)
+	config["world"]["enemy_y_min_milli"] = 500000
+	config["world"]["enemy_y_max_milli"] = 500001
+	config["stages"][0]["groups"] = [{"enemy_id": "melee_basic", "count": 1, "interval_ticks": 1}]
+	var model := RunModel.new()
+	model.setup(config, "stage_001", 31337, {"upgrades": {}})
+	for ignored in range(int(config["world"]["spawn_start_tick"])):
+		model.step([])
+	var enemy: Dictionary = model.enemies[0]
+	enemy["x_milli"] = int(enemy["attack_x_milli"])
+	enemy["attack_cooldown"] = 0
+	enemy["attack_damage"] = model.wall_hp
+	enemy["hp"] = 1
+	enemy["armor"] = 0
+	model.projectiles.append({
+		"entity_id": 9001,
+		"x_milli": enemy["x_milli"],
+		"y_milli": enemy["y_milli"],
+		"vx_milli": 0,
+		"vy_milli": 0,
+		"damage": 1,
+		"fatal": false,
+		"power": false,
+		"collision_radius_milli": 1000,
+		"age_ticks": 0
+	})
+	var events := model.step([])
+	var run_end_count := 0
+	for event in events:
+		if event["type"] == "run_end":
+			run_end_count += 1
+	_expect(model.status == "defeat" and model.enemies.is_empty() and run_end_count == 1, "simultaneous last kill and wall loss deterministically resolves as defeat")
+
+
 func _test_failure_keeps_kill_reward(source_config: Dictionary) -> void:
 	var config := source_config.duplicate(true)
 	config["world"]["enemy_y_min_milli"] = 500000
@@ -180,6 +264,44 @@ func _test_reward_idempotency() -> void:
 	var first := service.apply_run_reward(profile, reward)
 	var second := service.apply_run_reward(first["profile"], reward)
 	_expect(int(second["profile"]["coins"]) == 50 and bool(second["duplicate"]), "run reward is idempotent")
+	var missing_identity := service.apply_run_reward(profile, {"coins": 999, "xp": 999})
+	_expect(not bool(missing_identity.get("ok", false)) and int(missing_identity["profile"]["coins"]) == 0, "reward without run and ruleset identity is rejected")
+	var long_profile := profile.duplicate(true)
+	for run_number in range(205):
+		long_profile = service.apply_run_reward(long_profile, {"run_id": "history-%d" % run_number, "reward_version": "v1", "coins": 1, "xp": 0})["profile"]
+	var replayed_old_reward := service.apply_run_reward(long_profile, {"run_id": "history-0", "reward_version": "v1", "coins": 1000, "xp": 0})
+	_expect(bool(replayed_old_reward.get("duplicate", false)) and int(replayed_old_reward["profile"]["coins"]) == 205, "old reward identity remains idempotent after more than 200 runs")
+
+
+func _test_reward_event_identity(source_config: Dictionary) -> void:
+	var config := source_config.duplicate(true)
+	config["world"]["enemy_y_min_milli"] = 500000
+	config["world"]["enemy_y_max_milli"] = 500001
+	config["enemies"][0]["hp"] = 1
+	config["enemies"][0]["armor"] = 0
+	config["stages"][0]["groups"] = [{"enemy_id": "melee_basic", "count": 1, "interval_ticks": 1}]
+	var model := RunModel.new()
+	model.setup(config, "stage_001", 1717, {"upgrades": {}})
+	var rewards: Array[Dictionary] = []
+	for current_tick in range(40):
+		var commands: Array = []
+		if current_tick == int(config["world"]["spawn_start_tick"]) - 1:
+			commands = [
+				{"type": "select_skill", "skill_id": "fire_ball"},
+				{"type": "cast_skill", "x_milli": 1880000, "y_milli": 500000}
+			]
+		for event in model.step(commands):
+			if event["type"] == "reward":
+				rewards.append(event)
+		if model.status != "running":
+			break
+	var complete := rewards.size() == 2
+	for reward in rewards:
+		complete = complete and not str(reward.get("source", "")).is_empty()
+		complete = complete and not str(reward.get("reward_version", "")).is_empty()
+		complete = complete and not str(reward.get("idempotency_key", "")).is_empty()
+		complete = complete and reward.has("coins") and reward.has("xp")
+	_expect(complete, "kill and clear rewards carry source, amounts, ruleset version and idempotency keys")
 
 
 func _test_upgrade_atomicity(config: Dictionary) -> void:
@@ -190,6 +312,59 @@ func _test_upgrade_atomicity(config: Dictionary) -> void:
 	var funded_profile := {"coins": 500, "upgrades": {"strength": 0}}
 	var purchased := service.purchase(funded_profile, config, "strength")
 	_expect(bool(purchased.get("ok", false)) and int(purchased["profile"]["upgrades"]["strength"]) == 1 and int(funded_profile["upgrades"]["strength"]) == 0, "successful upgrade is atomic on a new profile")
+	var prerequisite_config := config.duplicate(true)
+	for definition in prerequisite_config["upgrades"]:
+		if definition["id"] == "ice_mastery":
+			definition["prerequisites"] = ["strength"]
+	var blocked_profile := {"coins": 1000, "upgrades": {"strength": 0, "ice_mastery": 0}}
+	var blocked := service.purchase(blocked_profile, prerequisite_config, "ice_mastery")
+	blocked_profile["upgrades"]["strength"] = 1
+	var allowed := service.purchase(blocked_profile, prerequisite_config, "ice_mastery")
+	_expect(not bool(blocked.get("ok", false)) and bool(allowed.get("ok", false)), "upgrade prerequisites block and allow purchase atomically")
+
+
+func _test_data_driven_upgrade_effects(source_config: Dictionary) -> void:
+	var config := source_config.duplicate(true)
+	config["weapons"][0]["fatal_chance_per_10000"] = 0
+	config["weapons"][0]["power_shot_chance_per_10000"] = 0
+	for definition in config["upgrades"]:
+		if definition["id"] == "strength":
+			definition["effect_per_level"] = 13
+		if definition["id"] == "agility":
+			definition["effect_per_level"] = 2
+	var model := RunModel.new()
+	model.setup(config, "stage_001", 9191, {"upgrades": {"strength": 2, "agility": 3}})
+	model.step([{"type": "aim", "x_milli": 1500000, "y_milli": 555000}, {"type": "fire_started"}])
+	var projectile: Dictionary = model.projectiles[0]
+	_expect(int(projectile["damage"]) == int(config["weapons"][0]["damage"]) + 26 and model.fire_cooldown == 4, "Strength and Agility use configured per-level effects")
+
+
+func _test_power_shot_resistance_and_boundary(source_config: Dictionary) -> void:
+	var model := RunModel.new()
+	model.setup(source_config, "stage_001", 5151, {"upgrades": {}})
+	var enemy := {
+		"entity_id": 1, "enemy_id": "test", "x_milli": 1000000, "y_milli": 500000,
+		"hp": 100, "max_hp": 100, "armor": 0, "collision_radius_milli": 30000,
+		"attack_x_milli": 350000, "tags": [], "knockback_resistance_permille": 500
+	}
+	model.enemies = [enemy]
+	model.projectiles = [{
+		"entity_id": 2, "x_milli": 1000000, "y_milli": 500000, "vx_milli": 0, "vy_milli": 0,
+		"damage": 1, "fatal": false, "power": true, "collision_radius_milli": 1000, "age_ticks": 0
+	}]
+	var first_events: Array[Dictionary] = []
+	model.call("_update_projectiles", first_events)
+	var resisted_position := int(model.enemies[0]["x_milli"])
+	model.enemies[0]["x_milli"] = int(source_config["world"]["enemy_spawn_x_milli"]) - 1000
+	model.enemies[0]["knockback_resistance_permille"] = 0
+	model.projectiles = [{
+		"entity_id": 3, "x_milli": model.enemies[0]["x_milli"], "y_milli": 500000, "vx_milli": 0, "vy_milli": 0,
+		"damage": 1, "fatal": false, "power": true, "collision_radius_milli": 1000, "age_ticks": 0
+	}]
+	var second_events: Array[Dictionary] = []
+	model.call("_update_projectiles", second_events)
+	var bounded_position := int(model.enemies[0]["x_milli"])
+	_expect(resisted_position == 1035000 and bounded_position == int(source_config["world"]["enemy_spawn_x_milli"]), "Power Shot uses configured knockback resistance and world boundary")
 
 
 func _test_migration() -> void:
@@ -198,6 +373,22 @@ func _test_migration() -> void:
 	var payload: Dictionary = migrated.get("envelope", {}).get("payload", {})
 	_expect(bool(migrated.get("ok", false)) and int(migrated["envelope"]["schema_version"]) == 3, "profile migrates v1 to v3")
 	_expect(payload.has("reward_ledger") and payload.has("crystals"), "migration adds required fields")
+
+
+func _test_current_schema_default_completion() -> void:
+	var directory := "user://automated-default-completion-test"
+	var absolute_directory := ProjectSettings.globalize_path(directory)
+	_delete_test_directory(absolute_directory)
+	var service := SaveService.new(directory)
+	service.save_profile({"coins": 12}, 1)
+	var profile_defaults := {"coins": 0, "install_id": "new-install", "reward_ledger": [], "upgrades": {}, "tutorial_complete": false}
+	var loaded_profile := service.load_profile(profile_defaults)
+	service.save_settings({"language": "en_US"}, 1)
+	var settings_defaults := {"language": "zh_CN", "quality": "medium", "ui_scale": 1.0}
+	var loaded_settings := service.load_settings(settings_defaults)
+	_expect(bool(loaded_profile.get("needs_save", false)) and str(loaded_profile["payload"]["install_id"]) == "new-install" and loaded_profile["payload"].has("reward_ledger"), "current-schema Profile fills newly required fields from Profile defaults")
+	_expect(bool(loaded_settings.get("needs_save", false)) and str(loaded_settings["payload"]["quality"]) == "medium" and not loaded_settings["payload"].has("coins"), "Settings fill only Settings defaults without Profile fields")
+	_delete_test_directory(absolute_directory)
 
 
 func _test_save_backup_recovery() -> void:
@@ -216,9 +407,13 @@ func _test_save_backup_recovery() -> void:
 	if corrupt != null:
 		corrupt.store_string("{broken")
 		corrupt.flush()
+	corrupt = null
 	var recovered := service.load_profile({})
 	_expect(bool(recovered.get("ok", false)) and bool(recovered.get("recovered", false)), "corrupt main profile recovers from backup: %s" % recovered)
 	_expect(int(recovered.get("payload", {}).get("coins", 0)) == 10, "backup contains previous valid profile: %s" % recovered)
+	var repair_save := service.save_profile(recovered.get("payload", {}), 1)
+	var repaired := service.load_profile({})
+	_expect(bool(repair_save.get("ok", false)) and bool(repaired.get("ok", false)) and str(repaired.get("source", "")) == "main" and not bool(repaired.get("recovered", false)), "saving the recovered payload repairs the main profile and prevents a recovery loop: %s / %s" % [repair_save, repaired])
 	_delete_test_directory(absolute_directory)
 
 
@@ -265,6 +460,17 @@ func _test_bad_config_reports_path(source_config: Dictionary) -> void:
 		if str(error.get("field_path", "")) == "enemies[1].id" and str(error.get("error_code", "")) == "duplicate_id":
 			found_path = true
 	_expect(found_path, "bad content reports the exact duplicate field path")
+
+
+func _test_missing_translation_reports_path(config: Dictionary, source_localization: Dictionary) -> void:
+	var broken := source_localization.duplicate(true)
+	broken["en_US"].erase("skill.fire")
+	var errors := ContentValidator.validate_localization(broken, config)
+	var found_path := false
+	for error in errors:
+		if str(error.get("field_path", "")) == "localization.en_US.skill.fire" and str(error.get("error_code", "")) == "missing_translation":
+			found_path = true
+	_expect(found_path, "missing translation reports the exact locale and key path")
 
 
 func _test_scene_smoke() -> void:

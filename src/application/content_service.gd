@@ -18,6 +18,7 @@ func load_builtin() -> Dictionary:
 	rules = rules_result["data"]
 	localization = localization_result["data"]
 	validation_errors = ContentValidator.validate(rules)
+	validation_errors.append_array(ContentValidator.validate_localization(localization, rules))
 	if not validation_errors.is_empty():
 		return {
 			"ok": false,
@@ -58,4 +59,3 @@ static func _load_json(path: String) -> Dictionary:
 	if not parser.data is Dictionary:
 		return {"ok": false, "error_code": "json_root_not_object", "field_path": path}
 	return {"ok": true, "data": parser.data}
-

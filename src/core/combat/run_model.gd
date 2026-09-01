@@ -37,6 +37,7 @@ var max_mana: int = 0
 var coins_earned: int = 0
 var xp_earned: int = 0
 var kills: int = 0
+var current_wave: int = 0
 var enemies: Array[Dictionary] = []
 var projectiles: Array[Dictionary] = []
 var selected_skill: String = ""
@@ -57,7 +58,7 @@ var _event_sequence: int = 0
 var _boss_rewarded: bool = false
 
 
-func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_profile: Dictionary) -> Dictionary:
+func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_profile: Dictionary, run_instance_id: String = "") -> Dictionary:
 	config = game_config.duplicate(true)
 	stage = _find_by_id(config.get("stages", []), stage_id)
 	if stage.is_empty():
@@ -67,7 +68,7 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	if weapon.is_empty():
 		return {"ok": false, "error_code": "missing_weapon", "field_path": "weapons.basic_bow"}
 	seed = run_seed if run_seed != 0 else 1
-	run_id = "%s-%d-%d" % [stage_id, seed, int(config.get("config_version", 0))]
+	run_id = run_instance_id if not run_instance_id.is_empty() else "%s-%d-%d" % [stage_id, seed, int(config.get("config_version", 0))]
 	_spawn_rng = DeterministicRng.new(seed ^ 0x4f1bbcdc)
 	_combat_rng = DeterministicRng.new(seed ^ 0x2c9277b5)
 	tick = 0
@@ -80,6 +81,7 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	coins_earned = 0
 	xp_earned = 0
 	kills = 0
+	current_wave = 0
 	enemies.clear()
 	projectiles.clear()
 	selected_skill = ""
@@ -133,6 +135,8 @@ func snapshot() -> Dictionary:
 		"coins_earned": coins_earned,
 		"xp_earned": xp_earned,
 		"kills": kills,
+		"wave": current_wave,
+		"wave_total": stage.get("groups", []).size(),
 		"spawned": spawn_cursor,
 		"spawn_total": spawn_queue.size(),
 		"selected_skill": selected_skill,
@@ -144,14 +148,19 @@ func snapshot() -> Dictionary:
 
 func result() -> Dictionary:
 	var clear_reward: Dictionary = stage.get("clear_reward", {}) if status == STATUS_VICTORY else {}
+	var reward_version := str(config.get("ruleset_version", "unknown"))
 	return {
 		"run_id": run_id,
-		"reward_version": str(config.get("ruleset_version", "unknown")),
+		"reward_version": reward_version,
+		"reward_source": "run_settlement",
+		"idempotency_key": run_id + ":" + reward_version,
 		"stage_id": str(stage.get("id", "")),
 		"stage_number": int(stage.get("number", 0)),
 		"status": status,
 		"tick": tick,
 		"kills": kills,
+		"wave": current_wave,
+		"wave_total": stage.get("groups", []).size(),
 		"wall_percent": int(round(float(wall_hp) * 100.0 / maxf(1.0, float(wall_max_hp)))),
 		"coins": coins_earned + int(clear_reward.get("coins", 0)),
 		"xp": xp_earned + int(clear_reward.get("xp", 0))
@@ -163,21 +172,25 @@ func debug_force_wall_damage(amount: int) -> void:
 
 
 func _build_spawn_queue() -> void:
-	var spawn_tick := 24
 	var world: Dictionary = config.get("world", {})
+	var spawn_tick := maxi(1, int(world.get("spawn_start_tick", 24)))
+	var group_gap_ticks := maxi(0, int(world.get("spawn_group_gap_ticks", 45)))
 	var y_min := int(world.get("enemy_y_min_milli", 220000))
 	var y_max := int(world.get("enemy_y_max_milli", 920000))
-	for group in stage.get("groups", []):
+	var groups: Array = stage.get("groups", [])
+	for group_index in range(groups.size()):
+		var group: Dictionary = groups[group_index]
 		var count := int(group.get("count", 0))
 		var interval := maxi(1, int(group.get("interval_ticks", 30)))
 		for index in range(count):
 			spawn_queue.append({
 				"tick": spawn_tick,
+				"wave": group_index + 1,
 				"enemy_id": str(group.get("enemy_id", "")),
 				"y_milli": _spawn_rng.range_exclusive(y_min, y_max)
 			})
 			spawn_tick += interval
-		spawn_tick += 45
+		spawn_tick += group_gap_ticks
 
 
 func _spawn_due_enemies(events: Array[Dictionary]) -> void:
@@ -185,11 +198,20 @@ func _spawn_due_enemies(events: Array[Dictionary]) -> void:
 		var order: Dictionary = spawn_queue[spawn_cursor]
 		var template := _find_by_id(config.get("enemies", []), str(order["enemy_id"]))
 		spawn_cursor += 1
+		current_wave = maxi(current_wave, int(order.get("wave", 1)))
 		if template.is_empty():
 			continue
 		var stage_number := int(stage.get("number", 1))
-		var hp_scale_permille := 1000 + (stage_number - 1) * 75
-		var damage_scale_permille := 1000 + (stage_number - 1) * 45
+		var stage_offset := maxi(0, stage_number - 1)
+		var scaling: Dictionary = config.get("difficulty_scaling", {})
+		var hp_scale_permille := mini(
+			1000 + stage_offset * int(scaling.get("hp_per_stage_permille", 0)),
+			int(scaling.get("max_hp_scale_permille", 1000))
+		)
+		var damage_scale_permille := mini(
+			1000 + stage_offset * int(scaling.get("damage_per_stage_permille", 0)),
+			int(scaling.get("max_damage_scale_permille", 1000))
+		)
 		var world: Dictionary = config.get("world", {})
 		var enemy := {
 			"entity_id": next_entity_id,
@@ -210,6 +232,7 @@ func _spawn_due_enemies(events: Array[Dictionary]) -> void:
 			"collision_radius_milli": int(template.get("collision_radius_milli", 30000)),
 			"tags": template.get("tags", []).duplicate(),
 			"status_resistance_permille": int(template.get("status_resistance_permille", 0)),
+			"knockback_resistance_permille": int(template.get("knockback_resistance_permille", 0)),
 			"slow_permille": 1000,
 			"slow_ticks": 0,
 			"stun_ticks": 0,
@@ -218,6 +241,8 @@ func _spawn_due_enemies(events: Array[Dictionary]) -> void:
 			"burn_counter": 0,
 			"burn_damage": 0,
 			"special": str(template.get("special", "")),
+			"special_interval_ticks": int(template.get("special_interval_ticks", 0)),
+			"special_damage": int(template.get("special_damage", 0)),
 			"special_counter": 0
 		}
 		next_entity_id += 1
@@ -270,7 +295,7 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 	var speed := int(weapon.get("projectile_speed_milli_per_tick", 56000))
 	var strength_level := _upgrade_level("strength")
 	var agility_level := _upgrade_level("agility")
-	var damage := int(weapon.get("damage", 1)) + strength_level * 4
+	var damage := int(weapon.get("damage", 1)) + strength_level * _upgrade_effect_per_level("strength")
 	var fatal := _combat_rng.chance_per_10000(int(weapon.get("fatal_chance_per_10000", 0)))
 	var power := _combat_rng.chance_per_10000(int(weapon.get("power_shot_chance_per_10000", 0)))
 	if fatal:
@@ -291,7 +316,7 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 	projectiles.append(projectile)
 	var base_interval := int(weapon.get("interval_ticks", 10))
 	var minimum_interval := int(weapon.get("min_interval_ticks", 4))
-	fire_cooldown = maxi(minimum_interval, base_interval - agility_level)
+	fire_cooldown = maxi(minimum_interval, base_interval - agility_level * _upgrade_effect_per_level("agility"))
 	_emit(events, "shot", {"entity_id": projectile["entity_id"], "fatal": fatal, "power": power})
 
 
@@ -327,7 +352,7 @@ func _cast_skill(skill_id: String, target_x: int, target_y: int, events: Array[D
 
 
 func _apply_fire_skill(skill: Dictionary, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
-	var damage := int(skill.get("damage", 0)) + _upgrade_level("fire_mastery") * 9
+	var damage := int(skill.get("damage", 0)) + _upgrade_level("fire_mastery") * _upgrade_effect_per_level("fire_mastery")
 	for enemy in enemies:
 		if _distance_squared(enemy["x_milli"], enemy["y_milli"], target_x, target_y) <= _square(int(skill["radius_milli"])):
 			_apply_enemy_damage(enemy, damage, "fire", events)
@@ -339,7 +364,7 @@ func _apply_fire_skill(skill: Dictionary, target_x: int, target_y: int, events: 
 
 
 func _apply_ice_skill(skill: Dictionary, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
-	var damage := int(skill.get("damage", 0)) + _upgrade_level("ice_mastery") * 8
+	var damage := int(skill.get("damage", 0)) + _upgrade_level("ice_mastery") * _upgrade_effect_per_level("ice_mastery")
 	for enemy in enemies:
 		if _distance_squared(enemy["x_milli"], enemy["y_milli"], target_x, target_y) <= _square(int(skill["radius_milli"])):
 			_apply_enemy_damage(enemy, damage, "ice", events)
@@ -358,7 +383,7 @@ func _apply_lightning_skill(skill: Dictionary, target_x: int, target_y: int, eve
 			candidates.append({"enemy": enemy, "distance": distance})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["distance"]) < int(b["distance"]))
 	var count := mini(int(skill.get("max_targets", 1)), candidates.size())
-	var damage := int(skill.get("damage", 0)) + _upgrade_level("lightning_mastery") * 11
+	var damage := int(skill.get("damage", 0)) + _upgrade_level("lightning_mastery") * _upgrade_effect_per_level("lightning_mastery")
 	for index in range(count):
 		var enemy: Dictionary = candidates[index]["enemy"]
 		_apply_enemy_damage(enemy, damage, "lightning", events)
@@ -395,12 +420,13 @@ func _update_enemies(events: Array[Dictionary]) -> void:
 				enemy["attack_cooldown"] = int(enemy["attack_interval_ticks"])
 				wall_hp = maxi(0, wall_hp - int(enemy["attack_damage"]))
 				_emit(events, "wall_damage", {"entity_id": enemy["entity_id"], "amount": enemy["attack_damage"], "wall_hp": wall_hp})
-		if enemy["tags"].has("boss"):
+		if enemy["tags"].has("boss") and int(enemy.get("special_interval_ticks", 0)) > 0:
 			enemy["special_counter"] = int(enemy["special_counter"]) + 1
-			if int(enemy["special_counter"]) >= 180:
+			if int(enemy["special_counter"]) >= int(enemy["special_interval_ticks"]):
 				enemy["special_counter"] = 0
-				wall_hp = maxi(0, wall_hp - 20)
-				_emit(events, "boss_special", {"entity_id": enemy["entity_id"], "special": enemy["special"], "wall_hp": wall_hp})
+				var special_damage := maxi(0, int(enemy.get("special_damage", 0)))
+				wall_hp = maxi(0, wall_hp - special_damage)
+				_emit(events, "boss_special", {"entity_id": enemy["entity_id"], "special": enemy["special"], "amount": special_damage, "wall_hp": wall_hp})
 
 
 func _update_projectiles(events: Array[Dictionary]) -> void:
@@ -426,8 +452,14 @@ func _update_projectiles(events: Array[Dictionary]) -> void:
 		if not hit_enemy.is_empty():
 			_emit(events, "hit", {"projectile_id": projectile["entity_id"], "entity_id": hit_enemy["entity_id"], "fatal": projectile["fatal"], "power": projectile["power"]})
 			_apply_enemy_damage(hit_enemy, int(projectile["damage"]), "arrow", events)
-			if bool(projectile["power"]) and not hit_enemy["tags"].has("boss"):
-				hit_enemy["x_milli"] = mini(int(config["world"]["enemy_spawn_x_milli"]), int(hit_enemy["x_milli"]) + int(weapon.get("knockback_milli", 0)))
+			if bool(projectile["power"]):
+				var resistance := clampi(int(hit_enemy.get("knockback_resistance_permille", 0)), 0, 1000)
+				var knockback := int(weapon.get("knockback_milli", 0)) * (1000 - resistance) / 1000
+				hit_enemy["x_milli"] = clampi(
+					int(hit_enemy["x_milli"]) + knockback,
+					int(hit_enemy["attack_x_milli"]),
+					int(config["world"]["enemy_spawn_x_milli"])
+				)
 			projectiles.remove_at(projectile_index)
 		elif int(projectile["age_ticks"]) > 90 or int(projectile["x_milli"]) > int(config["world"]["width_milli"]) + 100000 or int(projectile["y_milli"]) < -100000 or int(projectile["y_milli"]) > int(config["world"]["height_milli"]) + 100000:
 			projectiles.remove_at(projectile_index)
@@ -478,7 +510,15 @@ func _resolve_deaths(events: Array[Dictionary]) -> void:
 		coins_earned += coins
 		xp_earned += xp
 		_emit(events, "death", {"entity_id": enemy["entity_id"], "enemy_id": enemy["enemy_id"], "boss": enemy["tags"].has("boss")})
-		_emit(events, "reward", {"source": "kill", "entity_id": enemy["entity_id"], "coins": coins, "xp": xp})
+		var reward_version := str(config.get("ruleset_version", "unknown"))
+		_emit(events, "reward", {
+			"source": "kill",
+			"entity_id": enemy["entity_id"],
+			"coins": coins,
+			"xp": xp,
+			"reward_version": reward_version,
+			"idempotency_key": "%s:%s:kill:%d" % [run_id, reward_version, int(enemy["entity_id"])]
+		})
 		if enemy["tags"].has("boss"):
 			_boss_rewarded = true
 		enemies.remove_at(index)
@@ -496,7 +536,13 @@ func _resolve_run_end(events: Array[Dictionary]) -> void:
 		status = STATUS_VICTORY
 		fire_down = false
 		var result_data := result()
-		_emit(events, "reward", {"source": "stage_clear", "coins": int(stage["clear_reward"]["coins"]), "xp": int(stage["clear_reward"]["xp"]), "idempotency_key": run_id + ":" + str(config["ruleset_version"])})
+		_emit(events, "reward", {
+			"source": "stage_clear",
+			"coins": int(stage["clear_reward"]["coins"]),
+			"xp": int(stage["clear_reward"]["xp"]),
+			"reward_version": str(config["ruleset_version"]),
+			"idempotency_key": result_data["idempotency_key"]
+		})
 		_emit(events, "run_end", result_data)
 
 
@@ -526,6 +572,11 @@ func _tick_cooldowns() -> void:
 func _upgrade_level(upgrade_id: String) -> int:
 	var upgrades: Dictionary = profile_snapshot.get("upgrades", {})
 	return int(upgrades.get(upgrade_id, 0))
+
+
+func _upgrade_effect_per_level(upgrade_id: String) -> int:
+	var definition := _find_by_id(config.get("upgrades", []), upgrade_id)
+	return int(definition.get("effect_per_level", 0))
 
 
 func _resisted_ticks(enemy: Dictionary, base_ticks: int) -> int:
