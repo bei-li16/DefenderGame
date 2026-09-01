@@ -1,0 +1,201 @@
+{
+  "config_version": 1,
+  "ruleset_version": "aegis-mvp-v1",
+  "source": "Original tuning derived from the Windows MVP requirements",
+  "simulation_tick_rate": 30,
+  "world": {
+    "width_milli": 1920000,
+    "height_milli": 1080000,
+    "castle_x_milli": 210000,
+    "enemy_spawn_x_milli": 1880000,
+    "enemy_attack_x_milli": 350000,
+    "enemy_y_min_milli": 250000,
+    "enemy_y_max_milli": 920000
+  },
+  "player": {
+    "wall_hp": 650,
+    "max_mana": 120,
+    "mana_regen_interval_ticks": 15,
+    "mana_regen_amount": 1,
+    "bow_origin_x_milli": 245000,
+    "bow_origin_y_milli": 555000
+  },
+  "weapons": [
+    {
+      "id": "basic_bow",
+      "name_key": "weapon.basic_bow",
+      "damage": 34,
+      "interval_ticks": 10,
+      "min_interval_ticks": 4,
+      "projectile_speed_milli_per_tick": 56000,
+      "collision_radius_milli": 26000,
+      "knockback_milli": 70000,
+      "power_shot_chance_per_10000": 1200,
+      "fatal_chance_per_10000": 800,
+      "fatal_multiplier": 2,
+      "pierce": 0
+    }
+  ],
+  "skills": [
+    {
+      "id": "fire_ball",
+      "name_key": "skill.fire",
+      "mana_cost": 30,
+      "cooldown_ticks": 150,
+      "damage": 72,
+      "radius_milli": 190000,
+      "burn_damage": 9,
+      "burn_interval_ticks": 15,
+      "burn_duration_ticks": 75
+    },
+    {
+      "id": "glacial_spike",
+      "name_key": "skill.ice",
+      "mana_cost": 25,
+      "cooldown_ticks": 135,
+      "damage": 46,
+      "radius_milli": 210000,
+      "slow_permille": 450,
+      "slow_duration_ticks": 120,
+      "freeze_ticks": 24
+    },
+    {
+      "id": "lightning_strike",
+      "name_key": "skill.lightning",
+      "mana_cost": 40,
+      "cooldown_ticks": 195,
+      "damage": 118,
+      "radius_milli": 280000,
+      "max_targets": 4,
+      "stun_ticks": 36
+    }
+  ],
+  "enemies": [
+    {
+      "id": "melee_basic",
+      "name_key": "enemy.melee",
+      "hp": 110,
+      "speed_milli_per_tick": 3300,
+      "attack_damage": 12,
+      "attack_interval_ticks": 25,
+      "armor": 2,
+      "reward_coins": 7,
+      "reward_xp": 2,
+      "collision_radius_milli": 33000,
+      "attack_x_milli": 350000,
+      "tags": ["ground", "melee"],
+      "status_resistance_permille": 0
+    },
+    {
+      "id": "fast_raider",
+      "name_key": "enemy.fast",
+      "hp": 72,
+      "speed_milli_per_tick": 5400,
+      "attack_damage": 8,
+      "attack_interval_ticks": 18,
+      "armor": 0,
+      "reward_coins": 8,
+      "reward_xp": 2,
+      "collision_radius_milli": 28000,
+      "attack_x_milli": 350000,
+      "tags": ["ground", "fast"],
+      "status_resistance_permille": 80
+    },
+    {
+      "id": "ranged_hexer",
+      "name_key": "enemy.ranged",
+      "hp": 155,
+      "speed_milli_per_tick": 2400,
+      "attack_damage": 16,
+      "attack_interval_ticks": 34,
+      "armor": 4,
+      "reward_coins": 12,
+      "reward_xp": 4,
+      "collision_radius_milli": 35000,
+      "attack_x_milli": 720000,
+      "tags": ["ground", "ranged"],
+      "status_resistance_permille": 150
+    },
+    {
+      "id": "ember_warlord",
+      "name_key": "enemy.boss",
+      "hp": 2600,
+      "speed_milli_per_tick": 1900,
+      "attack_damage": 34,
+      "attack_interval_ticks": 22,
+      "armor": 9,
+      "reward_coins": 180,
+      "reward_xp": 70,
+      "collision_radius_milli": 72000,
+      "attack_x_milli": 390000,
+      "tags": ["ground", "boss"],
+      "status_resistance_permille": 550,
+      "special": "war_cry"
+    }
+  ],
+  "upgrades": [
+    {
+      "id": "strength",
+      "name_key": "upgrade.strength",
+      "description_key": "upgrade.strength.desc",
+      "max_level": 12,
+      "base_cost": 90,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 4,
+      "prerequisites": []
+    },
+    {
+      "id": "agility",
+      "name_key": "upgrade.agility",
+      "description_key": "upgrade.agility.desc",
+      "max_level": 6,
+      "base_cost": 120,
+      "cost_growth_permille": 1600,
+      "effect_per_level": 1,
+      "prerequisites": []
+    },
+    {
+      "id": "fire_mastery",
+      "name_key": "upgrade.fire",
+      "description_key": "upgrade.fire.desc",
+      "max_level": 8,
+      "base_cost": 110,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 9,
+      "prerequisites": []
+    },
+    {
+      "id": "ice_mastery",
+      "name_key": "upgrade.ice",
+      "description_key": "upgrade.ice.desc",
+      "max_level": 8,
+      "base_cost": 110,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 8,
+      "prerequisites": []
+    },
+    {
+      "id": "lightning_mastery",
+      "name_key": "upgrade.lightning",
+      "description_key": "upgrade.lightning.desc",
+      "max_level": 8,
+      "base_cost": 130,
+      "cost_growth_permille": 1550,
+      "effect_per_level": 11,
+      "prerequisites": []
+    }
+  ],
+  "stages": [
+    {"id":"stage_001","number":1,"name_key":"stage.001","boss":false,"groups":[{"enemy_id":"melee_basic","count":10,"interval_ticks":36}],"clear_reward":{"coins":80,"xp":25}},
+    {"id":"stage_002","number":2,"name_key":"stage.002","boss":false,"groups":[{"enemy_id":"melee_basic","count":14,"interval_ticks":31}],"clear_reward":{"coins":105,"xp":34}},
+    {"id":"stage_003","number":3,"name_key":"stage.003","boss":false,"groups":[{"enemy_id":"melee_basic","count":10,"interval_ticks":28},{"enemy_id":"fast_raider","count":8,"interval_ticks":25}],"clear_reward":{"coins":135,"xp":42}},
+    {"id":"stage_004","number":4,"name_key":"stage.004","boss":false,"groups":[{"enemy_id":"fast_raider","count":14,"interval_ticks":22},{"enemy_id":"melee_basic","count":10,"interval_ticks":26}],"clear_reward":{"coins":165,"xp":50}},
+    {"id":"stage_005","number":5,"name_key":"stage.005","boss":false,"groups":[{"enemy_id":"melee_basic","count":14,"interval_ticks":24},{"enemy_id":"ranged_hexer","count":7,"interval_ticks":34}],"clear_reward":{"coins":205,"xp":62}},
+    {"id":"stage_006","number":6,"name_key":"stage.006","boss":false,"groups":[{"enemy_id":"fast_raider","count":16,"interval_ticks":19},{"enemy_id":"ranged_hexer","count":9,"interval_ticks":30}],"clear_reward":{"coins":245,"xp":74}},
+    {"id":"stage_007","number":7,"name_key":"stage.007","boss":false,"groups":[{"enemy_id":"melee_basic","count":18,"interval_ticks":21},{"enemy_id":"fast_raider","count":14,"interval_ticks":18},{"enemy_id":"ranged_hexer","count":8,"interval_ticks":29}],"clear_reward":{"coins":295,"xp":88}},
+    {"id":"stage_008","number":8,"name_key":"stage.008","boss":false,"groups":[{"enemy_id":"fast_raider","count":22,"interval_ticks":17},{"enemy_id":"ranged_hexer","count":13,"interval_ticks":27}],"clear_reward":{"coins":350,"xp":104}},
+    {"id":"stage_009","number":9,"name_key":"stage.009","boss":false,"groups":[{"enemy_id":"melee_basic","count":24,"interval_ticks":18},{"enemy_id":"fast_raider","count":20,"interval_ticks":16},{"enemy_id":"ranged_hexer","count":15,"interval_ticks":25}],"clear_reward":{"coins":420,"xp":125}},
+    {"id":"stage_010","number":10,"name_key":"stage.010","boss":true,"groups":[{"enemy_id":"melee_basic","count":18,"interval_ticks":18},{"enemy_id":"fast_raider","count":18,"interval_ticks":16},{"enemy_id":"ranged_hexer","count":12,"interval_ticks":24},{"enemy_id":"ember_warlord","count":1,"interval_ticks":1}],"clear_reward":{"coins":700,"xp":250}}
+  ]
+}
+

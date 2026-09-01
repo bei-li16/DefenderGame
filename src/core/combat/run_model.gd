@@ -1,0 +1,583 @@
+class_name DefenderRunModel
+extends RefCounted
+
+const DeterministicRng = preload("res://src/core/rules/deterministic_rng.gd")
+
+const STATUS_RUNNING := "running"
+const STATUS_VICTORY := "victory"
+const STATUS_DEFEAT := "defeat"
+const COLLISION_BAND_HEIGHT_MILLI := 120000
+const EVENT_ORDER := {
+	"spawn": 10,
+	"boss_warning": 11,
+	"command": 20,
+	"shot": 21,
+	"skill_cast": 22,
+	"skill_rejected": 23,
+	"hit": 30,
+	"damage": 40,
+	"wall_damage": 41,
+	"status": 50,
+	"boss_special": 51,
+	"death": 60,
+	"reward": 70,
+	"run_end": 80
+}
+
+var config: Dictionary = {}
+var stage: Dictionary = {}
+var profile_snapshot: Dictionary = {}
+var weapon: Dictionary = {}
+var tick: int = 0
+var status: String = STATUS_RUNNING
+var wall_hp: int = 0
+var wall_max_hp: int = 0
+var mana: int = 0
+var max_mana: int = 0
+var coins_earned: int = 0
+var xp_earned: int = 0
+var kills: int = 0
+var enemies: Array[Dictionary] = []
+var projectiles: Array[Dictionary] = []
+var selected_skill: String = ""
+var aim_x_milli: int = 1200000
+var aim_y_milli: int = 540000
+var fire_down: bool = false
+var fire_cooldown: int = 0
+var skill_cooldowns: Dictionary = {}
+var spawn_queue: Array[Dictionary] = []
+var spawn_cursor: int = 0
+var next_entity_id: int = 1
+var run_id: String = ""
+var seed: int = 1
+
+var _spawn_rng: DefenderDeterministicRng
+var _combat_rng: DefenderDeterministicRng
+var _event_sequence: int = 0
+var _boss_rewarded: bool = false
+
+
+func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_profile: Dictionary) -> Dictionary:
+	config = game_config.duplicate(true)
+	stage = _find_by_id(config.get("stages", []), stage_id)
+	if stage.is_empty():
+		return {"ok": false, "error_code": "unknown_stage", "field_path": "stage_id"}
+	profile_snapshot = player_profile.duplicate(true)
+	weapon = _find_by_id(config.get("weapons", []), "basic_bow")
+	if weapon.is_empty():
+		return {"ok": false, "error_code": "missing_weapon", "field_path": "weapons.basic_bow"}
+	seed = run_seed if run_seed != 0 else 1
+	run_id = "%s-%d-%d" % [stage_id, seed, int(config.get("config_version", 0))]
+	_spawn_rng = DeterministicRng.new(seed ^ 0x4f1bbcdc)
+	_combat_rng = DeterministicRng.new(seed ^ 0x2c9277b5)
+	tick = 0
+	status = STATUS_RUNNING
+	var player: Dictionary = config.get("player", {})
+	wall_max_hp = int(player.get("wall_hp", 500))
+	wall_hp = wall_max_hp
+	max_mana = int(player.get("max_mana", 100))
+	mana = max_mana
+	coins_earned = 0
+	xp_earned = 0
+	kills = 0
+	enemies.clear()
+	projectiles.clear()
+	selected_skill = ""
+	fire_down = false
+	fire_cooldown = 0
+	skill_cooldowns.clear()
+	spawn_queue.clear()
+	spawn_cursor = 0
+	next_entity_id = 1
+	_event_sequence = 0
+	_boss_rewarded = false
+	_build_spawn_queue()
+	return {"ok": true, "run_id": run_id}
+
+
+func step(commands: Array) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	if status != STATUS_RUNNING:
+		return events
+	tick += 1
+	_event_sequence = 0
+	_tick_cooldowns()
+	_spawn_due_enemies(events)
+	_process_commands(commands, events)
+	_regenerate_mana(events)
+	_update_enemies(events)
+	_update_projectiles(events)
+	_resolve_deaths(events)
+	_resolve_run_end(events)
+	_sort_events(events)
+	return events
+
+
+func snapshot() -> Dictionary:
+	var enemies_copy: Array[Dictionary] = []
+	for enemy in enemies:
+		enemies_copy.append(enemy.duplicate(true))
+	var projectiles_copy: Array[Dictionary] = []
+	for projectile in projectiles:
+		projectiles_copy.append(projectile.duplicate(true))
+	return {
+		"tick": tick,
+		"status": status,
+		"stage_id": str(stage.get("id", "")),
+		"stage_number": int(stage.get("number", 0)),
+		"run_id": run_id,
+		"wall_hp": wall_hp,
+		"wall_max_hp": wall_max_hp,
+		"mana": mana,
+		"max_mana": max_mana,
+		"coins_earned": coins_earned,
+		"xp_earned": xp_earned,
+		"kills": kills,
+		"spawned": spawn_cursor,
+		"spawn_total": spawn_queue.size(),
+		"selected_skill": selected_skill,
+		"skill_cooldowns": skill_cooldowns.duplicate(true),
+		"enemies": enemies_copy,
+		"projectiles": projectiles_copy
+	}
+
+
+func result() -> Dictionary:
+	var clear_reward: Dictionary = stage.get("clear_reward", {}) if status == STATUS_VICTORY else {}
+	return {
+		"run_id": run_id,
+		"reward_version": str(config.get("ruleset_version", "unknown")),
+		"stage_id": str(stage.get("id", "")),
+		"stage_number": int(stage.get("number", 0)),
+		"status": status,
+		"tick": tick,
+		"kills": kills,
+		"wall_percent": int(round(float(wall_hp) * 100.0 / maxf(1.0, float(wall_max_hp)))),
+		"coins": coins_earned + int(clear_reward.get("coins", 0)),
+		"xp": xp_earned + int(clear_reward.get("xp", 0))
+	}
+
+
+func debug_force_wall_damage(amount: int) -> void:
+	wall_hp = maxi(0, wall_hp - maxi(0, amount))
+
+
+func _build_spawn_queue() -> void:
+	var spawn_tick := 24
+	var world: Dictionary = config.get("world", {})
+	var y_min := int(world.get("enemy_y_min_milli", 220000))
+	var y_max := int(world.get("enemy_y_max_milli", 920000))
+	for group in stage.get("groups", []):
+		var count := int(group.get("count", 0))
+		var interval := maxi(1, int(group.get("interval_ticks", 30)))
+		for index in range(count):
+			spawn_queue.append({
+				"tick": spawn_tick,
+				"enemy_id": str(group.get("enemy_id", "")),
+				"y_milli": _spawn_rng.range_exclusive(y_min, y_max)
+			})
+			spawn_tick += interval
+		spawn_tick += 45
+
+
+func _spawn_due_enemies(events: Array[Dictionary]) -> void:
+	while spawn_cursor < spawn_queue.size() and int(spawn_queue[spawn_cursor]["tick"]) <= tick:
+		var order: Dictionary = spawn_queue[spawn_cursor]
+		var template := _find_by_id(config.get("enemies", []), str(order["enemy_id"]))
+		spawn_cursor += 1
+		if template.is_empty():
+			continue
+		var stage_number := int(stage.get("number", 1))
+		var hp_scale_permille := 1000 + (stage_number - 1) * 75
+		var damage_scale_permille := 1000 + (stage_number - 1) * 45
+		var world: Dictionary = config.get("world", {})
+		var enemy := {
+			"entity_id": next_entity_id,
+			"enemy_id": str(template["id"]),
+			"name_key": str(template.get("name_key", "")),
+			"x_milli": int(world.get("enemy_spawn_x_milli", 1880000)),
+			"y_milli": int(order["y_milli"]),
+			"hp": maxi(1, int(template["hp"]) * hp_scale_permille / 1000),
+			"max_hp": maxi(1, int(template["hp"]) * hp_scale_permille / 1000),
+			"speed_milli_per_tick": int(template["speed_milli_per_tick"]),
+			"attack_damage": maxi(1, int(template["attack_damage"]) * damage_scale_permille / 1000),
+			"attack_interval_ticks": int(template["attack_interval_ticks"]),
+			"attack_cooldown": 0,
+			"attack_x_milli": int(template["attack_x_milli"]),
+			"armor": int(template.get("armor", 0)),
+			"reward_coins": int(template.get("reward_coins", 0)),
+			"reward_xp": int(template.get("reward_xp", 0)),
+			"collision_radius_milli": int(template.get("collision_radius_milli", 30000)),
+			"tags": template.get("tags", []).duplicate(),
+			"status_resistance_permille": int(template.get("status_resistance_permille", 0)),
+			"slow_permille": 1000,
+			"slow_ticks": 0,
+			"stun_ticks": 0,
+			"burn_ticks": 0,
+			"burn_interval_ticks": 0,
+			"burn_counter": 0,
+			"burn_damage": 0,
+			"special": str(template.get("special", "")),
+			"special_counter": 0
+		}
+		next_entity_id += 1
+		enemies.append(enemy)
+		_emit(events, "spawn", {"entity_id": enemy["entity_id"], "enemy_id": enemy["enemy_id"], "x_milli": enemy["x_milli"], "y_milli": enemy["y_milli"]})
+		if enemy["tags"].has("boss"):
+			_emit(events, "boss_warning", {"entity_id": enemy["entity_id"], "name_key": enemy["name_key"]})
+
+
+func _process_commands(commands: Array, events: Array[Dictionary]) -> void:
+	for command_value in commands:
+		if not command_value is Dictionary:
+			continue
+		var command: Dictionary = command_value
+		var command_type := str(command.get("type", ""))
+		match command_type:
+			"aim":
+				aim_x_milli = clampi(int(command.get("x_milli", aim_x_milli)), 0, int(config["world"]["width_milli"]))
+				aim_y_milli = clampi(int(command.get("y_milli", aim_y_milli)), 0, int(config["world"]["height_milli"]))
+			"fire_started":
+				fire_down = true
+				_emit(events, "command", {"command": "fire_started"})
+				if selected_skill.is_empty() and fire_cooldown <= 0:
+					_fire_arrow(events)
+			"fire_stopped":
+				fire_down = false
+				_emit(events, "command", {"command": "fire_stopped"})
+			"select_skill":
+				var skill_id := str(command.get("skill_id", ""))
+				if not _find_by_id(config.get("skills", []), skill_id).is_empty():
+					selected_skill = skill_id
+					_emit(events, "command", {"command": "select_skill", "skill_id": selected_skill})
+			"cancel_skill":
+				selected_skill = ""
+				_emit(events, "command", {"command": "cancel_skill"})
+			"cast_skill":
+				var cast_id := str(command.get("skill_id", selected_skill))
+				_cast_skill(cast_id, int(command.get("x_milli", aim_x_milli)), int(command.get("y_milli", aim_y_milli)), events)
+	if fire_down and selected_skill.is_empty() and fire_cooldown <= 0:
+		_fire_arrow(events)
+
+
+func _fire_arrow(events: Array[Dictionary]) -> void:
+	var player: Dictionary = config.get("player", {})
+	var origin_x := int(player.get("bow_origin_x_milli", 245000))
+	var origin_y := int(player.get("bow_origin_y_milli", 555000))
+	var delta_x := aim_x_milli - origin_x
+	var delta_y := aim_y_milli - origin_y
+	var divisor := maxi(1, maxi(absi(delta_x), absi(delta_y)))
+	var speed := int(weapon.get("projectile_speed_milli_per_tick", 56000))
+	var strength_level := _upgrade_level("strength")
+	var agility_level := _upgrade_level("agility")
+	var damage := int(weapon.get("damage", 1)) + strength_level * 4
+	var fatal := _combat_rng.chance_per_10000(int(weapon.get("fatal_chance_per_10000", 0)))
+	var power := _combat_rng.chance_per_10000(int(weapon.get("power_shot_chance_per_10000", 0)))
+	if fatal:
+		damage *= int(weapon.get("fatal_multiplier", 2))
+	var projectile := {
+		"entity_id": next_entity_id,
+		"x_milli": origin_x,
+		"y_milli": origin_y,
+		"vx_milli": int(delta_x * speed / divisor),
+		"vy_milli": int(delta_y * speed / divisor),
+		"damage": damage,
+		"fatal": fatal,
+		"power": power,
+		"collision_radius_milli": int(weapon.get("collision_radius_milli", 18000)),
+		"age_ticks": 0
+	}
+	next_entity_id += 1
+	projectiles.append(projectile)
+	var base_interval := int(weapon.get("interval_ticks", 10))
+	var minimum_interval := int(weapon.get("min_interval_ticks", 4))
+	fire_cooldown = maxi(minimum_interval, base_interval - agility_level)
+	_emit(events, "shot", {"entity_id": projectile["entity_id"], "fatal": fatal, "power": power})
+
+
+func _cast_skill(skill_id: String, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
+	if skill_id.is_empty():
+		return
+	var skill := _find_by_id(config.get("skills", []), skill_id)
+	if skill.is_empty():
+		_emit(events, "skill_rejected", {"skill_id": skill_id, "reason": "invalid_target"})
+		return
+	if int(skill_cooldowns.get(skill_id, 0)) > 0:
+		_emit(events, "skill_rejected", {"skill_id": skill_id, "reason": "cooldown"})
+		return
+	var mana_cost := int(skill.get("mana_cost", 0))
+	if mana < mana_cost:
+		_emit(events, "skill_rejected", {"skill_id": skill_id, "reason": "no_mana"})
+		return
+	var world: Dictionary = config.get("world", {})
+	if target_x < int(world.get("castle_x_milli", 0)) or target_x > int(world.get("width_milli", 1920000)) or target_y < 0 or target_y > int(world.get("height_milli", 1080000)):
+		_emit(events, "skill_rejected", {"skill_id": skill_id, "reason": "invalid_target"})
+		return
+	mana = clampi(mana - mana_cost, 0, max_mana)
+	skill_cooldowns[skill_id] = int(skill.get("cooldown_ticks", 1))
+	selected_skill = ""
+	_emit(events, "skill_cast", {"skill_id": skill_id, "x_milli": target_x, "y_milli": target_y, "mana": mana})
+	match skill_id:
+		"fire_ball":
+			_apply_fire_skill(skill, target_x, target_y, events)
+		"glacial_spike":
+			_apply_ice_skill(skill, target_x, target_y, events)
+		"lightning_strike":
+			_apply_lightning_skill(skill, target_x, target_y, events)
+
+
+func _apply_fire_skill(skill: Dictionary, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
+	var damage := int(skill.get("damage", 0)) + _upgrade_level("fire_mastery") * 9
+	for enemy in enemies:
+		if _distance_squared(enemy["x_milli"], enemy["y_milli"], target_x, target_y) <= _square(int(skill["radius_milli"])):
+			_apply_enemy_damage(enemy, damage, "fire", events)
+			enemy["burn_damage"] = int(skill.get("burn_damage", 0))
+			enemy["burn_interval_ticks"] = maxi(1, int(skill.get("burn_interval_ticks", 15)))
+			enemy["burn_counter"] = enemy["burn_interval_ticks"]
+			enemy["burn_ticks"] = _resisted_ticks(enemy, int(skill.get("burn_duration_ticks", 0)))
+			_emit(events, "status", {"entity_id": enemy["entity_id"], "status": "burn", "ticks": enemy["burn_ticks"]})
+
+
+func _apply_ice_skill(skill: Dictionary, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
+	var damage := int(skill.get("damage", 0)) + _upgrade_level("ice_mastery") * 8
+	for enemy in enemies:
+		if _distance_squared(enemy["x_milli"], enemy["y_milli"], target_x, target_y) <= _square(int(skill["radius_milli"])):
+			_apply_enemy_damage(enemy, damage, "ice", events)
+			enemy["slow_permille"] = int(skill.get("slow_permille", 500))
+			enemy["slow_ticks"] = _resisted_ticks(enemy, int(skill.get("slow_duration_ticks", 0)))
+			enemy["stun_ticks"] = maxi(int(enemy["stun_ticks"]), _resisted_ticks(enemy, int(skill.get("freeze_ticks", 0))))
+			_emit(events, "status", {"entity_id": enemy["entity_id"], "status": "frozen", "ticks": enemy["stun_ticks"]})
+
+
+func _apply_lightning_skill(skill: Dictionary, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
+	var candidates: Array[Dictionary] = []
+	var radius_squared := _square(int(skill["radius_milli"]))
+	for enemy in enemies:
+		var distance := _distance_squared(enemy["x_milli"], enemy["y_milli"], target_x, target_y)
+		if distance <= radius_squared:
+			candidates.append({"enemy": enemy, "distance": distance})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["distance"]) < int(b["distance"]))
+	var count := mini(int(skill.get("max_targets", 1)), candidates.size())
+	var damage := int(skill.get("damage", 0)) + _upgrade_level("lightning_mastery") * 11
+	for index in range(count):
+		var enemy: Dictionary = candidates[index]["enemy"]
+		_apply_enemy_damage(enemy, damage, "lightning", events)
+		enemy["stun_ticks"] = maxi(int(enemy["stun_ticks"]), _resisted_ticks(enemy, int(skill.get("stun_ticks", 0))))
+		_emit(events, "status", {"entity_id": enemy["entity_id"], "status": "stunned", "ticks": enemy["stun_ticks"]})
+
+
+func _update_enemies(events: Array[Dictionary]) -> void:
+	for enemy in enemies:
+		if int(enemy["hp"]) <= 0:
+			continue
+		if int(enemy["burn_ticks"]) > 0:
+			enemy["burn_ticks"] = int(enemy["burn_ticks"]) - 1
+			enemy["burn_counter"] = int(enemy["burn_counter"]) - 1
+			if int(enemy["burn_counter"]) <= 0:
+				enemy["burn_counter"] = enemy["burn_interval_ticks"]
+				_apply_enemy_damage(enemy, int(enemy["burn_damage"]), "burn", events)
+		if int(enemy["hp"]) <= 0:
+			continue
+		if int(enemy["stun_ticks"]) > 0:
+			enemy["stun_ticks"] = int(enemy["stun_ticks"]) - 1
+			continue
+		if int(enemy["slow_ticks"]) > 0:
+			enemy["slow_ticks"] = int(enemy["slow_ticks"]) - 1
+		else:
+			enemy["slow_permille"] = 1000
+		if int(enemy["x_milli"]) > int(enemy["attack_x_milli"]):
+			var movement := int(enemy["speed_milli_per_tick"]) * int(enemy["slow_permille"]) / 1000
+			enemy["x_milli"] = maxi(int(enemy["attack_x_milli"]), int(enemy["x_milli"]) - movement)
+		else:
+			if int(enemy["attack_cooldown"]) > 0:
+				enemy["attack_cooldown"] = int(enemy["attack_cooldown"]) - 1
+			else:
+				enemy["attack_cooldown"] = int(enemy["attack_interval_ticks"])
+				wall_hp = maxi(0, wall_hp - int(enemy["attack_damage"]))
+				_emit(events, "wall_damage", {"entity_id": enemy["entity_id"], "amount": enemy["attack_damage"], "wall_hp": wall_hp})
+		if enemy["tags"].has("boss"):
+			enemy["special_counter"] = int(enemy["special_counter"]) + 1
+			if int(enemy["special_counter"]) >= 180:
+				enemy["special_counter"] = 0
+				wall_hp = maxi(0, wall_hp - 20)
+				_emit(events, "boss_special", {"entity_id": enemy["entity_id"], "special": enemy["special"], "wall_hp": wall_hp})
+
+
+func _update_projectiles(events: Array[Dictionary]) -> void:
+	var enemy_bands := _build_enemy_bands()
+	for projectile_index in range(projectiles.size() - 1, -1, -1):
+		var projectile: Dictionary = projectiles[projectile_index]
+		var previous_x := int(projectile["x_milli"])
+		var previous_y := int(projectile["y_milli"])
+		projectile["x_milli"] = previous_x + int(projectile["vx_milli"])
+		projectile["y_milli"] = previous_y + int(projectile["vy_milli"])
+		projectile["age_ticks"] = int(projectile["age_ticks"]) + 1
+		var hit_enemy: Dictionary = {}
+		var best_t := 2.0
+		var candidate_enemies := _projectile_candidates(enemy_bands, previous_y, int(projectile["y_milli"]), int(projectile["collision_radius_milli"]))
+		for enemy in candidate_enemies:
+			if int(enemy["hp"]) <= 0:
+				continue
+			var radius := int(enemy["collision_radius_milli"]) + int(projectile["collision_radius_milli"])
+			var hit_t := _segment_hit_t(previous_x, previous_y, int(projectile["x_milli"]), int(projectile["y_milli"]), int(enemy["x_milli"]), int(enemy["y_milli"]), radius)
+			if hit_t >= 0.0 and hit_t < best_t:
+				best_t = hit_t
+				hit_enemy = enemy
+		if not hit_enemy.is_empty():
+			_emit(events, "hit", {"projectile_id": projectile["entity_id"], "entity_id": hit_enemy["entity_id"], "fatal": projectile["fatal"], "power": projectile["power"]})
+			_apply_enemy_damage(hit_enemy, int(projectile["damage"]), "arrow", events)
+			if bool(projectile["power"]) and not hit_enemy["tags"].has("boss"):
+				hit_enemy["x_milli"] = mini(int(config["world"]["enemy_spawn_x_milli"]), int(hit_enemy["x_milli"]) + int(weapon.get("knockback_milli", 0)))
+			projectiles.remove_at(projectile_index)
+		elif int(projectile["age_ticks"]) > 90 or int(projectile["x_milli"]) > int(config["world"]["width_milli"]) + 100000 or int(projectile["y_milli"]) < -100000 or int(projectile["y_milli"]) > int(config["world"]["height_milli"]) + 100000:
+			projectiles.remove_at(projectile_index)
+
+
+func _build_enemy_bands() -> Dictionary:
+	var bands: Dictionary = {}
+	for enemy in enemies:
+		if int(enemy["hp"]) <= 0:
+			continue
+		var radius := int(enemy["collision_radius_milli"])
+		var minimum_band := _band_index(int(enemy["y_milli"]) - radius)
+		var maximum_band := _band_index(int(enemy["y_milli"]) + radius)
+		for band in range(minimum_band, maximum_band + 1):
+			if not bands.has(band):
+				bands[band] = []
+			bands[band].append(enemy)
+	return bands
+
+
+func _projectile_candidates(bands: Dictionary, previous_y: int, current_y: int, radius: int) -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	var seen: Dictionary = {}
+	var minimum_band := _band_index(mini(previous_y, current_y) - radius)
+	var maximum_band := _band_index(maxi(previous_y, current_y) + radius)
+	for band in range(minimum_band, maximum_band + 1):
+		for enemy in bands.get(band, []):
+			var entity_id := int(enemy["entity_id"])
+			if seen.has(entity_id):
+				continue
+			seen[entity_id] = true
+			candidates.append(enemy)
+	return candidates
+
+
+static func _band_index(y_milli: int) -> int:
+	return int(floor(float(y_milli) / float(COLLISION_BAND_HEIGHT_MILLI)))
+
+
+func _resolve_deaths(events: Array[Dictionary]) -> void:
+	for index in range(enemies.size() - 1, -1, -1):
+		var enemy: Dictionary = enemies[index]
+		if int(enemy["hp"]) > 0:
+			continue
+		kills += 1
+		var coins := int(enemy.get("reward_coins", 0))
+		var xp := int(enemy.get("reward_xp", 0))
+		coins_earned += coins
+		xp_earned += xp
+		_emit(events, "death", {"entity_id": enemy["entity_id"], "enemy_id": enemy["enemy_id"], "boss": enemy["tags"].has("boss")})
+		_emit(events, "reward", {"source": "kill", "entity_id": enemy["entity_id"], "coins": coins, "xp": xp})
+		if enemy["tags"].has("boss"):
+			_boss_rewarded = true
+		enemies.remove_at(index)
+
+
+func _resolve_run_end(events: Array[Dictionary]) -> void:
+	if status != STATUS_RUNNING:
+		return
+	if wall_hp <= 0:
+		status = STATUS_DEFEAT
+		fire_down = false
+		_emit(events, "run_end", result())
+		return
+	if spawn_cursor >= spawn_queue.size() and enemies.is_empty():
+		status = STATUS_VICTORY
+		fire_down = false
+		var result_data := result()
+		_emit(events, "reward", {"source": "stage_clear", "coins": int(stage["clear_reward"]["coins"]), "xp": int(stage["clear_reward"]["xp"]), "idempotency_key": run_id + ":" + str(config["ruleset_version"])})
+		_emit(events, "run_end", result_data)
+
+
+func _apply_enemy_damage(enemy: Dictionary, raw_damage: int, source: String, events: Array[Dictionary]) -> void:
+	if int(enemy["hp"]) <= 0:
+		return
+	var damage := maxi(1, raw_damage - int(enemy.get("armor", 0)))
+	enemy["hp"] = maxi(0, int(enemy["hp"]) - damage)
+	_emit(events, "damage", {"entity_id": enemy["entity_id"], "amount": damage, "source": source, "hp": enemy["hp"]})
+
+
+func _regenerate_mana(events: Array[Dictionary]) -> void:
+	var player: Dictionary = config.get("player", {})
+	var interval := maxi(1, int(player.get("mana_regen_interval_ticks", 15)))
+	if tick % interval == 0 and mana < max_mana:
+		mana = clampi(mana + int(player.get("mana_regen_amount", 1)), 0, max_mana)
+		_emit(events, "status", {"status": "mana_regen", "mana": mana})
+
+
+func _tick_cooldowns() -> void:
+	if fire_cooldown > 0:
+		fire_cooldown -= 1
+	for skill_id in skill_cooldowns.keys():
+		skill_cooldowns[skill_id] = maxi(0, int(skill_cooldowns[skill_id]) - 1)
+
+
+func _upgrade_level(upgrade_id: String) -> int:
+	var upgrades: Dictionary = profile_snapshot.get("upgrades", {})
+	return int(upgrades.get(upgrade_id, 0))
+
+
+func _resisted_ticks(enemy: Dictionary, base_ticks: int) -> int:
+	var resistance := clampi(int(enemy.get("status_resistance_permille", 0)), 0, 950)
+	return maxi(1, base_ticks * (1000 - resistance) / 1000) if base_ticks > 0 else 0
+
+
+func _emit(events: Array[Dictionary], event_type: String, values: Dictionary) -> void:
+	var event := values.duplicate(true)
+	event["type"] = event_type
+	event["tick"] = tick
+	event["sequence"] = _event_sequence
+	_event_sequence += 1
+	events.append(event)
+
+
+func _sort_events(events: Array[Dictionary]) -> void:
+	events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_order := int(EVENT_ORDER.get(str(a["type"]), 999))
+		var b_order := int(EVENT_ORDER.get(str(b["type"]), 999))
+		if a_order == b_order:
+			return int(a["sequence"]) < int(b["sequence"])
+		return a_order < b_order
+	)
+
+
+static func _find_by_id(items: Array, item_id: String) -> Dictionary:
+	for value in items:
+		if value is Dictionary and str(value.get("id", "")) == item_id:
+			return value.duplicate(true)
+	return {}
+
+
+static func _square(value: int) -> int:
+	return value * value
+
+
+static func _distance_squared(ax: int, ay: int, bx: int, by: int) -> int:
+	var dx := ax - bx
+	var dy := ay - by
+	return dx * dx + dy * dy
+
+
+static func _segment_hit_t(ax: int, ay: int, bx: int, by: int, px: int, py: int, radius: int) -> float:
+	var dx := float(bx - ax)
+	var dy := float(by - ay)
+	var length_squared := dx * dx + dy * dy
+	var t := 0.0
+	if length_squared > 0.0:
+		t = clampf((float(px - ax) * dx + float(py - ay) * dy) / length_squared, 0.0, 1.0)
+	var closest_x := float(ax) + dx * t
+	var closest_y := float(ay) + dy * t
+	var offset_x := float(px) - closest_x
+	var offset_y := float(py) - closest_y
+	return t if offset_x * offset_x + offset_y * offset_y <= float(radius) * float(radius) else -1.0

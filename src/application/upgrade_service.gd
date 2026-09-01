@@ -1,0 +1,56 @@
+class_name DefenderUpgradeService
+extends RefCounted
+
+
+func purchase(profile: Dictionary, config: Dictionary, upgrade_id: String) -> Dictionary:
+	var definition := _find_upgrade(config.get("upgrades", []), upgrade_id)
+	if definition.is_empty():
+		return {"ok": false, "error_code": "unknown_upgrade", "profile": profile}
+	var current_upgrades: Dictionary = profile.get("upgrades", {})
+	var current_level := int(current_upgrades.get(upgrade_id, 0))
+	if current_level >= int(definition.get("max_level", 0)):
+		return {"ok": false, "error_code": "max_level", "profile": profile}
+	for prerequisite in definition.get("prerequisites", []):
+		if int(current_upgrades.get(str(prerequisite), 0)) <= 0:
+			return {"ok": false, "error_code": "missing_prerequisite", "profile": profile}
+	var price := price_for_level(definition, current_level)
+	if int(profile.get("coins", 0)) < price:
+		return {"ok": false, "error_code": "insufficient_coins", "price": price, "profile": profile}
+	var updated := profile.duplicate(true)
+	updated["coins"] = int(updated.get("coins", 0)) - price
+	var updated_upgrades: Dictionary = updated.get("upgrades", {}).duplicate(true)
+	updated_upgrades[upgrade_id] = current_level + 1
+	updated["upgrades"] = updated_upgrades
+	return {"ok": true, "price": price, "new_level": current_level + 1, "profile": updated}
+
+
+func apply_run_reward(profile: Dictionary, result: Dictionary) -> Dictionary:
+	var key := str(result.get("run_id", "")) + ":" + str(result.get("reward_version", ""))
+	var ledger: Array = profile.get("reward_ledger", [])
+	if key.is_empty() or ledger.has(key):
+		return {"ok": true, "duplicate": true, "profile": profile.duplicate(true)}
+	var updated := profile.duplicate(true)
+	updated["coins"] = int(updated.get("coins", 0)) + int(result.get("coins", 0))
+	updated["xp"] = int(updated.get("xp", 0)) + int(result.get("xp", 0))
+	var updated_ledger: Array = updated.get("reward_ledger", []).duplicate()
+	updated_ledger.append(key)
+	if updated_ledger.size() > 200:
+		updated_ledger = updated_ledger.slice(updated_ledger.size() - 200)
+	updated["reward_ledger"] = updated_ledger
+	return {"ok": true, "duplicate": false, "profile": updated}
+
+
+static func price_for_level(definition: Dictionary, current_level: int) -> int:
+	var price := int(definition.get("base_cost", 0))
+	var growth := int(definition.get("cost_growth_permille", 1000))
+	for ignored in range(current_level):
+		price = maxi(price + 1, int(round(float(price) * float(growth) / 1000.0)))
+	return price
+
+
+static func _find_upgrade(upgrades: Array, upgrade_id: String) -> Dictionary:
+	for definition in upgrades:
+		if definition is Dictionary and str(definition.get("id", "")) == upgrade_id:
+			return definition
+	return {}
+

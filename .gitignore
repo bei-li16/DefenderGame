@@ -1,20 +1,24 @@
 # Godot generated cache (Godot 4.x)
 .godot/
 .import/
+/参考/**/*.import
+*.translation
 
 # Local editor settings
 .vscode/
 .idea/
 
-# Export and test output
+# Export, generated manifest and test output
 Build/
 Builds/
+builds/
 Export/
 Artifacts/
 TestResults/
 Coverage/
+content/build/build-manifest.json
 
-# Operating system files
+# Operating system and temporary files
 .DS_Store
 Thumbs.db
 Desktop.ini

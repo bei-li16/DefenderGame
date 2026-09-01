@@ -8,6 +8,8 @@
 
 目标：使用 Godot 4.7.2 和 GDScript 在一台 Windows 电脑上完成轻量、离线、可测试的 2D 单机 MVP
 
+实施状态：本文架构已在当前分支落地。模块、测试结果和发布阻塞项见 [`implementation-status.md`](implementation-status.md)，本机命令见 [`development-guide.md`](development-guide.md)。
+
 ## 1. 架构目标
 
 本方案以最小工具链为首要约束。Godot 编辑器、导出模板、Git 和游戏资源应构成首版全部开发依赖，不安装 .NET、Visual Studio、移动 SDK、数据库、容器或云服务。
