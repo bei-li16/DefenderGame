@@ -148,9 +148,18 @@ diagnostics/
 
 脚本要求 Git 工作树干净，并依次执行内容校验、核心测试、10 Stage 自动通关、Godot 声明一致性、PCK 预检、项目许可、清单和匹配模板检查。导出后还会检查实际 PCK，使用非管理员进程和隔离 `%APPDATA%` 启动实际 EXE，并确认 `profile.json`、`settings.json` 写入用户数据目录。Release 成功后才会生成包含 EXE/PCK、`README.txt`、`GAME_LICENSE.txt`、`GODOT_COPYRIGHT.txt` 的便携 ZIP。
 
+项目所有者确定许可和版权主体后，可任选一条命令生成待审阅的项目许可：
+
+```powershell
+& .\tools\set_game_license.ps1 -License MIT -CopyrightHolder '版权主体名称' -Year 2026
+& .\tools\set_game_license.ps1 -License Proprietary -CopyrightHolder '版权主体名称' -Year 2026
+```
+
+生成器默认拒绝覆盖已有 `release/GAME_LICENSE.txt`，需要有意替换时才使用 `-Force`。MIT 模板采用 [OSI 公布文本](https://opensource.org/license/mit)；Proprietary 是便于审阅的项目模板，不替代适用司法辖区的专业法律意见。两个源模板都被导出预设和 PCK 探针明确排除，发布 ZIP 只收集最终确认的 `GAME_LICENSE.txt`。
+
 当前导出预设已就绪，但仍有两个发布门禁：
 
 - 按用户要求未安装 Godot 4.7.2 export templates；不要用其他 Godot 版本的模板替代。
-- 项目所有者尚未选择代码/原创资产许可，因此 `release/GAME_LICENSE.txt` 尚未创建。
+- 项目所有者尚未选择代码/原创资产许可及版权主体，因此生成器尚未创建 `release/GAME_LICENSE.txt`。
 
 这两个条件不影响编辑器内开发和全部源码验收，但在解除前不能生成合规发布包。

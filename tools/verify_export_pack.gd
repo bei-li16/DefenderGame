@@ -16,6 +16,7 @@ const EXCLUDED_PATHS: Array[String] = [
 	"res://tools/build_windows.ps1",
 	"res://tools/verify_export_pack.gd",
 	"res://docs/implementation-status.md",
+	"res://release/license-templates/MIT.template.txt",
 	"res://参考/来源清单.csv",
 	"res://参考/01_官方/app-store_01_主菜单.webp"
 ]

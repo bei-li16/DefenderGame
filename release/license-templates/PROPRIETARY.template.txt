@@ -1,0 +1,25 @@
+Aegis of Ember / 余烬守望
+Project Code and Original Content License
+License-Type: Proprietary
+
+Copyright (c) {{YEAR}} {{COPYRIGHT_HOLDER}}. All rights reserved.
+
+The game code, original visual assets, original audio, text, game design data,
+and documentation covered by this notice are proprietary works of the
+copyright holder.
+
+No license is granted to copy, modify, publish, distribute, sublicense, sell,
+or create derivative works from these materials except where expressly
+permitted by applicable law or by prior written permission from the copyright
+holder. A person who lawfully receives a released game build may install and
+use that build for personal use subject to any accompanying written terms.
+
+Third-party software and notices are not covered by this proprietary notice.
+Godot Engine and bundled third-party components remain governed by the terms
+listed in GODOT_COPYRIGHT.txt.
+
+THE MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, TO THE
+MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW.
+
+This template is a project convenience and is not a substitute for legal
+advice. The publisher should obtain legal review before commercial release.

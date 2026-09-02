@@ -29,7 +29,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | Presentation | 启动恢复、主菜单、关卡选择、升级及前置条件、设置、教学、战场、HUD、暂停、快捷设置、结算、保存失败重试和原创 Canvas 视觉 |
 | Infrastructure | JSON、临时写入/校验/原子替换、备份/迁移、InputMap、程序合成音效、本地轮转日志和手动诊断 ZIP |
 | Content | 10 Stage、3 普通敌人、1 Boss、1 武器、3 技能、5 升级、中英文文本、难度倍率/上限和配置化生成规则 |
-| Tooling | 内容校验、Godot 许可声明生成、构建清单、headless 回归、自动通关、事务/输入/诊断/教学/设置/布局验收、崩溃恢复、压力/浸泡、真实窗口运行、PCK 预检和导出 EXE 普通用户验收脚本 |
+| Tooling | 内容校验、Godot 声明及项目许可生成、构建清单、headless 回归、自动通关、事务/输入/诊断/教学/设置/布局验收、崩溃恢复、压力/浸泡、真实窗口运行、PCK 预检和导出 EXE 普通用户验收脚本 |
 
 ## 3. 最终自动验证结果
 
@@ -52,7 +52,8 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | `tests/resolution_layout.gd` | zh_CN/en_US × 1366×768/1920×1080/2560×1440 × 菜单/战斗 9 种状态，共 54 组全部通过 |
 | `tests/window_mode_acceptance.gd` | 真实窗口下窗口、无边框、全屏、准星映射和 1920×1080 逻辑画布 7/7 通过 |
 | `tools/run_windows_runtime_acceptance.ps1` | Compatibility/GTX 1060：平均 408.25 FPS、帧时 p95 3.05 ms、进程峰值工作集 194.75 MiB；5 次启动平均 1.510 s、最慢 1.728 s |
-| `tools/run_pack_preflight.ps1` | 不安装模板生成约 143 KiB PCK；7 个必需资源存在、7 个测试/工具/文档/参考路径排除，manifest Git SHA/config hash 一致；从源码目录外及隔离 `%APPDATA%` 启动成功 |
+| `tools/run_pack_preflight.ps1` | 不安装模板生成约 143 KiB PCK；7 个必需资源存在、8 个测试/工具/文档/许可模板/参考路径排除，manifest Git SHA/config hash 一致；从源码目录外及隔离 `%APPDATA%` 启动成功 |
+| `tools/set_game_license.ps1` | MIT/Proprietary 临时输出均无残留占位符，版权主体/年份替换正确；默认防覆盖门禁通过，未替项目所有者生成最终许可 |
 | 静态边界检查 | 生产源码无 HTTP/WebSocket 客户端；表现层无硬编码 `KEY_`/`button_index`，无直接修改 Profile；Core 不依赖 SceneTree/Input/FileAccess/表现节点 |
 
 真实运行使用非管理员进程完成，游戏的所有持久写入均位于 `user://`。这证明源码路径不要求提权，但 AT-020 仍需在未安装 Godot 的普通用户环境用发布 EXE 复核。
@@ -103,12 +104,12 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 PCK 预检脚本已经证明资源过滤、manifest 和包内启动路径有效。正式构建脚本会先检查干净 Git、内容、核心测试、10 Stage、Godot/第三方许可声明和项目许可，再生成带 Godot 版本、Git SHA、配置版本/hash、UTC 时间的清单并导出。当前仍有两个主动门禁：
 
 1. 本机没有 Godot 4.7.2 的 `windows_debug_x86_64.exe` / `windows_release_x86_64.exe` export templates；这是遵循用户“不安装模板”的预期状态。
-2. `release/GAME_LICENSE.txt` 尚不存在；项目发布许可必须由项目所有者选择，不能由实现者代替授权。
+2. `release/GAME_LICENSE.txt` 尚不存在；MIT/Proprietary 生成器和模板已经验证，但许可类型与版权主体必须由项目所有者选择，不能由实现者代替授权。
 
 解除后依次执行：
 
 1. 安装与 Godot 4.7.2 完全匹配的官方 export templates。
-2. 确定项目代码/原创资产许可并创建 `release/GAME_LICENSE.txt`。
+2. 确定项目代码/原创资产许可和版权主体，使用 `tools/set_game_license.ps1` 生成并审阅 `release/GAME_LICENSE.txt`。
 3. 运行 `tools/build_windows.ps1 -Configuration Release`，生成 EXE/PCK 和带许可声明的便携 ZIP。
 4. 在未安装 Godot 的普通 Windows 用户环境执行 AT-019、AT-020。
 5. 用独立最低目标配置复核冷启动、Compatibility 渲染和 60 分钟稳定性。

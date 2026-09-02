@@ -49,6 +49,10 @@ $gameLicense = Join-Path $repository 'release\GAME_LICENSE.txt'
 if (-not (Test-Path -LiteralPath $gameLicense -PathType Leaf)) {
     throw 'Publisher license decision is required: create release\GAME_LICENSE.txt before exporting a distributable build.'
 }
+$gameLicenseText = Get-Content -Raw -LiteralPath $gameLicense
+if ($gameLicenseText.Length -lt 100 -or $gameLicenseText -match '\{\{[^}]+\}\}|<YEAR>|<COPYRIGHT HOLDER>|(?i)\bTODO\b') {
+    throw 'release\GAME_LICENSE.txt is empty, incomplete, or still contains placeholders.'
+}
 
 & $GodotConsole --headless --path $repository --script 'res://tools/write_build_manifest.gd'
 if ($LASTEXITCODE -ne 0) {
