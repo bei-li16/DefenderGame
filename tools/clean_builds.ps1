@@ -41,9 +41,22 @@ foreach ($name in $probeDirectories) {
 
 $tempFiles = Get-ChildItem -LiteralPath $builds -Recurse -Force -File |
     Where-Object { $_.Extension -eq ".tmp" -or $_.Extension -eq ".log" }
+$locked = 0
 foreach ($file in $tempFiles) {
-    Remove-Item -LiteralPath $file.FullName -Force
-    Write-Host "Removed $($file.FullName.Substring($builds.Length + 1))"
+    try {
+        Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+        Write-Host "Removed $($file.FullName.Substring($builds.Length + 1))"
+    }
+    catch {
+        # Files locked by a running process (for example a game instance still
+        # holding the previous build) are reported and left in place.
+        $locked += 1
+        Write-Warning "Locked, left in place: $($file.FullName.Substring($builds.Length + 1))"
+    }
 }
 
 Write-Host "Probe residue cleaned; release artifacts in Builds/Windows and the portable ZIP were kept."
+if ($locked -gt 0) {
+    Write-Host "$locked locked file(s) were skipped; close the owning process and re-run if needed."
+}
+exit 0
