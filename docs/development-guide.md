@@ -9,10 +9,11 @@
 当前开发阶段只依赖：
 
 - Godot 4.7.2 stable 标准版（本机位于 `D:\Software\Godot-4.7.2`）。
+- 与 Godot 4.7.2 完全匹配的 Windows x86_64 Debug/Release export templates（位于 `%APPDATA%\Godot\export_templates\4.7.2.stable`，合计约 203 MiB）。
 - Git。
 - 可选文本编辑器。
 
-不需要 Unity、Visual Studio、.NET SDK、Android Studio、Xcode、数据库、Docker、第三方 Godot addon 或外部音视频编辑器。Windows export templates 仅在生成 EXE/PCK 时需要，当前按用户要求未安装。
+不需要 Unity、Visual Studio、.NET SDK、Android Studio、Xcode、数据库、Docker、第三方 Godot addon 或外部音视频编辑器。为保持轻量，只安装了两个 Windows x86_64 模板；Android、iOS、Web、Linux 和 macOS 模板均未安装，完整模板下载包在校验和提取后已删除。
 
 下面用 `$Godot` 和 `$GodotConsole` 简化命令；如换电脑，只需修改这两个值：
 
@@ -131,7 +132,7 @@ diagnostics/
 
 清单位于 `content/build/build-manifest.json`，包含应用版本、Godot 版本、Git SHA、配置版本、配置 hash 和 UTC 时间。该文件不提交 Git，但会被资源导出收集。
 
-不安装 export templates 时，仍可执行本地 PCK 发布预检：
+换机后即使暂未安装 export templates，仍可执行本地 PCK 发布预检：
 
 ```powershell
 & .\tools\run_pack_preflight.ps1
@@ -148,7 +149,7 @@ diagnostics/
 
 脚本要求 Git 工作树干净，并依次执行内容校验、核心测试、10 Stage 自动通关、Godot 声明一致性、PCK 预检、项目许可、清单和匹配模板检查。导出后还会检查实际 PCK，使用非管理员进程和隔离 `%APPDATA%` 启动实际 EXE，并确认 `profile.json`、`settings.json` 写入用户数据目录。Release 成功后才会生成包含 EXE/PCK、`README.txt`、`GAME_LICENSE.txt`、`GODOT_COPYRIGHT.txt` 的便携 ZIP。
 
-项目所有者确定许可和版权主体后，可任选一条命令生成待审阅的项目许可：
+项目当前采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。需要为后续项目有意更换许可时，可任选一条命令生成待审阅文件：
 
 ```powershell
 & .\tools\set_game_license.ps1 -License MIT -CopyrightHolder '版权主体名称' -Year 2026
@@ -157,12 +158,7 @@ diagnostics/
 
 生成器默认拒绝覆盖已有 `release/GAME_LICENSE.txt`，需要有意替换时才使用 `-Force`。MIT 模板采用 [OSI 公布文本](https://opensource.org/license/mit)；Proprietary 是便于审阅的项目模板，不替代适用司法辖区的专业法律意见。两个源模板都被导出预设和 PCK 探针明确排除，发布 ZIP 只收集最终确认的 `GAME_LICENSE.txt`。
 
-当前导出预设已就绪，但仍有两个发布门禁：
-
-- 按用户要求未安装 Godot 4.7.2 export templates；不要用其他 Godot 版本的模板替代。
-- 项目所有者尚未选择代码/原创资产许可及版权主体，因此生成器尚未创建 `release/GAME_LICENSE.txt`。
-
-这两个条件不影响编辑器内开发和全部源码验收，但在解除前不能生成合规发布包。
+当前导出预设、MIT 项目许可和 Godot 4.7.2 Windows x86_64 模板均已就绪。不要用其他 Godot 版本的模板替代；正式构建必须从干净 Git 工作树执行。
 
 需要一次查看全部发布条件时运行：
 
@@ -170,4 +166,4 @@ diagnostics/
 & .\tools\check_release_readiness.ps1
 ```
 
-它会执行无模板 PCK 预检，并把分支、Git、Godot、导出预设、许可、两个模板、非管理员状态和 PCK 结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。未满足条件或跳过动态预检时返回退出码 2；只想快速查看静态材料时可增加 `-SkipPackPreflight`，但该模式不会产生“发布就绪”结论。
+它会执行 PCK 预检，并把分支、Git、Godot、导出预设、许可、两个模板、非管理员状态和 PCK 结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。当前本机结果为 12/12、blockers=0。未满足条件或跳过动态预检时返回退出码 2；只想快速查看静态材料时可增加 `-SkipPackPreflight`，但该模式不会产生“发布就绪”结论。

@@ -16,7 +16,7 @@
 
 产品名为《余烬守望 / Aegis of Ember》。实现受参考资料的信息层级启发，但没有复制或打包 `参考/` 下的图片；战场、敌人、城堡、技能效果和短音效均由项目代码原创生成，保持轻量且无需额外制作软件。
 
-MVP 源码门禁 AT-001～AT-018 已通过。无需模板的 PCK 资源收集、内容排除、清单一致性和隔离启动预检也已通过。AT-019、AT-020 仍需要实际 Windows EXE/PCK 对和便携 ZIP，当前受“不要安装 export templates”的明确约束以及项目许可尚未选定而保持待办，不能用编辑器或 PCK 预检代替最终发布包结论。
+MVP 门禁 AT-001～AT-020 已在当前 Windows 开发机通过。Godot 4.7.2 官方 Windows x86_64 模板已安装，项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可；正式 Release 已生成独立 EXE/PCK 和便携 ZIP，并从全新解压目录以非管理员进程完成包内容、清单、图形启动及 `user://` 写入验收。
 
 Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完整四页研究树和 Honors 仍按需求文档保留为后续范围，不属于本次 MVP 发布门禁。
 
@@ -52,12 +52,14 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | `tests/resolution_layout.gd` | zh_CN/en_US × 1366×768/1920×1080/2560×1440 × 菜单/战斗 9 种状态，共 54 组全部通过 |
 | `tests/window_mode_acceptance.gd` | 真实窗口下窗口、无边框、全屏、准星映射和 1920×1080 逻辑画布 7/7 通过 |
 | `tools/run_windows_runtime_acceptance.ps1` | Compatibility/GTX 1060：平均 408.25 FPS、帧时 p95 3.05 ms、进程峰值工作集 194.75 MiB；5 次启动平均 1.510 s、最慢 1.728 s |
-| `tools/run_pack_preflight.ps1` | 不安装模板生成约 143 KiB PCK；7 个必需资源存在、8 个测试/工具/文档/许可模板/参考路径排除，manifest Git SHA/config hash 一致；从源码目录外及隔离 `%APPDATA%` 启动成功 |
-| `tools/set_game_license.ps1` | MIT/Proprietary 临时输出均无残留占位符，版权主体/年份替换正确；默认防覆盖门禁通过，未替项目所有者生成最终许可 |
-| `tools/check_release_readiness.ps1` | 汇总分支、提交、工作树、Godot、导出预设、声明、项目许可、Debug/Release 模板、非管理员状态和 PCK 预检；生成机器可读 JSON，缺项返回退出码 2 |
+| `tools/run_pack_preflight.ps1` | 生成约 143 KiB PCK；7 个必需资源存在、8 个测试/工具/文档/许可模板/参考路径排除，manifest Git SHA/config hash 一致；从源码目录外及隔离 `%APPDATA%` 启动成功 |
+| `tools/set_game_license.ps1` | MIT/Proprietary 模板、占位符替换及防覆盖门禁通过；最终采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可 |
+| `tools/check_release_readiness.ps1` | 分支、提交、工作树、Godot、导出预设、声明、项目许可、Debug/Release 模板、非管理员状态和 PCK 预检共 12/12 就绪，blockers=0 |
+| `tools/build_windows.ps1 -Configuration Release` | 内容、44 项核心回归、10 Stage、许可、PCK 和模板门禁通过；生成独立 EXE/PCK 及仅含 5 个预期文件的便携 ZIP |
+| ZIP 独立解压验收 | 实际 EXE/PCK 从全新目录以非管理员进程启动，退出码 0；Compatibility/OpenGL 3.3 识别 GTX 1060，隔离用户目录生成 `profile.json`、`settings.json` |
 | 静态边界检查 | 生产源码无 HTTP/WebSocket 客户端；表现层无硬编码 `KEY_`/`button_index`，无直接修改 Profile；Core 不依赖 SceneTree/Input/FileAccess/表现节点 |
 
-真实运行使用非管理员进程完成，游戏的所有持久写入均位于 `user://`。这证明源码路径不要求提权，但 AT-020 仍需在未安装 Godot 的普通用户环境用发布 EXE 复核。
+真实运行使用非管理员进程和 ZIP 内的实际发布 EXE 完成，游戏的所有持久写入均位于 `user://`；启动过程不调用已安装的 Godot 编辑器或控制台。面向外部公开分发前，仍建议在另一台未安装 Godot 的最低目标配置电脑上补做兼容性抽检，但它不再是当前本机 Release 构建的阻塞项。
 
 ## 4. 需求追踪
 
@@ -72,7 +74,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | FR-070～FR-073 经济/升级 | MVP 源码通过 | coins/xp、来源/规则版本/幂等键、5 项升级的效果/价格/前置/上限、永久奖励账本 |
 | FR-080～FR-083 配置/随机/回放 | MVP 源码通过 | v2 JSON 规则真源、启动/构建校验、注入 seed/run ID、命令日志和事件 SHA-256 |
 | NFR-001～NFR-009 | 本机源码通过 | 性能、启动、60 分钟稳定性、离线、可靠性、分层、可复现、可访问性和双语均有自动证据 |
-| NFR-010 构建 | 部分通过 | 构建脚本及 manifest 字段已实现，manifest 已进入并通过 PCK 一致性检查；发布 EXE/PCK 对未生成 |
+| NFR-010 构建 | 通过 | Release EXE/PCK 和 ZIP 已生成；包内 manifest 的 Godot 版本、Git SHA、配置版本和配置 hash 通过一致性检查 |
 | NFR-011～NFR-012 | 源码通过 | 不采集/上传数据；无 Asset Library addon 或生产第三方插件 |
 
 ## 5. AT-001～AT-020 状态
@@ -97,22 +99,17 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | AT-016 | 通过 | 重复敌人 ID 返回字段路径 `enemies[1].id` 和错误码 `duplicate_id` |
 | AT-017 | 通过 | 完整单机流程无网络依赖；生产脚本静态检查无 HTTP/WebSocket 客户端 |
 | AT-018 | 通过 | Core 静态检查无 Node、SceneTree、Input、FileAccess、AudioServer 或 Time 依赖 |
-| AT-019 | PCK 预检通过，待 EXE | 无模板 PCK 已生成、检查并隔离启动；按用户要求未安装 export templates，项目许可文件尚未确定，正式 EXE/PCK 对尚未生成 |
-| AT-020 | 源码路径通过，待发布包 | 当前非管理员进程和 `user://` 写入路径通过；仍需发布 EXE 在未安装 Godot 的普通用户环境复核 |
+| AT-019 | 通过 | 正式 Windows x86_64 EXE/PCK 和 ZIP 已生成；实际 PCK 的资源边界、manifest Git SHA/config hash、全新解压目录启动及图形 Compatibility 渲染均通过 |
+| AT-020 | 通过 | ZIP 内实际 EXE 由非管理员进程直接启动，不调用编辑器；`profile.json`、`settings.json` 仅写入隔离的 `%APPDATA%\Godot\app_userdata\Aegis of Ember` |
 
-## 6. 当前发布阻塞项与下一步
+## 6. 发布结果与后续兼容性抽检
 
-PCK 预检脚本已经证明资源过滤、manifest 和包内启动路径有效。正式构建脚本会先检查干净 Git、内容、核心测试、10 Stage、Godot/第三方许可声明和项目许可，再生成带 Godot 版本、Git SHA、配置版本/hash、UTC 时间的清单并导出。当前仍有两个主动门禁：
+当前本机没有发布阻塞项。正式构建产物位于被 Git 忽略的 `Builds/`：
 
-1. 本机没有 Godot 4.7.2 的 `windows_debug_x86_64.exe` / `windows_release_x86_64.exe` export templates；这是遵循用户“不安装模板”的预期状态。
-2. `release/GAME_LICENSE.txt` 尚不存在；MIT/Proprietary 生成器和模板已经验证，但许可类型与版权主体必须由项目所有者选择，不能由实现者代替授权。
+1. `Builds/Windows/DefenderGame.exe` 与 `DefenderGame.pck`。
+2. `Builds/Aegis-of-Ember-0.1.0-Windows-x64.zip`。
+3. ZIP 只包含 EXE、PCK、`README.txt`、`GAME_LICENSE.txt` 和 `GODOT_COPYRIGHT.txt`。
 
-解除后依次执行：
+为减小本机负担，仅从官方 4.7.2 模板包安装了 `windows_debug_x86_64.exe` 和 `windows_release_x86_64.exe`（合计约 203 MiB）；约 1.19 GiB 的完整下载包在 SHA-512 校验和提取成功后已删除。Android、iOS、Web、Linux 和 macOS 模板均未安装。
 
-1. 安装与 Godot 4.7.2 完全匹配的官方 export templates。
-2. 确定项目代码/原创资产许可和版权主体，使用 `tools/set_game_license.ps1` 生成并审阅 `release/GAME_LICENSE.txt`。
-3. 运行 `tools/build_windows.ps1 -Configuration Release`，生成 EXE/PCK 和带许可声明的便携 ZIP。
-4. 在未安装 Godot 的普通 Windows 用户环境执行 AT-019、AT-020。
-5. 用独立最低目标配置复核冷启动、Compatibility 渲染和 60 分钟稳定性。
-
-在这两个门禁解除前，项目可以继续通过 Godot 标准版直接开发、运行和测试，但不能宣称 Windows 发布包已经验收。
+下一步不是继续安装开发软件，而是进行外部兼容性抽检：在另一台未安装 Godot、接近最低目标配置的 Windows 10/11 x64 电脑上直接解压 ZIP，复核冷启动、输入、Compatibility 渲染、存档权限和 60 分钟稳定性。若准备公开发布，还应补充图标、签名与发行渠道元数据；这些不影响当前 MVP 功能闭环。

@@ -53,6 +53,7 @@ git switch windows-godot
 & .\tools\run_windows_runtime_acceptance.ps1
 & .\tools\run_pack_preflight.ps1
 & .\tools\check_release_readiness.ps1
+& .\tools\build_windows.ps1 -Configuration Release
 ```
 
-当前源码验收 AT-001～AT-018 已通过，无模板 PCK 预检也已通过；可分发 EXE/PCK 仍等待 export templates 和项目许可决定。完整证据与门禁见 [`docs/implementation-status.md`](docs/implementation-status.md)，开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。
+当前 MVP 验收 AT-001～AT-020 已通过，发布就绪检查为 12/12、blockers=0。正式构建会在被 Git 忽略的 `Builds/` 下生成 Windows x86_64 EXE/PCK 和便携 ZIP；项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。完整证据见 [`docs/implementation-status.md`](docs/implementation-status.md)，开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。
