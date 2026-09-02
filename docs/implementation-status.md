@@ -54,6 +54,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | `tools/run_windows_runtime_acceptance.ps1` | Compatibility/GTX 1060：平均 408.25 FPS、帧时 p95 3.05 ms、进程峰值工作集 194.75 MiB；5 次启动平均 1.510 s、最慢 1.728 s |
 | `tools/run_pack_preflight.ps1` | 不安装模板生成约 143 KiB PCK；7 个必需资源存在、8 个测试/工具/文档/许可模板/参考路径排除，manifest Git SHA/config hash 一致；从源码目录外及隔离 `%APPDATA%` 启动成功 |
 | `tools/set_game_license.ps1` | MIT/Proprietary 临时输出均无残留占位符，版权主体/年份替换正确；默认防覆盖门禁通过，未替项目所有者生成最终许可 |
+| `tools/check_release_readiness.ps1` | 汇总分支、提交、工作树、Godot、导出预设、声明、项目许可、Debug/Release 模板、非管理员状态和 PCK 预检；生成机器可读 JSON，缺项返回退出码 2 |
 | 静态边界检查 | 生产源码无 HTTP/WebSocket 客户端；表现层无硬编码 `KEY_`/`button_index`，无直接修改 Profile；Core 不依赖 SceneTree/Input/FileAccess/表现节点 |
 
 真实运行使用非管理员进程完成，游戏的所有持久写入均位于 `user://`。这证明源码路径不要求提权，但 AT-020 仍需在未安装 Godot 的普通用户环境用发布 EXE 复核。

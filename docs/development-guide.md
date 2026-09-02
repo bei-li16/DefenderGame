@@ -163,3 +163,11 @@ diagnostics/
 - 项目所有者尚未选择代码/原创资产许可及版权主体，因此生成器尚未创建 `release/GAME_LICENSE.txt`。
 
 这两个条件不影响编辑器内开发和全部源码验收，但在解除前不能生成合规发布包。
+
+需要一次查看全部发布条件时运行：
+
+```powershell
+& .\tools\check_release_readiness.ps1
+```
+
+它会执行无模板 PCK 预检，并把分支、Git、Godot、导出预设、许可、两个模板、非管理员状态和 PCK 结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。未满足条件或跳过动态预检时返回退出码 2；只想快速查看静态材料时可增加 `-SkipPackPreflight`，但该模式不会产生“发布就绪”结论。
