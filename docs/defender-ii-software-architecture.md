@@ -439,9 +439,12 @@ Core 测试：
 导出预设名称固定为 `Windows Desktop`：
 
 ```powershell
+& .\tools\run_pack_preflight.ps1
 godot --headless --path . --export-debug "Windows Desktop" Builds/Windows-Dev/DefenderGame.exe
 godot --headless --path . --export-release "Windows Desktop" Builds/Windows/DefenderGame.exe
 ```
+
+`run_pack_preflight.ps1` 不需要 export templates。它从干净提交生成 manifest 和本地 PCK，验证必需/排除资源、Git SHA、配置 hash，并从隔离目录启动该包。该检查只提前验证数据包，不代替正式 EXE 和普通用户环境验收。
 
 导出前必须依次运行内容校验、headless 测试和版本清单生成。清单包含：
 

@@ -8,7 +8,7 @@
 
 状态：轻量 Windows 单机 MVP 实施基线
 
-实施状态：MVP 代码与本机运行验证已完成；Windows EXE 导出因遵循“暂不安装 export templates”的约束而保持待办。逐项证据见 [`implementation-status.md`](implementation-status.md)。
+实施状态：MVP 代码、本机运行和无模板 PCK 预检已完成；Windows EXE 导出因遵循“暂不安装 export templates”的约束而保持待办。逐项证据见 [`implementation-status.md`](implementation-status.md)。
 
 研究归档：`main` 分支、标签 `archive/mobile-cross-platform-v2.0`
 

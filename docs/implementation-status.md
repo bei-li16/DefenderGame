@@ -16,7 +16,7 @@
 
 产品名为《余烬守望 / Aegis of Ember》。实现受参考资料的信息层级启发，但没有复制或打包 `参考/` 下的图片；战场、敌人、城堡、技能效果和短音效均由项目代码原创生成，保持轻量且无需额外制作软件。
 
-MVP 源码门禁 AT-001～AT-018 已通过。AT-019、AT-020 需要实际 Windows EXE/PCK 和便携 ZIP，当前受“不要安装 export templates”的明确约束以及项目许可尚未选定而保持待办，不能用编辑器内运行代替发布包结论。
+MVP 源码门禁 AT-001～AT-018 已通过。无需模板的 PCK 资源收集、内容排除、清单一致性和隔离启动预检也已通过。AT-019、AT-020 仍需要实际 Windows EXE/PCK 对和便携 ZIP，当前受“不要安装 export templates”的明确约束以及项目许可尚未选定而保持待办，不能用编辑器或 PCK 预检代替最终发布包结论。
 
 Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完整四页研究树和 Honors 仍按需求文档保留为后续范围，不属于本次 MVP 发布门禁。
 
@@ -52,6 +52,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | `tests/resolution_layout.gd` | zh_CN/en_US × 1366×768/1920×1080/2560×1440 × 菜单/战斗 9 种状态，共 54 组全部通过 |
 | `tests/window_mode_acceptance.gd` | 真实窗口下窗口、无边框、全屏、准星映射和 1920×1080 逻辑画布 7/7 通过 |
 | `tools/run_windows_runtime_acceptance.ps1` | Compatibility/GTX 1060：平均 408.25 FPS、帧时 p95 3.05 ms、进程峰值工作集 194.75 MiB；5 次启动平均 1.510 s、最慢 1.728 s |
+| `tools/run_pack_preflight.ps1` | 不安装模板生成约 143 KiB PCK；7 个必需资源存在、7 个测试/工具/文档/参考路径排除，manifest Git SHA/config hash 一致；从源码目录外及隔离 `%APPDATA%` 启动成功 |
 | 静态边界检查 | 生产源码无 HTTP/WebSocket 客户端；表现层无硬编码 `KEY_`/`button_index`，无直接修改 Profile；Core 不依赖 SceneTree/Input/FileAccess/表现节点 |
 
 真实运行使用非管理员进程完成，游戏的所有持久写入均位于 `user://`。这证明源码路径不要求提权，但 AT-020 仍需在未安装 Godot 的普通用户环境用发布 EXE 复核。
@@ -69,7 +70,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | FR-070～FR-073 经济/升级 | MVP 源码通过 | coins/xp、来源/规则版本/幂等键、5 项升级的效果/价格/前置/上限、永久奖励账本 |
 | FR-080～FR-083 配置/随机/回放 | MVP 源码通过 | v2 JSON 规则真源、启动/构建校验、注入 seed/run ID、命令日志和事件 SHA-256 |
 | NFR-001～NFR-009 | 本机源码通过 | 性能、启动、60 分钟稳定性、离线、可靠性、分层、可复现、可访问性和双语均有自动证据 |
-| NFR-010 构建 | 部分通过 | 构建脚本及 manifest 字段已实现；发布 EXE/PCK 未生成 |
+| NFR-010 构建 | 部分通过 | 构建脚本及 manifest 字段已实现，manifest 已进入并通过 PCK 一致性检查；发布 EXE/PCK 对未生成 |
 | NFR-011～NFR-012 | 源码通过 | 不采集/上传数据；无 Asset Library addon 或生产第三方插件 |
 
 ## 5. AT-001～AT-020 状态
@@ -94,12 +95,12 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | AT-016 | 通过 | 重复敌人 ID 返回字段路径 `enemies[1].id` 和错误码 `duplicate_id` |
 | AT-017 | 通过 | 完整单机流程无网络依赖；生产脚本静态检查无 HTTP/WebSocket 客户端 |
 | AT-018 | 通过 | Core 静态检查无 Node、SceneTree、Input、FileAccess、AudioServer 或 Time 依赖 |
-| AT-019 | 待模板与许可 | 导出预设、清单和构建门禁已就绪；按用户要求未安装 export templates，项目许可文件尚未确定，EXE/PCK 尚未生成 |
+| AT-019 | PCK 预检通过，待 EXE | 无模板 PCK 已生成、检查并隔离启动；按用户要求未安装 export templates，项目许可文件尚未确定，正式 EXE/PCK 对尚未生成 |
 | AT-020 | 源码路径通过，待发布包 | 当前非管理员进程和 `user://` 写入路径通过；仍需发布 EXE 在未安装 Godot 的普通用户环境复核 |
 
 ## 6. 当前发布阻塞项与下一步
 
-构建脚本会先检查干净 Git、内容、核心测试、10 Stage、Godot/第三方许可声明和项目许可，再生成带 Godot 版本、Git SHA、配置版本/hash、UTC 时间的清单并导出。当前有两个主动门禁：
+PCK 预检脚本已经证明资源过滤、manifest 和包内启动路径有效。正式构建脚本会先检查干净 Git、内容、核心测试、10 Stage、Godot/第三方许可声明和项目许可，再生成带 Godot 版本、Git SHA、配置版本/hash、UTC 时间的清单并导出。当前仍有两个主动门禁：
 
 1. 本机没有 Godot 4.7.2 的 `windows_debug_x86_64.exe` / `windows_release_x86_64.exe` export templates；这是遵循用户“不安装模板”的预期状态。
 2. `release/GAME_LICENSE.txt` 尚不存在；项目发布许可必须由项目所有者选择，不能由实现者代替授权。

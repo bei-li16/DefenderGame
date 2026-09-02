@@ -131,6 +131,14 @@ diagnostics/
 
 清单位于 `content/build/build-manifest.json`，包含应用版本、Godot 版本、Git SHA、配置版本、配置 hash 和 UTC 时间。该文件不提交 Git，但会被资源导出收集。
 
+不安装 export templates 时，仍可执行本地 PCK 发布预检：
+
+```powershell
+& .\tools\run_pack_preflight.ps1
+```
+
+该脚本要求工作树干净，重新生成清单并用 `--export-pack` 创建被 Git 忽略的本地 PCK。随后从隔离目录检查必需资源、Git SHA 和配置 hash，确认测试、工具、文档及 `参考/` 未进入包，并在隔离的 `%APPDATA%` 下启动 60 帧。它不生成 Windows EXE，也不能替代 AT-019/AT-020 的发布包验收。
+
 正式构建统一使用门禁脚本：
 
 ```powershell

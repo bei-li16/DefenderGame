@@ -51,6 +51,7 @@ git switch windows-godot
 & 'D:\Software\Godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script res://tests/diagnostic_acceptance.gd
 & .\tools\run_save_crash_acceptance.ps1
 & .\tools\run_windows_runtime_acceptance.ps1
+& .\tools\run_pack_preflight.ps1
 ```
 
-当前源码验收 AT-001～AT-018 已通过；EXE/PCK 发布仍等待 export templates 和项目许可决定。完整证据与门禁见 [`docs/implementation-status.md`](docs/implementation-status.md)，开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。
+当前源码验收 AT-001～AT-018 已通过，无模板 PCK 预检也已通过；可分发 EXE/PCK 仍等待 export templates 和项目许可决定。完整证据与门禁见 [`docs/implementation-status.md`](docs/implementation-status.md)，开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。
