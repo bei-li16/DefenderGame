@@ -146,7 +146,7 @@ diagnostics/
 & .\tools\build_windows.ps1 -Configuration Release
 ```
 
-脚本要求 Git 工作树干净，并依次执行内容校验、核心测试、10 Stage 自动通关、Godot 声明一致性、项目许可、清单和匹配模板检查。Release 成功后会生成 EXE/PCK 和包含 `README.txt`、`GAME_LICENSE.txt`、`GODOT_COPYRIGHT.txt` 的便携 ZIP。
+脚本要求 Git 工作树干净，并依次执行内容校验、核心测试、10 Stage 自动通关、Godot 声明一致性、PCK 预检、项目许可、清单和匹配模板检查。导出后还会检查实际 PCK，使用非管理员进程和隔离 `%APPDATA%` 启动实际 EXE，并确认 `profile.json`、`settings.json` 写入用户数据目录。Release 成功后才会生成包含 EXE/PCK、`README.txt`、`GAME_LICENSE.txt`、`GODOT_COPYRIGHT.txt` 的便携 ZIP。
 
 当前导出预设已就绪，但仍有两个发布门禁：
 

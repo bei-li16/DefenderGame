@@ -40,6 +40,11 @@ if ($noticeChanges) {
     throw 'Godot notice metadata changed. Review and commit release\GODOT_COPYRIGHT.txt before exporting.'
 }
 
+& (Join-Path $PSScriptRoot 'run_pack_preflight.ps1') -GodotConsole $GodotConsole
+if ($LASTEXITCODE -ne 0) {
+    throw 'Template-free PCK preflight failed; Windows export was not attempted.'
+}
+
 $gameLicense = Join-Path $repository 'release\GAME_LICENSE.txt'
 if (-not (Test-Path -LiteralPath $gameLicense -PathType Leaf)) {
     throw 'Publisher license decision is required: create release\GAME_LICENSE.txt before exporting a distributable build.'
@@ -68,6 +73,12 @@ if ($LASTEXITCODE -ne 0) {
 $pckPath = [System.IO.Path]::ChangeExtension($outputPath, '.pck')
 if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf) -or -not (Test-Path -LiteralPath $pckPath -PathType Leaf)) {
     throw 'Export reported success but the expected EXE/PCK pair is incomplete.'
+}
+
+$gitSha = (& git -C $repository rev-parse HEAD).Trim()
+& (Join-Path $PSScriptRoot 'verify_windows_export.ps1') -ExePath $outputPath -PckPath $pckPath -ExpectedGitSha $gitSha -GodotConsole $GodotConsole
+if ($LASTEXITCODE -ne 0) {
+    throw 'Exported Windows package acceptance failed.'
 }
 
 if ($Configuration -eq 'Release') {

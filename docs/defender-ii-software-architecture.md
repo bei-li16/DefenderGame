@@ -457,7 +457,7 @@ config_hash
 build_utc
 ```
 
-发布 ZIP 包含 EXE、PCK、许可和 README，不写注册表、不要求管理员权限。安装器、代码签名和 Steam 是独立发布阶段。
+正式构建在打 ZIP 前必须校验实际 PCK，并从非管理员进程、隔离 `%APPDATA%` 启动实际 EXE，确认默认档案与设置只写入 `user://`。发布 ZIP 包含 EXE、PCK、许可和 README，不写注册表、不要求管理员权限。安装器、代码签名和 Steam 是独立发布阶段。
 
 ## 16. 交付分期
 

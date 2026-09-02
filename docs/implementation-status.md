@@ -29,7 +29,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | Presentation | 启动恢复、主菜单、关卡选择、升级及前置条件、设置、教学、战场、HUD、暂停、快捷设置、结算、保存失败重试和原创 Canvas 视觉 |
 | Infrastructure | JSON、临时写入/校验/原子替换、备份/迁移、InputMap、程序合成音效、本地轮转日志和手动诊断 ZIP |
 | Content | 10 Stage、3 普通敌人、1 Boss、1 武器、3 技能、5 升级、中英文文本、难度倍率/上限和配置化生成规则 |
-| Tooling | 内容校验、Godot 许可声明生成、构建清单、headless 回归、自动通关、事务/输入/诊断/教学/设置/布局验收、崩溃恢复、压力/浸泡和真实窗口运行检查 |
+| Tooling | 内容校验、Godot 许可声明生成、构建清单、headless 回归、自动通关、事务/输入/诊断/教学/设置/布局验收、崩溃恢复、压力/浸泡、真实窗口运行、PCK 预检和导出 EXE 普通用户验收脚本 |
 
 ## 3. 最终自动验证结果
 
