@@ -1,0 +1,1 @@
+# Keep generated exports and isolated acceptance data out of Godot's resource scan.

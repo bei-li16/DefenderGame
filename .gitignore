@@ -10,8 +10,9 @@
 
 # Export, generated manifest and test output
 Build/
-Builds/
-builds/
+Builds/*
+builds/*
+!Builds/.gdignore
 Export/
 Artifacts/
 TestResults/
