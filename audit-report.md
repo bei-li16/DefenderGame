@@ -224,13 +224,13 @@
 | 编号 | 修复内容 | 回归证据 |
 |---|---|---|
 | C-1 | `_boss_rewarded` 从死代码改为 `result()` 的 `boss_slain` 诊断字段(`run_model.gd`),供结算与后续 Honors 使用 | 新增 3 项断言:无 Boss 关胜利 `boss_slain=false`;Boss 被击杀后结果字段为真且只结算一次 |
-| C-2 | `reward_ledger` 引入 512 条容量上限与 `reward_ledger_pruned` 剪枝计数(`upgrade_service.gd`);`game_app.gd` 默认档补齐新字段,旧档经默认字段补全机制自动迁移 | 新增 2 项断言:520 次结算后账本恒为 512 条且 pruned=8;窗口内新键保持幂等;原 205 次旧键幂等测试不变通过 |
+| C-2 | `reward_ledger` 引入 512 条容量上限与 `reward_ledger_pruned` 剪枝计数(`upgrade_service.gd`);`game_app.gd` 默认档补齐新字段,旧档经默认字段补全机制自动迁移。**与审计原建议(前缀区间水位)的偏差为正式接受项**:run_id 为随机 32 位 hex,不存在可排序前缀,"已结算前缀区间"无法定义;且现有代码不存在跨会话重结算路径(`settle_run` 仅由 run 结束信号与同会话保存重试触发,历史结果不落盘),512 窗口在全部现有路径下语义完整。若 1.0 引入可重结算历史对局的功能(如回放结算 UI),账本必须升级为全量结构(建议:单调 run 序号 + `min_seq` 水位) | 新增 2 项断言:520 次结算后账本恒为 512 条且 pruned=8;窗口内新键保持幂等;原 205 次旧键幂等测试不变通过 |
 | C-3 | `snapshot()` 改为浅拷贝并文档化只读别名契约("tags 数组生成后不再原地修改") | 压力测试 p95 1.294 ms;10 关 autoplay 每 tick 数值与基线逐字节一致 |
 | C-4 | `GameSession` 日志门控(`logging_enabled = OS.is_debug_build()`,Release 构建不再累积命令/事件日志)+ 同窗口 `aim` 命令合并(只保留最新瞄准,aim 不产生事件,回放语义不变) | 新增 2 项断言:连续两个 aim 合并为 1 条且取最新;后续非 aim 命令保持顺序;soak 60 逻辑分钟内存增长 3.17 MiB 与基线一致 |
 | C-5 | 删除 `project.godot` 中无事件、无消费者的 `combat_aim` 空 action | inputmap 验收 6/6 通过 |
 | C-6 | 结算界面"继续"按钮在胜利时直达下一关(`stage_%03d`),失败局维持返回菜单 | resolution_layout 含 result 状态检查,0 失败 |
 | C-8 | 状态抗性减免下限移入配置 `rules.status_resistance_floor_permille`(默认 950),`content_validator.gd` 增加范围校验 | 新增断言:默认下限下 999 抗性灼烧 1000 tick → 50;下限 0 → 1000(全额) |
-| C-11 | 新增 `tools/clean_builds.ps1`(-All 可全清)。首次执行暴露 PowerShell 5.1 兼容缺陷:`-LiteralPath` 与 `-Include` 组合会忽略过滤条件,误删了本应保留的本地发布产物(EXE/PCK/ZIP/manifest);已改为 `Where-Object` 扩展名过滤并重跑验证。产物通过 `tools/build_windows.ps1 -Configuration Release` 全流水线重新生成并重新验收 | 清理脚本仅删除探针目录与 tmp/log;重建的 Release 包通过构建门禁与导出验收 |
+| C-11 | 新增 `tools/clean_builds.ps1`(-All 可全清)。首次执行暴露 PowerShell 5.1 兼容缺陷:`-LiteralPath` 与 `-Include` 组合会忽略过滤条件,误删了本应保留的本地发布产物(EXE/PCK/ZIP/manifest);已改为 `Where-Object` 扩展名过滤并重跑验证。产物通过 `tools/build_windows.ps1 -Configuration Release` 全流水线重新生成并重新验收。**终态说明**:构建/预检流程本身会重新生成 `PackPreflight/`、`WindowsPackageProbe/` 等探针目录,属预期行为;发布确认后手动执行一次本脚本即恢复终态(不建议挂入构建流水线,探针产物是排障证据) | 清理脚本仅删除探针目录与 tmp/log;重建的 Release 包通过构建门禁与导出验收 |
 | A-1~A-4 | 架构文档四处偏差已同步:无 Camera2D 的直接坐标映射、过程式绘制说明、实际目录树、`.tres` 方案启用条件(`docs/defender-ii-software-architecture.md`) | 文档与实现一致 |
 
 ### 9.2 有意推迟(含理由)
@@ -238,7 +238,7 @@
 - **C-7(波次语义双轨)**:纯命名清晰度问题,涉及 result 字段与 HUD 文案,建议与 1.0 真波次机制一并处理,避免无谓的存档/回放字段变更。
 - **C-9(敌方攻击实体化)**:1.0 防御设施(Lava Moat/Magic Tower 拦截玩法)的设计决策,不属于本轮缺陷修复。
 - **C-10(拆分 run_model.gd / gameplay.gd)**:审计 P0 结构准备项,是独立的结构重构,需要以事件哈希金样为安全网单独执行;本轮先完成其依赖的行为修正(快照、日志),降低后续重构的耦合面。
-- **打包级 PowerShell 验收**(save crash/runtime probe/pack preflight/release readiness):已随重建 Release 包重跑包内门禁(preflight 与导出验收由 build_windows.ps1 内部执行);`check_release_readiness.ps1` 硬性要求 `windows-godot` 分支,在审计分支上不适用,应在下次于实现分支发布前重跑。
+- **打包级 PowerShell 验收**(save crash/runtime probe/pack preflight/release readiness):`pack_preflight` 与导出验收由 `build_windows.ps1` 内部执行,已在审计分支重建 Release 包时通过;`check_release_readiness.ps1` 硬性要求 `windows-godot` 分支,已于修复合并回实现分支后重跑(见 §9.4)。
 
 ### 9.3 本轮回归结果
 
@@ -257,6 +257,14 @@
 | `tests/resolution_layout.gd` | 2 语言 × 3 分辨率 × 菜单/战斗(含 result 状态),0 失败 |
 | `tests/window_mode_acceptance.gd` | 7/7(真实窗口) |
 
+### 9.4 合并与发布门禁收尾(评审意见执行记录)
+
+外部评审确认"修改-审计循环"主体闭环后,指出三个收尾点,处理如下:
+
+1. **合并回实现分支并重跑发布门禁**:本报告与修复提交以快进合并落到 `windows-godot`;在实现分支上重跑 `tools/check_release_readiness.ps1`(要求 12/12、blockers=0)并执行 `tools/build_windows.ps1 -Configuration Release`,使发布清单的 Git SHA 指向合并后的代码。
+2. **C-2 口径正式化**:采用评审给出的选项二——在 §9.1 明示实现与原建议的偏差及理由,作为正式接受项记录(见 C-2 行),并写明 1.0 触发升级的条件。
+3. **C-11 终态清理**:Release 重建后执行一次 `tools/clean_builds.ps1`,移除构建流程重新生成的探针目录,保留 `Builds/Windows`、便携 ZIP 与构建清单作为最终产物。
+
 ---
 
-*审计人:ZCode 自动审计(基于仓库静态审查 + headless 实机验证)。§1~§8 为审计原始结论;§9 记录基于审计结论的修复迭代。C-7/C-9/C-10 有意推迟,理由见 §9.2。*
+*审计人:ZCode 自动审计(基于仓库静态审查 + headless 实机验证)。§1~§8 为审计原始结论;§9 记录基于审计结论的修复迭代与评审收尾。C-7/C-9/C-10 有意推迟,理由见 §9.2。*
