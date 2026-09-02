@@ -5,6 +5,7 @@ const ContentValidator = preload("res://src/core/rules/content_validator.gd")
 const DeterministicRng = preload("res://src/core/rules/deterministic_rng.gd")
 const EventHasher = preload("res://src/core/replay/event_hasher.gd")
 const RunModel = preload("res://src/core/combat/run_model.gd")
+const GameSession = preload("res://src/application/game_session.gd")
 const UpgradeService = preload("res://src/application/upgrade_service.gd")
 const SaveService = preload("res://src/application/save_service.gd")
 const ReplayService = preload("res://src/application/replay_service.gd")
@@ -33,9 +34,13 @@ func _run() -> void:
 		_test_simultaneous_outcome_priority(content.rules)
 		_test_failure_keeps_kill_reward(content.rules)
 		_test_reward_idempotency()
+		_test_reward_ledger_cap()
 		_test_reward_event_identity(content.rules)
+		_test_boss_slain_diagnostic(content.rules)
 		_test_upgrade_atomicity(content.rules)
 		_test_data_driven_upgrade_effects(content.rules)
+		_test_status_resistance_floor_from_config(content.rules)
+		_test_aim_command_coalescing(content.rules)
 		_test_power_shot_resistance_and_boundary(content.rules)
 		_test_migration()
 		_test_current_schema_default_completion()
@@ -271,6 +276,86 @@ func _test_reward_idempotency() -> void:
 		long_profile = service.apply_run_reward(long_profile, {"run_id": "history-%d" % run_number, "reward_version": "v1", "coins": 1, "xp": 0})["profile"]
 	var replayed_old_reward := service.apply_run_reward(long_profile, {"run_id": "history-0", "reward_version": "v1", "coins": 1000, "xp": 0})
 	_expect(bool(replayed_old_reward.get("duplicate", false)) and int(replayed_old_reward["profile"]["coins"]) == 205, "old reward identity remains idempotent after more than 200 runs")
+
+
+func _test_reward_ledger_cap() -> void:
+	var service := UpgradeService.new()
+	var profile := {"coins": 0, "xp": 0, "reward_ledger": [], "reward_ledger_pruned": 0}
+	for run_number in range(520):
+		profile = service.apply_run_reward(profile, {"run_id": "cap-%d" % run_number, "reward_version": "v1", "coins": 1, "xp": 0})["profile"]
+	var ledger: Array = profile["reward_ledger"]
+	_expect(ledger.size() == 512 and int(profile["reward_ledger_pruned"]) == 8, "reward ledger is capped and records pruned keys")
+	var replayed_recent := service.apply_run_reward(profile, {"run_id": "cap-519", "reward_version": "v1", "coins": 1, "xp": 0})
+	_expect(bool(replayed_recent.get("duplicate", false)) and int(replayed_recent["profile"]["coins"]) == 520, "recent reward identity remains idempotent within the ledger window")
+
+
+func _test_boss_slain_diagnostic(source_config: Dictionary) -> void:
+	var plain := _execute_tiny_victory(source_config, 424242)
+	_expect(not bool(plain["result"].get("boss_slain", true)), "boss-free victory reports boss_slain false")
+	var config := source_config.duplicate(true)
+	config["stages"][0]["groups"] = [{"enemy_id": "ember_warlord", "count": 1, "interval_ticks": 1}]
+	var model := RunModel.new()
+	model.setup(config, "stage_001", 606, {"upgrades": {}})
+	var guard := 0
+	while model.enemies.is_empty() and guard < 60:
+		model.step([])
+		guard += 1
+	if model.enemies.is_empty():
+		_expect(false, "boss spawned for the boss_slain diagnostic check")
+		return
+	var boss: Dictionary = model.enemies[0]
+	model.projectiles.append({
+		"entity_id": 9001, "x_milli": int(boss["x_milli"]), "y_milli": int(boss["y_milli"]),
+		"vx_milli": 0, "vy_milli": 0, "damage": 99999, "fatal": false, "power": false,
+		"collision_radius_milli": 1000, "age_ticks": 0
+	})
+	model.step([])
+	_expect(model.status == "victory" and bool(model.result().get("boss_slain", false)), "boss kill is reported in the run result and settles victory once")
+	_expect(model.step([]).is_empty(), "finished boss run cannot settle twice")
+
+
+func _test_status_resistance_floor_from_config(source_config: Dictionary) -> void:
+	var capped_config := source_config.duplicate(true)
+	capped_config["skills"][0]["burn_duration_ticks"] = 1000
+	var capped_ticks := _burn_ticks_after_fire(capped_config, 999)
+	var open_config := source_config.duplicate(true)
+	open_config["skills"][0]["burn_duration_ticks"] = 1000
+	open_config["rules"] = {"status_resistance_floor_permille": 0}
+	var open_ticks := _burn_ticks_after_fire(open_config, 999)
+	_expect(capped_ticks == 50 and open_ticks == 1000, "status resistance floor comes from configuration")
+
+
+func _burn_ticks_after_fire(config: Dictionary, resistance: int) -> int:
+	var model := RunModel.new()
+	model.setup(config, "stage_001", 5150, {"upgrades": {}})
+	var guard := 0
+	while model.enemies.is_empty() and guard < 60:
+		model.step([])
+		guard += 1
+	if model.enemies.is_empty():
+		return -1
+	model.enemies[0]["status_resistance_permille"] = resistance
+	var ticks := -1
+	for event in model.step([
+		{"type": "select_skill", "skill_id": "fire_ball"},
+		{"type": "cast_skill", "x_milli": int(model.enemies[0]["x_milli"]), "y_milli": int(model.enemies[0]["y_milli"])}
+	]):
+		if event["type"] == "status" and event.get("status", "") == "burn":
+			ticks = int(event.get("ticks", -1))
+	return ticks
+
+
+func _test_aim_command_coalescing(source_config: Dictionary) -> void:
+	var session := GameSession.new()
+	var start_result := session.start(source_config, "stage_001", 2718, {"upgrades": {}})
+	_expect(bool(start_result.get("ok", false)), "application session starts for the aim coalescing check")
+	session.queue_command({"type": "aim", "x_milli": 1000000, "y_milli": 400000})
+	session.queue_command({"type": "aim", "x_milli": 1500000, "y_milli": 500000})
+	var pending: Array = session.get("_pending_commands")
+	_expect(pending.size() == 1 and session.get("_command_log").size() == 1 and int(pending[0]["x_milli"]) == 1500000, "same-window aim commands coalesce to the latest target")
+	session.queue_command({"type": "fire_started"})
+	_expect(session.get("_pending_commands").size() == 2 and str(session.get("_pending_commands")[0]["type"]) == "aim" and str(session.get("_pending_commands")[1]["type"]) == "fire_started", "non-aim commands keep their order after a coalesced aim")
+	session.free()
 
 
 func _test_reward_event_identity(source_config: Dictionary) -> void:

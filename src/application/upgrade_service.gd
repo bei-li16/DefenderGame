@@ -1,6 +1,12 @@
 class_name DefenderUpgradeService
 extends RefCounted
 
+# Idempotency keys only need to survive within the process that settled a run:
+# results are never re-settled across sessions because no code path retains old
+# run results. The persistent window keeps the profile bounded while recent
+# retries and replays stay protected; the pruned counter records the overflow.
+const MAX_LEDGER_KEYS := 512
+
 
 func purchase(profile: Dictionary, config: Dictionary, upgrade_id: String) -> Dictionary:
 	var definition := _find_upgrade(config.get("upgrades", []), upgrade_id)
@@ -38,7 +44,13 @@ func apply_run_reward(profile: Dictionary, result: Dictionary) -> Dictionary:
 	updated["xp"] = int(updated.get("xp", 0)) + int(result.get("xp", 0))
 	var updated_ledger: Array = updated.get("reward_ledger", []).duplicate()
 	updated_ledger.append(key)
+	var pruned := int(updated.get("reward_ledger_pruned", 0))
+	if updated_ledger.size() > MAX_LEDGER_KEYS:
+		var overflow := updated_ledger.size() - MAX_LEDGER_KEYS
+		updated_ledger = updated_ledger.slice(overflow)
+		pruned += overflow
 	updated["reward_ledger"] = updated_ledger
+	updated["reward_ledger_pruned"] = pruned
 	return {"ok": true, "duplicate": false, "profile": updated}
 
 

@@ -36,10 +36,6 @@ environment/defaults/default_clear_color=Color(0.018, 0.027, 0.047, 1)
 
 [input]
 
-combat_aim={
-"deadzone": 0.5,
-"events": []
-}
 combat_fire={
 "deadzone": 0.5,
 "events": [Object(InputEventMouseButton,"button_index":1)]

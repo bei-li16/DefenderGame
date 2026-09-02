@@ -68,50 +68,30 @@ Godot 官方给出的推荐存储约为 1.5GB（编辑器、模板和缓存）�
 project.godot
 export_presets.cfg
 src/
-  core/                         # 纯规则；不继承 Node
-    combat/
-    entities/
-    progression/
-    rules/
-    replay/
-  application/
-    game_session.gd
-    run_orchestrator.gd
-    upgrade_service.gd
-    save_service.gd
-    content_service.gd
+  core/                         # 纯规则;不继承 Node
+    combat/run_model.gd
+    rules/deterministic_rng.gd, content_validator.gd
+    replay/event_hasher.gd
+  application/                  # GameSession、RunOrchestrator、Save/Upgrade/Content/ReplayService
   presentation/
-    gameplay/
-    hud/
-    menus/
-    tutorial/
+    gameplay/                   # 战场渲染与 HUD(过程式 CanvasItem 绘制)
+    menus/                      # bootstrap、主菜单、背景
+    ui_theme.gd
   infrastructure/
-    config/
-    persistence/
-    input/
-    audio/
-  autoload/
-    game_app.gd                 # 唯一组合根与应用生命周期
+    audio/procedural_audio.gd
+    diagnostic_service.gd
+  autoload/game_app.gd          # 唯一组合根与应用生命周期
 scenes/
   bootstrap.tscn
   main_menu.tscn
   gameplay.tscn
 content/
-  config/
-  art/
-  audio/
-  fonts/
-  themes/
-  catalogs/
-tests/
-  core/
-  application/
-  fixtures/
-  run_all.gd
-tools/
-  validate_content.gd
-  write_build_manifest.gd
+  config/game_rules.json        # 规则真源
+  catalogs/localization.json    # 双语文本
+tests/                          # 自有 headless runner 与验收脚本
+tools/                          # 内容校验、构建清单、发布脚本
 docs/
+参考/                           # 视觉研究资料,导出排除
 ```
 
 `.godot/`、导出目录和本地日志不提交。Godot 生成的 `.uid` 文件与资源一起提交，避免引用在不同电脑上漂移。
@@ -190,7 +170,7 @@ func snapshot() -> RunSnapshot:
 
 ### 6.3 Presentation
 
-- `GameplayView`：按快照维护 Sprite2D、AnimationPlayer、GPUParticles2D/CPUParticles2D 和飘字。
+- `GameplayView`：按快照渲染战场。当前实现采用过程式 `CanvasItem._draw()` 程序绘制，无 Sprite/粒子节点；架构中的节点池策略仅在切换到 Sprite 实体渲染时生效。飘字与特效由表现层自有数组按画质预算管理。
 - `HudView`：城墙、Mana、Stage、技能、暂停和结算。
 - `MenuController`：主菜单、Stage 选择、升级和设置。
 - `InputController`：InputMap -> 应用命令。
@@ -301,7 +281,7 @@ ui_accept
 ui_cancel
 ```
 
-InputController 把 viewport 鼠标坐标通过 Camera2D 转成逻辑坐标，并发出：
+InputController 把 viewport 鼠标坐标直接转成逻辑坐标（项目使用 `canvas_items` 拉伸 + `expand` 宽高比，逻辑画布保持 1920×1080 扩展域，无需 Camera2D；`combat_fire`/`combat_cast` 等动作经 InputMap，瞄准由每物理 tick 的 `aim` 命令轮询鼠标位置），并发出：
 
 ```text
 AimChanged(x_milli, y_milli)
@@ -334,7 +314,7 @@ PauseRequested
 }
 ```
 
-`.tres` 资源目录只负责稳定 ID 到表现资源的映射：
+当前 MVP 的视觉全部由程序绘制，没有表现资源文件。`.tres` 资源目录方案在引入真实美术资产时启用，届时只负责稳定 ID 到表现资源的映射：
 
 ```text
 enemy_id -> PackedScene / Texture2D / sound_id

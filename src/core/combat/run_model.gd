@@ -116,12 +116,15 @@ func step(commands: Array) -> Array[Dictionary]:
 
 
 func snapshot() -> Dictionary:
+	# Shallow copies are sufficient: entity entries hold only scalars plus the
+	# "tags" array, and core never mutates a tags array in place after spawn.
+	# Presentation must treat the snapshot as read-only for this contract to hold.
 	var enemies_copy: Array[Dictionary] = []
 	for enemy in enemies:
-		enemies_copy.append(enemy.duplicate(true))
+		enemies_copy.append(enemy.duplicate(false))
 	var projectiles_copy: Array[Dictionary] = []
 	for projectile in projectiles:
-		projectiles_copy.append(projectile.duplicate(true))
+		projectiles_copy.append(projectile.duplicate(false))
 	return {
 		"tick": tick,
 		"status": status,
@@ -162,6 +165,7 @@ func result() -> Dictionary:
 		"wave": current_wave,
 		"wave_total": stage.get("groups", []).size(),
 		"wall_percent": int(round(float(wall_hp) * 100.0 / maxf(1.0, float(wall_max_hp)))),
+		"boss_slain": _boss_rewarded,
 		"coins": coins_earned + int(clear_reward.get("coins", 0)),
 		"xp": xp_earned + int(clear_reward.get("xp", 0))
 	}
@@ -580,7 +584,8 @@ func _upgrade_effect_per_level(upgrade_id: String) -> int:
 
 
 func _resisted_ticks(enemy: Dictionary, base_ticks: int) -> int:
-	var resistance := clampi(int(enemy.get("status_resistance_permille", 0)), 0, 950)
+	var floor_permille := int(config.get("rules", {}).get("status_resistance_floor_permille", 950))
+	var resistance := clampi(int(enemy.get("status_resistance_permille", 0)), 0, floor_permille)
 	return maxi(1, base_ticks * (1000 - resistance) / 1000) if base_ticks > 0 else 0
 
 

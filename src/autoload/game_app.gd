@@ -243,6 +243,7 @@ func _default_profile() -> Dictionary:
 		"upgrades": {"strength": 0, "agility": 0, "fire_mastery": 0, "ice_mastery": 0, "lightning_mastery": 0},
 		"best_results": {},
 		"reward_ledger": [],
+		"reward_ledger_pruned": 0,
 		"tutorial_complete": false
 	}
 

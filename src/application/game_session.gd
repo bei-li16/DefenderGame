@@ -14,6 +14,9 @@ var _command_log: Array = []
 var _event_log: Array = []
 var _started: bool = false
 var _finished_emitted: bool = false
+# Command and event logs serve replay export only (FR-083: debug builds).
+# Release builds skip logging so long sessions do not accumulate entries.
+var logging_enabled: bool = OS.is_debug_build()
 
 
 func start(config: Dictionary, stage_id: String, seed: int, profile: Dictionary, run_instance_id: String = "") -> Dictionary:
@@ -32,10 +35,19 @@ func queue_command(command: Dictionary) -> void:
 	if not _started or _model.status != "running":
 		return
 	var logged := command.duplicate(true)
+	if str(command.get("type", "")) == "aim" and not _pending_commands.is_empty() and str(_pending_commands[-1].get("type", "")) == "aim":
+		# Aim commands emit no events and only the final target before a
+		# fire/cast command affects the simulation, so same-window aims
+		# collapse to the latest one without changing behavior or replay.
+		_pending_commands[-1] = logged
+		if logging_enabled and not _command_log.is_empty() and str(_command_log[-1].get("type", "")) == "aim":
+			_command_log[-1] = logged
+		return
 	logged["queued_at_tick"] = _model.tick + 1
 	logged["sequence"] = _pending_commands.size()
 	_pending_commands.append(logged)
-	_command_log.append(logged.duplicate(true))
+	if logging_enabled:
+		_command_log.append(logged.duplicate(true))
 
 
 func current_snapshot() -> Dictionary:
@@ -63,7 +75,8 @@ func _physics_process(_delta: float) -> void:
 	var events := _model.step(_pending_commands)
 	_pending_commands.clear()
 	if not events.is_empty():
-		_event_log.append_array(events)
+		if logging_enabled:
+			_event_log.append_array(events)
 		events_produced.emit(events)
 	var snapshot := _model.snapshot()
 	snapshot_changed.emit(snapshot)

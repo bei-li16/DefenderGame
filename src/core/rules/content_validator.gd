@@ -46,6 +46,12 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 	if int(scaling.get("max_damage_scale_permille", 0)) < 1000:
 		_add_error(errors, "difficulty_scaling.max_damage_scale_permille", "less_than_base_scale")
 
+	var rules: Dictionary = config.get("rules", {})
+	if rules.has("status_resistance_floor_permille"):
+		var resistance_floor := int(rules.get("status_resistance_floor_permille", -1))
+		if resistance_floor < 0 or resistance_floor > 1000:
+			_add_error(errors, "rules.status_resistance_floor_permille", "out_of_range")
+
 	var enemy_ids := _validate_id_list(config.get("enemies", []), "enemies", errors)
 	var weapon_ids := _validate_id_list(config.get("weapons", []), "weapons", errors)
 	var skill_ids := _validate_id_list(config.get("skills", []), "skills", errors)

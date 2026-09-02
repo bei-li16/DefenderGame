@@ -3,6 +3,9 @@
   "ruleset_version": "aegis-mvp-v2",
   "source": "Original tuning derived from the Windows MVP requirements",
   "simulation_tick_rate": 30,
+  "rules": {
+    "status_resistance_floor_permille": 950
+  },
   "world": {
     "width_milli": 1920000,
     "height_milli": 1080000,

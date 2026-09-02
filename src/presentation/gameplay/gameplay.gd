@@ -466,7 +466,12 @@ func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> 
 	actions.add_child(retry)
 	var next := _overlay_button(GameApp.text("result.next"))
 	next.custom_minimum_size.x = 260
-	next.pressed.connect(func() -> void: GameApp.return_to_menu())
+	next.pressed.connect(func() -> void:
+		if victory and int(result.get("stage_number", 0)) < 10:
+			GameApp.start_stage("stage_%03d" % (int(result.get("stage_number", 0)) + 1))
+		else:
+			GameApp.return_to_menu()
+	)
 	actions.add_child(next)
 
 

@@ -215,6 +215,48 @@
 | 根目录输出审计结果文档 md | ✅ 本文件 `audit-report.md` |
 | 指导后续开发 | ✅ §7 给出 P0/P1/P2 优先级路线与前置依赖 |
 
+## 9. 修复迭代记录(2026-09-03)
+
+依据本报告 §5/§4 的结论,在 `audit/windows-godot` 分支完成一轮代码修复,并用全量回归套件验证。
+
+### 9.1 已修复
+
+| 编号 | 修复内容 | 回归证据 |
+|---|---|---|
+| C-1 | `_boss_rewarded` 从死代码改为 `result()` 的 `boss_slain` 诊断字段(`run_model.gd`),供结算与后续 Honors 使用 | 新增 3 项断言:无 Boss 关胜利 `boss_slain=false`;Boss 被击杀后结果字段为真且只结算一次 |
+| C-2 | `reward_ledger` 引入 512 条容量上限与 `reward_ledger_pruned` 剪枝计数(`upgrade_service.gd`);`game_app.gd` 默认档补齐新字段,旧档经默认字段补全机制自动迁移 | 新增 2 项断言:520 次结算后账本恒为 512 条且 pruned=8;窗口内新键保持幂等;原 205 次旧键幂等测试不变通过 |
+| C-3 | `snapshot()` 改为浅拷贝并文档化只读别名契约("tags 数组生成后不再原地修改") | 压力测试 p95 1.294 ms;10 关 autoplay 每 tick 数值与基线逐字节一致 |
+| C-4 | `GameSession` 日志门控(`logging_enabled = OS.is_debug_build()`,Release 构建不再累积命令/事件日志)+ 同窗口 `aim` 命令合并(只保留最新瞄准,aim 不产生事件,回放语义不变) | 新增 2 项断言:连续两个 aim 合并为 1 条且取最新;后续非 aim 命令保持顺序;soak 60 逻辑分钟内存增长 3.17 MiB 与基线一致 |
+| C-5 | 删除 `project.godot` 中无事件、无消费者的 `combat_aim` 空 action | inputmap 验收 6/6 通过 |
+| C-6 | 结算界面"继续"按钮在胜利时直达下一关(`stage_%03d`),失败局维持返回菜单 | resolution_layout 含 result 状态检查,0 失败 |
+| C-8 | 状态抗性减免下限移入配置 `rules.status_resistance_floor_permille`(默认 950),`content_validator.gd` 增加范围校验 | 新增断言:默认下限下 999 抗性灼烧 1000 tick → 50;下限 0 → 1000(全额) |
+| C-11 | 新增 `tools/clean_builds.ps1`(-All 可全清)。首次执行暴露 PowerShell 5.1 兼容缺陷:`-LiteralPath` 与 `-Include` 组合会忽略过滤条件,误删了本应保留的本地发布产物(EXE/PCK/ZIP/manifest);已改为 `Where-Object` 扩展名过滤并重跑验证。产物通过 `tools/build_windows.ps1 -Configuration Release` 全流水线重新生成并重新验收 | 清理脚本仅删除探针目录与 tmp/log;重建的 Release 包通过构建门禁与导出验收 |
+| A-1~A-4 | 架构文档四处偏差已同步:无 Camera2D 的直接坐标映射、过程式绘制说明、实际目录树、`.tres` 方案启用条件(`docs/defender-ii-software-architecture.md`) | 文档与实现一致 |
+
+### 9.2 有意推迟(含理由)
+
+- **C-7(波次语义双轨)**:纯命名清晰度问题,涉及 result 字段与 HUD 文案,建议与 1.0 真波次机制一并处理,避免无谓的存档/回放字段变更。
+- **C-9(敌方攻击实体化)**:1.0 防御设施(Lava Moat/Magic Tower 拦截玩法)的设计决策,不属于本轮缺陷修复。
+- **C-10(拆分 run_model.gd / gameplay.gd)**:审计 P0 结构准备项,是独立的结构重构,需要以事件哈希金样为安全网单独执行;本轮先完成其依赖的行为修正(快照、日志),降低后续重构的耦合面。
+- **打包级 PowerShell 验收**(save crash/runtime probe/pack preflight/release readiness):已随重建 Release 包重跑包内门禁(preflight 与导出验收由 build_windows.ps1 内部执行);`check_release_readiness.ps1` 硬性要求 `windows-godot` 分支,在审计分支上不适用,应在下次于实现分支发布前重跑。
+
+### 9.3 本轮回归结果
+
+| 套件 | 结果 |
+|---|---|
+| `tests/run_all.gd` | **53 passed, 0 failed**(原 44 + 新增 9) |
+| `tools/validate_content.gd` | 通过(config v2,含新 `rules` 段校验) |
+| `tests/stage_autoplay.gd` | 10/10 victory;数值与修复前基线逐字节一致(确定性保持) |
+| `tests/performance_stress.gd` | p95 1.294 ms(预算 <10 ms) |
+| `tests/long_soak.gd` | 60 逻辑分钟:内存增长 3.17 MiB、节点 3→3 |
+| `tests/tutorial_acceptance.gd` | 8/8 |
+| `tests/settings_acceptance.gd` | 8/8 |
+| `tests/application_transaction_acceptance.gd` | 4/4 |
+| `tests/inputmap_acceptance.gd` | 6/6 |
+| `tests/diagnostic_acceptance.gd` | 10/10 |
+| `tests/resolution_layout.gd` | 2 语言 × 3 分辨率 × 菜单/战斗(含 result 状态),0 失败 |
+| `tests/window_mode_acceptance.gd` | 7/7(真实窗口) |
+
 ---
 
-*审计人：ZCode 自动审计（基于仓库静态审查 + headless 实机验证）。本报告只读不改任何生产代码；发现的 C-1～C-11 均未在本分支修复，留待后续开发分支处理。*
+*审计人:ZCode 自动审计(基于仓库静态审查 + headless 实机验证)。§1~§8 为审计原始结论;§9 记录基于审计结论的修复迭代。C-7/C-9/C-10 有意推迟,理由见 §9.2。*
