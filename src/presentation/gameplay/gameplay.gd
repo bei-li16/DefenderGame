@@ -424,6 +424,9 @@ func _confirm_return_to_menu() -> void:
 
 
 func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> void:
+	# The run is over: never show the result panel on top of a paused tree,
+	# otherwise PAUSABLE HUD children would stop responding to input.
+	get_tree().paused = false
 	_result_overlay = _overlay_panel(Vector2(720, 760 if not bool(settlement.get("ok", false)) else 680))
 	var stack := _result_overlay.get_meta("stack") as VBoxContainer
 	var victory := str(result.get("status", "")) == "victory"
@@ -460,19 +463,24 @@ func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> 
 	var actions := HBoxContainer.new()
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	stack.add_child(actions)
-	var retry := _overlay_button(GameApp.text("hud.restart"))
-	retry.custom_minimum_size.x = 260
-	retry.pressed.connect(func() -> void: GameApp.start_stage(GameApp.current_stage_id))
-	actions.add_child(retry)
-	var next := _overlay_button(GameApp.text("result.next"))
-	next.custom_minimum_size.x = 260
-	next.pressed.connect(func() -> void:
-		if victory and int(result.get("stage_number", 0)) < 10:
+	var restart := _overlay_button(GameApp.text("hud.restart"))
+	restart.custom_minimum_size.x = 200
+	restart.pressed.connect(func() -> void: GameApp.start_stage(GameApp.current_stage_id))
+	actions.add_child(restart)
+	var menu := _overlay_button(GameApp.text("hud.main_menu"))
+	menu.custom_minimum_size.x = 200
+	menu.pressed.connect(func() -> void: GameApp.return_to_menu())
+	actions.add_child(menu)
+	if victory and int(result.get("stage_number", 0)) < 10:
+		var next := _overlay_button(GameApp.text("result.next"))
+		next.custom_minimum_size.x = 200
+		next.pressed.connect(func() -> void:
 			GameApp.start_stage("stage_%03d" % (int(result.get("stage_number", 0)) + 1))
-		else:
-			GameApp.return_to_menu()
-	)
-	actions.add_child(next)
+		)
+		actions.add_child(next)
+	for button in actions.get_children():
+		button.process_mode = Node.PROCESS_MODE_ALWAYS
+	restart.call_deferred("grab_focus")
 
 
 func _retry_settlement(result: Dictionary) -> void:
