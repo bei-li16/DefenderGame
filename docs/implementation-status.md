@@ -53,7 +53,7 @@
 
 MVP 门禁 AT-001～AT-020 已在当前 Windows 开发机通过。Godot 4.7.2 官方 Windows x86_64 模板已安装，项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可；正式 Release 已生成独立 EXE/PCK 和便携 ZIP，并从全新解压目录以非管理员进程完成包内容、清单、图形启动及 `user://` 写入验收。
 
-Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完整四页研究树和 Honors 仍按需求文档保留为后续范围，不属于本次 MVP 发布门禁。
+Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完整四页研究树和 Honors 已于 2026-09-03 全部落地(见 §0),Release 包 `Aegis-of-Ember-1.0.0-Windows-x64.zip` 已通过全部门禁重建。
 
 ## 2. 已落地模块
 
