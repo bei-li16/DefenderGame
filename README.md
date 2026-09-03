@@ -19,18 +19,19 @@ git switch windows-godot
 
 ## Windows / Godot 实现
 
-`windows-godot` 当前包含可直接运行的原创单机游戏《余烬守望 / Aegis of Ember》：
+`windows-godot` 当前包含可直接运行的原创单机游戏《余烬守望 / Aegis of Ember》(Windows 1.0)：
 
-- 10 个线性 Stage、3 类普通敌人和 1 个 Boss。
-- 基础弓、连续射击、Fatal Blow、Power Shot。
-- 火球、冰刺和雷击，以及 Mana、冷却、状态和抗性。
-- 城墙、胜负、金币、XP、5 项升级和奖励幂等。
-- 主菜单、关卡选择、升级、设置、教学、暂停和结算。
+- 30 个线性 Stage、6 类普通敌人(近战/快速/远程/重甲/飞行/萨满)和 3 个 Boss(余烬督军、霜痕巨人、风暴女王,各自独立特殊行为)。
+- 4 把武器:守望长弓、震击长弓(强化击退)、飓风长弓(三连射)、幻影长弓(穿透),按关卡进度解锁,可在武器库切换。
+- 火球、冰刺和雷击,以及 Mana、冷却、状态和抗性;四页研究树(攻击/魔法/防御/效用)共 18 项升级。
+- 防御设施:熔岩护城河(范围灼烧)与魔法塔(自动狙击),由防御页研究解锁;霜痕巨人的冰霜新星会暂时冻结玩家防御。
+- Honors 成就系统(8 项)、难度曲线含 HP/伤害/速度/数量四维上限、金币/XP 加成研究和奖励永久幂等账本。
+- 主菜单、关卡选择(30 关)、研究分页、武器库、荣誉、设置、教学、暂停和结算(胜利直达下一关,结算面板可返回主菜单)。
 - 简体中文/英文、窗口/无边框/全屏、分辨率和 UI 缩放。
-- JSON 配置、固定 30 tick、确定性随机、回放事件 hash。
-- `user://` JSON 存档、临时写入、hash 校验、备份与 v1→v3 迁移。
-- 本地轮转日志和玩家主动导出的隐私安全诊断 ZIP，不进行网络上传。
-- 原创程序绘制视觉和程序合成音频；`参考/` 图片不会进入导出包。
+- JSON 配置 + 发布包内置回退配置、固定 30 tick、确定性随机、回放事件 hash。
+- `user://` JSON 存档、临时写入、hash 校验、备份与 v1→v4 迁移。
+- 本地轮转日志和玩家主动导出的隐私安全诊断 ZIP,不进行网络上传。
+- 原创程序绘制视觉和程序合成音频;`参考/` 图片不会进入导出包。
 
 运行游戏：
 
@@ -56,4 +57,4 @@ git switch windows-godot
 & .\tools\build_windows.ps1 -Configuration Release
 ```
 
-当前 MVP 验收 AT-001～AT-020 已通过，发布就绪检查为 12/12、blockers=0。正式构建会在被 Git 忽略的 `Builds/` 下生成 Windows x86_64 EXE/PCK 和便携 ZIP；项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。完整证据见 [`docs/implementation-status.md`](docs/implementation-status.md)，开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。
+当前版本 1.0.0-windows:MVP 验收 AT-001～AT-020 与 1.0 内容验收全部通过,核心回归 70 项、30 Stage 自动通关全胜(3 个 Boss 各恰好结算一次)。正式构建会在被 Git 忽略的 `Builds/` 下生成 Windows x86_64 EXE/PCK 和便携 ZIP;项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。完整证据见 [`docs/implementation-status.md`](docs/implementation-status.md),开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。

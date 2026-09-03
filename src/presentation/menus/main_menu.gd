@@ -123,6 +123,8 @@ func _show_main_navigation() -> void:
 	for entry in [
 		["menu.stage", Callable(self, "_show_stage_select")],
 		["menu.upgrades", Callable(self, "_show_upgrades")],
+		["menu.weapons", Callable(self, "_show_weapons")],
+		["menu.honors", Callable(self, "_show_honors")],
 		["menu.settings", Callable(self, "_show_settings")],
 		["menu.tutorial", Callable(self, "_show_tutorial")]
 	]:
@@ -153,17 +155,16 @@ func _show_stage_select() -> void:
 	for stage in GameApp.content.rules.get("stages", []):
 		var number := int(stage.get("number", 0))
 		var stage_id := str(stage.get("id", ""))
-		var label := "%s %02d" % [GameApp.text("common.stage"), number]
+		var label := "%s %02d  ·  %s" % [GameApp.text("common.stage"), number, GameApp.text(str(stage.get("name_key", "")))]
 		if bool(stage.get("boss", false)):
 			label += "  ⚠ " + GameApp.text("common.boss")
 		var best: Dictionary = best_results.get(stage_id, {})
 		if not best.is_empty():
 			label += "\n★ %d%%  ·  %s %d" % [int(best.get("wall_percent", 0)), GameApp.text("result.kills"), int(best.get("kills", 0))]
-		elif number > unlocked:
+		if number > unlocked:
 			label += "\n🔒 " + GameApp.text("menu.locked")
-		else:
-			var reward: Dictionary = stage.get("clear_reward", {})
-			label += "\n◆ %d   %s %d" % [int(reward.get("coins", 0)), GameApp.text("common.xp"), int(reward.get("xp", 0))]
+		var reward: Dictionary = stage.get("clear_reward", {})
+		label += "\n◆ %d   %s %d" % [int(reward.get("coins", 0)), GameApp.text("common.xp"), int(reward.get("xp", 0))]
 		var stage_button := _button(label, 96)
 		stage_button.disabled = number > unlocked
 		stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -173,7 +174,27 @@ func _show_stage_select() -> void:
 
 
 func _show_upgrades() -> void:
-	var stack := _new_content_stack(GameApp.text("menu.upgrades"))
+	var pages: Array = GameApp.content.rules.get("research_pages", [])
+	_show_research_page(str(pages[0].get("id", "attack")) if not pages.is_empty() else "")
+
+
+func _show_research_page(page_id: String) -> void:
+	var page_title := GameApp.text("menu.upgrades")
+	for page in GameApp.content.rules.get("research_pages", []):
+		if str(page.get("id", "")) == page_id:
+			page_title = GameApp.text(str(page.get("name_key", page_id)))
+			break
+	var stack := _new_content_stack(page_title)
+	var page_tabs := HBoxContainer.new()
+	page_tabs.add_theme_constant_override("separation", 8)
+	for page in GameApp.content.rules.get("research_pages", []):
+		var page_button := _button(GameApp.text(str(page.get("name_key", page.get("id", "")))), 48)
+		page_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var selected_page := str(page.get("id", ""))
+		page_button.disabled = selected_page == page_id
+		page_button.pressed.connect(func() -> void: _show_research_page(selected_page))
+		page_tabs.add_child(page_button)
+	stack.add_child(page_tabs)
 	var wallet := Label.new()
 	wallet.text = "◆  %d %s" % [int(GameApp.profile.get("coins", 0)), GameApp.text("menu.coins")]
 	wallet.add_theme_font_size_override("font_size", 26)
@@ -192,6 +213,8 @@ func _show_upgrades() -> void:
 	scroll.add_child(list)
 	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
 	for definition in GameApp.content.rules.get("upgrades", []):
+		if not page_id.is_empty() and str(definition.get("page", "")) != page_id:
+			continue
 		var upgrade_id := str(definition.get("id", ""))
 		var level := int(upgrades.get(upgrade_id, 0))
 		var max_level := int(definition.get("max_level", 0))
@@ -244,6 +267,96 @@ func _show_upgrades() -> void:
 			_show_upgrades()
 		)
 		row.add_child(purchase)
+	_add_back_button(stack)
+
+
+func _show_weapons() -> void:
+	var stack := _new_content_stack(GameApp.text("menu.weapons"))
+	var current_id := str(GameApp.profile.get("current_weapon_id", "basic_bow"))
+	var unlocked: Array = GameApp.profile.get("unlocked_weapons", [])
+	var note := Label.new()
+	note.text = "%s: %s" % [GameApp.text("menu.selected"), GameApp.text(str(GameApp.content.find_by_id("weapons", current_id).get("name_key", current_id)))]
+	note.add_theme_font_size_override("font_size", 22)
+	note.add_theme_color_override("font_color", Color("ffd166"))
+	stack.add_child(note)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 12)
+	scroll.add_child(list)
+	for definition in GameApp.content.rules.get("weapons", []):
+		var weapon_id := str(definition.get("id", ""))
+		var is_unlocked := unlocked.has(weapon_id)
+		var card := PanelContainer.new()
+		list.add_child(card)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		card.add_child(row)
+		var info := VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(info)
+		var name := Label.new()
+		name.text = "%s  ·  %s %d" % [GameApp.text(str(definition.get("name_key", weapon_id))), GameApp.text("common.stage"), int(definition.get("unlock_stage", 1))]
+		name.add_theme_font_size_override("font_size", 25)
+		name.add_theme_color_override("font_color", Color("8ce99a") if is_unlocked else Color("8693a6"))
+		info.add_child(name)
+		var description := Label.new()
+		description.text = "%s\n%s: %d  ·  %s: %d  ·  %s: %d" % [
+			GameApp.text(str(definition.get("description_key", ""))),
+			GameApp.text("result.coins"), int(definition.get("damage", 0)),
+			GameApp.text("hud.wave"), int(definition.get("projectile_count", 1)),
+			GameApp.text("common.level"), int(definition.get("pierce", 0))
+		]
+		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_child(description)
+		var equip := _button(GameApp.text("menu.selected") if weapon_id == current_id else (GameApp.text("menu.unlocked") if is_unlocked else GameApp.text("menu.locked")), 66)
+		equip.custom_minimum_size.x = 150
+		equip.disabled = not is_unlocked or weapon_id == current_id
+		equip.pressed.connect(func() -> void:
+			var result := GameApp.select_weapon(weapon_id)
+			if bool(result.get("ok", false)):
+				_show_weapons()
+		)
+		row.add_child(equip)
+	_add_back_button(stack)
+
+
+func _show_honors() -> void:
+	var stack := _new_content_stack(GameApp.text("menu.honors"))
+	var stats: Dictionary = GameApp.profile.get("stats", {})
+	var progress := Label.new()
+	progress.text = "%s %d  ·  %s %d  ·  %s %d" % [
+		GameApp.text("result.kills"), int(stats.get("total_kills", 0)),
+		GameApp.text("common.stage"), int(stats.get("stages_completed", 0)),
+		GameApp.text("menu.coins"), int(stats.get("total_coins_earned", 0))
+	]
+	progress.add_theme_font_size_override("font_size", 21)
+	stack.add_child(progress)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 10)
+	scroll.add_child(list)
+	var honors: Dictionary = GameApp.profile.get("honors", {})
+	for definition in GameApp.content.rules.get("honors", []):
+		var honor_id := str(definition.get("id", ""))
+		var unlocked := bool(honors.get(honor_id, false))
+		var card := PanelContainer.new()
+		list.add_child(card)
+		var label := Label.new()
+		label.text = "%s  ·  %s\n%s\n%s" % [
+			"✦" if unlocked else "◇",
+			GameApp.text(str(definition.get("name_key", honor_id))),
+			GameApp.text(str(definition.get("description_key", ""))),
+			GameApp.text("menu.unlocked") if unlocked else GameApp.text("menu.locked")
+		]
+		label.add_theme_font_size_override("font_size", 19)
+		label.add_theme_color_override("font_color", Color("ffd166") if unlocked else Color("8693a6"))
+		card.add_child(label)
 	_add_back_button(stack)
 
 

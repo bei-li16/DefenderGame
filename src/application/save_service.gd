@@ -1,8 +1,8 @@
 class_name DefenderSaveService
 extends RefCounted
 
-const CURRENT_SCHEMA_VERSION := 3
-const APP_VERSION := "0.1.0-mvp"
+const CURRENT_SCHEMA_VERSION := 4
+const APP_VERSION := "1.0.0-windows"
 
 var base_directory: String
 
@@ -163,6 +163,21 @@ static func migrate_envelope(source_envelope: Dictionary) -> Dictionary:
 					payload_v2["tutorial_complete"] = false
 				envelope["payload"] = payload_v2
 				version = 3
+			3:
+				var payload_v3: Dictionary = envelope.get("payload", {})
+				if payload_v3.has("coins") or payload_v3.has("upgrades"):
+					if not payload_v3.has("current_weapon_id"):
+						payload_v3["current_weapon_id"] = "basic_bow"
+					if not payload_v3.has("unlocked_weapons"):
+						payload_v3["unlocked_weapons"] = ["basic_bow"]
+					if not payload_v3.has("stats"):
+						payload_v3["stats"] = {}
+					if not payload_v3.has("honors"):
+						payload_v3["honors"] = {}
+					if not payload_v3.has("honor_reward_ledger"):
+						payload_v3["honor_reward_ledger"] = []
+					envelope["payload"] = payload_v3
+				version = 4
 		envelope["schema_version"] = version
 		migrated = true
 	var payload: Dictionary = envelope.get("payload", {})

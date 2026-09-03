@@ -42,6 +42,10 @@ func _run() -> void:
 		_test_status_resistance_floor_from_config(content.rules)
 		_test_aim_command_coalescing(content.rules)
 		_test_power_shot_resistance_and_boundary(content.rules)
+		_test_weapon_variants(content.rules)
+		_test_defenses(content.rules)
+		_test_frost_nova_freezes_defenses(content.rules)
+		_test_extended_upgrade_effects(content.rules)
 		_test_migration()
 		_test_current_schema_default_completion()
 		_test_save_backup_recovery()
@@ -284,9 +288,11 @@ func _test_reward_ledger_cap() -> void:
 	for run_number in range(520):
 		profile = service.apply_run_reward(profile, {"run_id": "cap-%d" % run_number, "reward_version": "v1", "coins": 1, "xp": 0})["profile"]
 	var ledger: Array = profile["reward_ledger"]
-	_expect(ledger.size() == 512 and int(profile["reward_ledger_pruned"]) == 8, "reward ledger is capped and records pruned keys")
+	_expect(ledger.size() == 520 and int(profile["reward_ledger_pruned"]) == 0, "reward ledger is permanent: every settled key is retained")
 	var replayed_recent := service.apply_run_reward(profile, {"run_id": "cap-519", "reward_version": "v1", "coins": 1, "xp": 0})
-	_expect(bool(replayed_recent.get("duplicate", false)) and int(replayed_recent["profile"]["coins"]) == 520, "recent reward identity remains idempotent within the ledger window")
+	_expect(bool(replayed_recent.get("duplicate", false)) and int(replayed_recent["profile"]["coins"]) == 520, "recent reward identity remains idempotent")
+	var replayed_oldest := service.apply_run_reward(profile, {"run_id": "cap-0", "reward_version": "v1", "coins": 1, "xp": 0})
+	_expect(bool(replayed_oldest.get("duplicate", false)) and int(replayed_oldest["profile"]["coins"]) == 520, "oldest reward identity remains idempotent permanently")
 
 
 func _test_boss_slain_diagnostic(source_config: Dictionary) -> void:
@@ -452,12 +458,219 @@ func _test_power_shot_resistance_and_boundary(source_config: Dictionary) -> void
 	_expect(resisted_position == 1035000 and bounded_position == int(source_config["world"]["enemy_spawn_x_milli"]), "Power Shot uses configured knockback resistance and world boundary")
 
 
+func _test_weapon_variants(source_config: Dictionary) -> void:
+	var hurricane_model := RunModel.new()
+	hurricane_model.setup(source_config, "stage_001", 7001, {"current_weapon_id": "hurricane_bow", "unlocked_weapons": ["basic_bow", "hurricane_bow"], "upgrades": {}})
+	_expect(hurricane_model.weapon_id == "hurricane_bow", "selected unlocked weapon equips for the run")
+	var volley_events := hurricane_model.step([
+		{"type": "aim", "x_milli": 1500000, "y_milli": 540000},
+		{"type": "fire_started"},
+		{"type": "fire_stopped"}
+	])
+	var volley_shots := 0
+	for event in volley_events:
+		if str(event.get("type", "")) == "shot":
+			volley_shots += 1
+	_expect(volley_shots == 3 and hurricane_model.projectiles.size() == 3, "hurricane bow fires a three-arrow volley per shot")
+
+	var locked_model := RunModel.new()
+	locked_model.setup(source_config, "stage_001", 7002, {"current_weapon_id": "phantom_bow", "unlocked_weapons": ["basic_bow"], "upgrades": {}})
+	_expect(locked_model.weapon_id == "basic_bow", "locked weapon selection falls back to the basic bow")
+
+	var pierce_model := RunModel.new()
+	pierce_model.setup(source_config, "stage_001", 7003, {"current_weapon_id": "phantom_bow", "unlocked_weapons": ["basic_bow", "phantom_bow"], "upgrades": {}})
+	var spawn_guard := 0
+	while pierce_model.enemies.is_empty() and spawn_guard < 60:
+		pierce_model.step([])
+		spawn_guard += 1
+	var stack_template: Dictionary = pierce_model.enemies[0].duplicate(true)
+	pierce_model.enemies.clear()
+	for stack_index in range(3):
+		var copy: Dictionary = stack_template.duplicate(true)
+		copy["entity_id"] = 9000 + stack_index
+		copy["x_milli"] = 1500000
+		copy["y_milli"] = 555000
+		copy["hp"] = 10
+		copy["max_hp"] = 10
+		copy["speed_milli_per_tick"] = 0
+		copy["attack_x_milli"] = 1500000
+		copy["attack_damage"] = 0
+		pierce_model.enemies.append(copy)
+	var pierce_events: Array = []
+	pierce_events.append_array(pierce_model.step([
+		{"type": "aim", "x_milli": 1500000, "y_milli": 555000},
+		{"type": "fire_started"},
+		{"type": "fire_stopped"}
+	]))
+	for flight_tick in range(40):
+		if pierce_model.status != "running" or pierce_model.projectiles.is_empty():
+			break
+		pierce_events.append_array(pierce_model.step([]))
+	var pierce_deaths := 0
+	for event in pierce_events:
+		if str(event.get("type", "")) == "death":
+			pierce_deaths += 1
+	_expect(pierce_deaths == 3, "phantom bow pierces through stacked enemies instead of stopping at the first")
+
+
+func _test_defenses(source_config: Dictionary) -> void:
+	var idle_model := RunModel.new()
+	idle_model.setup(source_config, "stage_001", 7100, {"upgrades": {}})
+	var idle_guard := 0
+	while idle_model.enemies.is_empty() and idle_guard < 60:
+		idle_model.step([])
+		idle_guard += 1
+	idle_model.enemies[0]["x_milli"] = 400000
+	idle_model.enemies[0]["speed_milli_per_tick"] = 0
+	idle_model.enemies[0]["attack_x_milli"] = 400000
+	var idle_events: Array[Dictionary] = []
+	idle_model.call("_update_defenses", idle_events)
+	var idle_attacks := 0
+	for event in idle_events:
+		if str(event.get("type", "")) == "defense_attack":
+			idle_attacks += 1
+	_expect(idle_attacks == 0, "defenses stay inactive without research levels")
+
+	var defense_model := RunModel.new()
+	defense_model.setup(source_config, "stage_001", 7101, {"upgrades": {"lava_moat": 1, "magic_tower": 1}})
+	var defense_guard := 0
+	while defense_model.enemies.is_empty() and defense_guard < 60:
+		defense_model.step([])
+		defense_guard += 1
+	defense_model.enemies[0]["x_milli"] = 400000
+	defense_model.enemies[0]["y_milli"] = 555000
+	defense_model.enemies[0]["speed_milli_per_tick"] = 0
+	defense_model.enemies[0]["attack_x_milli"] = 400000
+	defense_model.enemies[0]["hp"] = 1000
+	defense_model.enemies[0]["max_hp"] = 1000
+	var hp_before := int(defense_model.enemies[0]["hp"])
+	var defense_events: Array[Dictionary] = []
+	defense_model.call("_update_defenses", defense_events)
+	var moat_fired := false
+	var tower_fired := false
+	for event in defense_events:
+		if str(event.get("type", "")) == "defense_attack":
+			if str(event.get("defense_id", "")) == "lava_moat":
+				moat_fired = true
+			if str(event.get("defense_id", "")) == "magic_tower":
+				tower_fired = true
+	_expect(moat_fired and tower_fired, "researched lava moat and magic tower both strike an enemy in range")
+	_expect(int(defense_model.enemies[0]["hp"]) < hp_before and int(defense_model.enemies[0].get("burn_ticks", 0)) > 0, "lava moat damages and ignites the target")
+	var second_events: Array[Dictionary] = []
+	defense_model.call("_update_defenses", second_events)
+	var second_attacks := 0
+	for event in second_events:
+		if str(event.get("type", "")) == "defense_attack":
+			second_attacks += 1
+	_expect(second_attacks == 0, "defense cooldown blocks an immediate second strike")
+
+
+func _test_frost_nova_freezes_defenses(source_config: Dictionary) -> void:
+	var config := source_config.duplicate(true)
+	config["stages"][0]["groups"] = [{"enemy_id": "frost_titan", "count": 1, "interval_ticks": 1}]
+	var model := RunModel.new()
+	model.setup(config, "stage_001", 7200, {"upgrades": {"lava_moat": 1}})
+	var nova_seen := false
+	var nova_guard := 0
+	while nova_guard < 400 and model.status == "running" and not nova_seen:
+		for event in model.step([]):
+			if str(event.get("type", "")) == "boss_special" and str(event.get("special", "")) == "frost_nova":
+				nova_seen = true
+		nova_guard += 1
+	_expect(nova_seen, "frost titan casts frost nova during the run")
+	_expect(int(model.get("defense_cooldowns")["lava_moat"]) >= 90, "frost nova freezes the player's defenses instead of helping its allies")
+
+
+func _test_extended_upgrade_effects(source_config: Dictionary) -> void:
+	var mana_model := RunModel.new()
+	mana_model.setup(source_config, "stage_001", 7300, {"upgrades": {"mana_capacity": 8}})
+	var mana_base := RunModel.new()
+	mana_base.setup(source_config, "stage_001", 7301, {"upgrades": {}})
+	_expect(mana_model.max_mana == mana_base.max_mana + 8 * 10, "mana capacity research raises max Mana")
+
+	var armor_model := RunModel.new()
+	armor_model.setup(source_config, "stage_001", 7302, {"upgrades": {"wall_armor": 10}})
+	var armor_guard := 0
+	while armor_model.enemies.is_empty() and armor_guard < 60:
+		armor_model.step([])
+		armor_guard += 1
+	armor_model.enemies[0]["x_milli"] = int(armor_model.enemies[0]["attack_x_milli"])
+	armor_model.enemies[0]["speed_milli_per_tick"] = 0
+	armor_model.enemies[0]["attack_damage"] = 10
+	armor_model.enemies[0]["attack_cooldown"] = 0
+	var armor_events := armor_model.step([])
+	var armor_amount := -1
+	for event in armor_events:
+		if str(event.get("type", "")) == "wall_damage":
+			armor_amount = int(event.get("amount", -1))
+	_expect(armor_amount == 0 and armor_model.wall_hp == armor_model.wall_max_hp, "wall armor research absorbs the full incoming hit")
+
+	var bounty_model := RunModel.new()
+	bounty_model.setup(source_config, "stage_001", 7303, {"upgrades": {"coin_bounty": 10}})
+	var bounty_guard := 0
+	while bounty_model.enemies.is_empty() and bounty_guard < 60:
+		bounty_model.step([])
+		bounty_guard += 1
+	var bounty_enemy: Dictionary = bounty_model.enemies[0]
+	bounty_enemy["hp"] = 1
+	bounty_enemy["speed_milli_per_tick"] = 0
+	bounty_enemy["attack_x_milli"] = int(bounty_enemy["x_milli"])
+	bounty_model.projectiles.append({
+		"entity_id": 9500, "x_milli": int(bounty_enemy["x_milli"]), "y_milli": int(bounty_enemy["y_milli"]),
+		"vx_milli": 0, "vy_milli": 0, "damage": 5, "fatal": false, "power": false,
+		"collision_radius_milli": 1000, "age_ticks": 0
+	})
+	bounty_model.step([])
+	var expected_coins := int(bounty_enemy.get("reward_coins", 0)) + 10
+	_expect(bounty_model.coins_earned == expected_coins, "coin bounty research adds to every kill reward")
+
+	var cooldown_model := RunModel.new()
+	cooldown_model.setup(source_config, "stage_001", 7304, {"upgrades": {"cooldown_mastery": 6}})
+	cooldown_model.step([
+		{"type": "select_skill", "skill_id": "fire_ball"},
+		{"type": "cast_skill", "x_milli": 1200000, "y_milli": 540000}
+	])
+	var base_cooldown := int(_find_skill(source_config, "fire_ball")["cooldown_ticks"])
+	_expect(int(cooldown_model.skill_cooldowns.get("fire_ball", -1)) == base_cooldown - 18, "cooldown mastery shortens skill cooldown")
+
+	var radius_config := source_config.duplicate(true)
+	var radius_model := RunModel.new()
+	radius_model.setup(radius_config, "stage_001", 7305, {"upgrades": {"spell_radius": 5}})
+	var radius_guard := 0
+	while radius_model.enemies.is_empty() and radius_guard < 60:
+		radius_model.step([])
+		radius_guard += 1
+	var radius_enemy: Dictionary = radius_model.enemies[0]
+	radius_enemy["hp"] = 1000
+	radius_enemy["max_hp"] = 1000
+	radius_enemy["speed_milli_per_tick"] = 0
+	radius_enemy["attack_x_milli"] = int(radius_enemy["x_milli"])
+	var offset_target_y := clampi(int(radius_enemy["y_milli"]) - 200000, 0, int(radius_config["world"]["height_milli"]))
+	var radius_events := radius_model.step([
+		{"type": "select_skill", "skill_id": "fire_ball"},
+		{"type": "cast_skill", "x_milli": int(radius_enemy["x_milli"]), "y_milli": offset_target_y}
+	])
+	var fire_hit := false
+	for event in radius_events:
+		if str(event.get("type", "")) == "damage" and str(event.get("source", "")) == "fire" and int(event.get("entity_id", 0)) == int(radius_enemy["entity_id"]):
+			fire_hit = true
+	_expect(fire_hit, "spell radius research extends the fire skill beyond its base radius")
+
+
+func _find_skill(config: Dictionary, skill_id: String) -> Dictionary:
+	for skill in config.get("skills", []):
+		if skill is Dictionary and str(skill.get("id", "")) == skill_id:
+			return skill
+	return {}
+
+
 func _test_migration() -> void:
 	var old_envelope := {"schema_version": 1, "payload": {"coins": 12, "xp": 3, "upgrades": {}}}
 	var migrated := SaveService.migrate_envelope(old_envelope)
 	var payload: Dictionary = migrated.get("envelope", {}).get("payload", {})
-	_expect(bool(migrated.get("ok", false)) and int(migrated["envelope"]["schema_version"]) == 3, "profile migrates v1 to v3")
+	_expect(bool(migrated.get("ok", false)) and int(migrated["envelope"]["schema_version"]) == 4, "profile migrates v1 to v4")
 	_expect(payload.has("reward_ledger") and payload.has("crystals"), "migration adds required fields")
+	_expect(payload.has("current_weapon_id") and payload.has("unlocked_weapons") and payload.has("stats") and payload.has("honors"), "migration adds Windows 1.0 weapon, stats and honors fields")
 
 
 func _test_current_schema_default_completion() -> void:

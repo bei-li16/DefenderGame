@@ -7,12 +7,16 @@ signal settings_changed(settings: Dictionary)
 const ContentService = preload("res://src/application/content_service.gd")
 const SaveService = preload("res://src/application/save_service.gd")
 const UpgradeService = preload("res://src/application/upgrade_service.gd")
+const HonorService = preload("res://src/application/honor_service.gd")
+const ReplayService = preload("res://src/application/replay_service.gd")
 const ProceduralAudio = preload("res://src/infrastructure/audio/procedural_audio.gd")
 const DiagnosticService = preload("res://src/infrastructure/diagnostic_service.gd")
 
 var content := ContentService.new()
 var save_service := SaveService.new()
 var upgrade_service := UpgradeService.new()
+var honor_service := HonorService.new()
+var replay_service := ReplayService.new()
 var diagnostics := DiagnosticService.new()
 var profile: Dictionary = {}
 var settings: Dictionary = {}
@@ -25,6 +29,11 @@ var audio: DefenderProceduralAudio
 
 
 func _ready() -> void:
+	# Scripted runs (headless tests and tools via --script) must never load or
+	# write the player's real profile: isolate the default save directory and
+	# start it fresh. The shipped game never runs with --script.
+	if OS.get_cmdline_args().has("--script"):
+		_reset_isolated_save_directory()
 	diagnostics.start_session(
 		str(ProjectSettings.get_setting("application/config/version", "unknown")),
 		str(Engine.get_version_info().get("string", "unknown"))
@@ -33,6 +42,31 @@ func _ready() -> void:
 	audio.name = "ProceduralAudio"
 	add_child(audio)
 	initialize()
+
+
+func _reset_isolated_save_directory() -> void:
+	var directory_path := "user://automated-app-data"
+	var absolute_path := ProjectSettings.globalize_path(directory_path)
+	if DirAccess.dir_exists_absolute(absolute_path):
+		var directory := DirAccess.open(absolute_path)
+		if directory != null:
+			for file_name in directory.get_files():
+				directory.remove(file_name)
+			for subdirectory_name in directory.get_directories():
+				_remove_directory_recursive(absolute_path.path_join(subdirectory_name))
+				directory.remove(subdirectory_name)
+	save_service = SaveService.new(directory_path)
+
+
+func _remove_directory_recursive(absolute_path: String) -> void:
+	var directory := DirAccess.open(absolute_path)
+	if directory == null:
+		return
+	for file_name in directory.get_files():
+		directory.remove(file_name)
+	for subdirectory_name in directory.get_directories():
+		_remove_directory_recursive(absolute_path.path_join(subdirectory_name))
+		directory.remove(subdirectory_name)
 
 
 func initialize() -> void:
@@ -52,8 +86,9 @@ func initialize() -> void:
 		_record_failure("profile_load", profile_result, "Bootstrap")
 		initialization_finished.emit(false, initialization_error)
 		return
-	profile = profile_result["payload"]
-	if bool(profile_result.get("needs_save", false)) or bool(profile_result.get("migrated", false)):
+	var loaded_profile: Dictionary = profile_result["payload"]
+	profile = _normalize_profile(loaded_profile)
+	if bool(profile_result.get("needs_save", false)) or bool(profile_result.get("migrated", false)) or profile != loaded_profile:
 		var profile_save := save_service.save_profile(profile, int(content.rules["config_version"]))
 		if not bool(profile_save.get("ok", false)):
 			initialization_error = profile_save
@@ -133,9 +168,16 @@ func settle_run(result: Dictionary) -> Dictionary:
 	if bool(reward_result.get("duplicate", false)):
 		return reward_result
 	var updated: Dictionary = reward_result["profile"].duplicate(true)
+	var honor_result := honor_service.apply_result(updated, result, content.rules)
+	if not bool(honor_result.get("ok", false)):
+		_record_failure("settle_honors", honor_result, "Gameplay")
+		return honor_result
+	updated = honor_result["profile"].duplicate(true)
 	var stage_number := int(result.get("stage_number", 1))
 	if str(result.get("status", "")) == "victory":
-		updated["highest_unlocked_stage"] = mini(10, maxi(int(updated.get("highest_unlocked_stage", 1)), stage_number + 1))
+		var stage_count := maxi(1, content.rules.get("stages", []).size())
+		updated["highest_unlocked_stage"] = mini(stage_count, maxi(int(updated.get("highest_unlocked_stage", 1)), stage_number + 1))
+	updated = _unlock_weapons_for_stage(updated, int(updated.get("highest_unlocked_stage", 1)))
 	var best_results: Dictionary = updated.get("best_results", {}).duplicate(true)
 	var stage_id := str(result.get("stage_id", ""))
 	var previous: Dictionary = best_results.get(stage_id, {})
@@ -144,7 +186,8 @@ func settle_run(result: Dictionary) -> Dictionary:
 			"status": result.get("status", ""),
 			"kills": result.get("kills", 0),
 			"wall_percent": result.get("wall_percent", 0),
-			"tick": result.get("tick", 0)
+			"tick": result.get("tick", 0),
+			"weapon_id": result.get("weapon_id", "basic_bow")
 		}
 	updated["best_results"] = best_results
 	var save_result := save_service.save_profile(updated, int(content.rules["config_version"]))
@@ -157,6 +200,9 @@ func settle_run(result: Dictionary) -> Dictionary:
 	profile = updated
 	reward_result["profile"] = profile.duplicate(true)
 	reward_result["save"] = save_result
+	reward_result["new_honors"] = honor_result.get("new_honors", [])
+	reward_result["honor_coins"] = honor_result.get("honor_coins", 0)
+	reward_result["honor_xp"] = honor_result.get("honor_xp", 0)
 	profile_changed.emit(profile.duplicate(true))
 	diagnostics.record("run_settled", "", "Gameplay", {"stage_id": stage_id, "status": str(result.get("status", ""))})
 	return reward_result
@@ -178,6 +224,27 @@ func purchase_upgrade(upgrade_id: String) -> Dictionary:
 		result["save"] = save_result
 		profile_changed.emit(profile.duplicate(true))
 	return result
+
+
+func select_weapon(weapon_id: String) -> Dictionary:
+	var weapon := content.find_by_id("weapons", weapon_id)
+	if weapon.is_empty():
+		return {"ok": false, "error_code": "unknown_weapon", "profile": profile.duplicate(true)}
+	var unlocked: Array = profile.get("unlocked_weapons", [])
+	if not unlocked.has(weapon_id):
+		return {"ok": false, "error_code": "weapon_locked", "profile": profile.duplicate(true)}
+	var updated := profile.duplicate(true)
+	updated["current_weapon_id"] = weapon_id
+	var save_result := save_service.save_profile(updated, int(content.rules["config_version"]))
+	if not bool(save_result.get("ok", false)):
+		_record_failure("weapon_save", save_result, "MainMenu")
+		var failure := save_result.duplicate(true)
+		failure["profile"] = profile.duplicate(true)
+		failure["operation"] = "select_weapon"
+		return failure
+	profile = updated
+	profile_changed.emit(profile.duplicate(true))
+	return {"ok": true, "weapon_id": weapon_id, "profile": profile.duplicate(true), "save": save_result}
 
 
 func complete_tutorial() -> Dictionary:
@@ -212,6 +279,15 @@ func export_diagnostics() -> Dictionary:
 	return diagnostics.export_zip()
 
 
+func export_debug_replay(record: Dictionary) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"ok": false, "error_code": "debug_only"}
+	var result := replay_service.export_record(record)
+	if not bool(result.get("ok", false)):
+		_record_failure("replay_export", result, "Gameplay")
+	return result
+
+
 func _record_failure(operation: String, result: Dictionary, scene_name: String) -> void:
 	diagnostics.record("operation_failed", str(result.get("error_code", "unknown")), scene_name, {"operation": operation})
 
@@ -234,18 +310,65 @@ func _apply_settings() -> void:
 
 func _default_profile() -> Dictionary:
 	var bytes := Crypto.new().generate_random_bytes(16)
+	var upgrades: Dictionary = {}
+	for definition in content.rules.get("upgrades", []):
+		if definition is Dictionary:
+			upgrades[str(definition.get("id", ""))] = 0
 	return {
 		"install_id": bytes.hex_encode(),
 		"coins": 180,
 		"xp": 0,
 		"crystals": 0,
 		"highest_unlocked_stage": 1,
-		"upgrades": {"strength": 0, "agility": 0, "fire_mastery": 0, "ice_mastery": 0, "lightning_mastery": 0},
+		"current_weapon_id": "basic_bow",
+		"unlocked_weapons": ["basic_bow"],
+		"upgrades": upgrades,
 		"best_results": {},
 		"reward_ledger": [],
 		"reward_ledger_pruned": 0,
+		"stats": {"total_kills": 0, "stages_completed": 0, "bosses_defeated": 0, "perfect_stages": 0, "spells_cast": 0, "total_coins_earned": 0, "highest_stage_reached": 0, "weapons_used": []},
+		"honors": {},
+		"honor_reward_ledger": [],
 		"tutorial_complete": false
 	}
+
+
+func _normalize_profile(source: Dictionary) -> Dictionary:
+	var normalized := source.duplicate(true)
+	var defaults := _default_profile()
+	for key in defaults.keys():
+		if not normalized.has(key):
+			normalized[key] = defaults[key].duplicate(true) if defaults[key] is Array or defaults[key] is Dictionary else defaults[key]
+	var upgrades: Dictionary = normalized.get("upgrades", {}).duplicate(true)
+	for definition in content.rules.get("upgrades", []):
+		if definition is Dictionary:
+			var upgrade_id := str(definition.get("id", ""))
+			if not upgrades.has(upgrade_id):
+				upgrades[upgrade_id] = 0
+	normalized["upgrades"] = upgrades
+	var stage_count := maxi(1, content.rules.get("stages", []).size())
+	normalized["highest_unlocked_stage"] = clampi(int(normalized.get("highest_unlocked_stage", 1)), 1, stage_count)
+	normalized = _unlock_weapons_for_stage(normalized, int(normalized["highest_unlocked_stage"]))
+	var stats: Dictionary = normalized.get("stats", {}).duplicate(true)
+	for stat_key in defaults["stats"].keys():
+		if not stats.has(stat_key):
+			stats[stat_key] = defaults["stats"][stat_key].duplicate(true) if defaults["stats"][stat_key] is Array or defaults["stats"][stat_key] is Dictionary else defaults["stats"][stat_key]
+	normalized["stats"] = stats
+	return normalized
+
+
+func _unlock_weapons_for_stage(source: Dictionary, stage_number: int) -> Dictionary:
+	var updated := source.duplicate(true)
+	var unlocked: Array = updated.get("unlocked_weapons", []).duplicate()
+	for weapon in content.rules.get("weapons", []):
+		if weapon is Dictionary and int(weapon.get("unlock_stage", 1)) <= stage_number:
+			var weapon_id := str(weapon.get("id", ""))
+			if not unlocked.has(weapon_id):
+				unlocked.append(weapon_id)
+	updated["unlocked_weapons"] = unlocked
+	if not unlocked.has(str(updated.get("current_weapon_id", "basic_bow"))):
+		updated["current_weapon_id"] = "basic_bow"
+	return updated
 
 
 func _default_settings() -> Dictionary:

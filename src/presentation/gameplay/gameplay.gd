@@ -15,6 +15,8 @@ var _mana_value_label: Label
 var _stage_label: Label
 var _enemy_label: Label
 var _coin_label: Label
+var _weapon_label: Label
+var _defense_label: Label
 var _feedback_label: Label
 var _boss_panel: PanelContainer
 var _boss_bar: ProgressBar
@@ -124,6 +126,12 @@ func _on_snapshot(value: Dictionary) -> void:
 	_stage_label.text = "%s  %02d" % [GameApp.text("common.stage"), int(snapshot.get("stage_number", 0))]
 	_enemy_label.text = "%s  %d / %d" % [GameApp.text("hud.wave"), int(snapshot.get("kills", 0)), int(snapshot.get("spawn_total", 0))]
 	_coin_label.text = "◆  %d" % int(snapshot.get("coins_earned", 0))
+	_weapon_label.text = "%s: %s" % [GameApp.text("hud.weapon"), GameApp.text(str(snapshot.get("weapon_name_key", "weapon.basic_bow")))]
+	var defenses: Dictionary = snapshot.get("defenses", {})
+	_defense_label.text = "%s  %s %d  ·  %s %d" % [
+		GameApp.text("hud.defenses"), GameApp.text("hud.lava_moat"), int(defenses.get("lava_moat_level", 0)),
+		GameApp.text("hud.magic_tower"), int(defenses.get("magic_tower_level", 0))
+	]
 	_update_skill_buttons()
 	_update_boss_bar()
 
@@ -160,12 +168,17 @@ func _on_events(events_value: Array) -> void:
 			"boss_special":
 				_shake_strength = _quality_shake(18.0)
 				_append_effect({"kind": "boss_wave", "position": Vector2(780, 540), "age": 0.0, "duration": 0.8})
+			"defense_attack":
+				_feedback(GameApp.text("feedback.defense"), Color("ff9b54"), 0.8)
+				_append_effect({"kind": "defense", "position": Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0), "age": 0.0, "duration": 0.35})
 
 
 func _on_run_finished(result: Dictionary) -> void:
 	if _settled:
 		return
 	_settled = true
+	if session != null:
+		session.export_debug_replay()
 	var settlement := GameApp.settle_run(result)
 	_show_result(result, settlement)
 
@@ -227,6 +240,16 @@ func _build_hud() -> void:
 	pause.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause.pressed.connect(_toggle_pause)
 	top_row.add_child(pause)
+	_weapon_label = _hud_label("", 18, Color("b9d7ea"), 220)
+	_weapon_label.position = Vector2(24, 1040)
+	_weapon_label.size.y = 32
+	_weapon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_weapon_label)
+	_defense_label = _hud_label("", 17, Color("f2bd76"), 560)
+	_defense_label.position = Vector2(260, 1040)
+	_defense_label.size.y = 32
+	_defense_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_defense_label)
 
 	_feedback_label = Label.new()
 	_feedback_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -454,7 +477,8 @@ func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> 
 		var retry_save := _overlay_button(GameApp.text("result.retry_save"))
 		retry_save.pressed.connect(func() -> void: _retry_settlement(result))
 		stack.add_child(retry_save)
-	if victory and int(result.get("stage_number", 0)) < 10:
+	var total_stages: int = GameApp.content.rules.get("stages", []).size()
+	if victory and int(result.get("stage_number", 0)) < total_stages:
 		var unlocked := Label.new()
 		unlocked.text = "✦  " + (GameApp.text("result.stage_unlocked") % (int(result.get("stage_number", 0)) + 1)) + "  ✦"
 		unlocked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -471,7 +495,18 @@ func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> 
 	menu.custom_minimum_size.x = 200
 	menu.pressed.connect(func() -> void: GameApp.return_to_menu())
 	actions.add_child(menu)
-	if victory and int(result.get("stage_number", 0)) < 10:
+	if not settlement.get("new_honors", []).is_empty():
+		var honor_names: Array[String] = []
+		for honor_id in settlement.get("new_honors", []):
+			var honor := GameApp.content.find_by_id("honors", str(honor_id))
+			if not honor.is_empty():
+				honor_names.append(GameApp.text(str(honor.get("name_key", honor_id))))
+		var honors_label := Label.new()
+		honors_label.text = "✦  %s: %s  ✦" % [GameApp.text("result.honors"), ", ".join(honor_names)]
+		honors_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		honors_label.add_theme_color_override("font_color", Color("8ce99a"))
+		stack.add_child(honors_label)
+	if victory and int(result.get("stage_number", 0)) < total_stages:
 		var next := _overlay_button(GameApp.text("result.next"))
 		next.custom_minimum_size.x = 200
 		next.pressed.connect(func() -> void:

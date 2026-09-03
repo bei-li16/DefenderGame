@@ -8,13 +8,41 @@ var localization: Dictionary = {}
 var validation_errors: Array[Dictionary] = []
 
 
-func load_builtin() -> Dictionary:
+func load_builtin(force_release_fallback: bool = false) -> Dictionary:
+	var allow_fallback := force_release_fallback or not OS.is_debug_build()
 	var rules_result := _load_json("res://content/config/game_rules.json")
+	var primary_rules_error: Dictionary = {}
 	if not bool(rules_result.get("ok", false)):
-		return rules_result
+		primary_rules_error = rules_result.duplicate(true)
+	else:
+		var primary_validation: Array[Dictionary] = ContentValidator.validate(rules_result["data"])
+		if primary_validation.is_empty():
+			rules_result["validation_errors"] = []
+		else:
+			primary_rules_error = {"ok": false, "error_code": "invalid_content", "field_path": primary_validation[0]["field_path"], "errors": primary_validation}
+	if not primary_rules_error.is_empty():
+		if not allow_fallback:
+			return primary_rules_error
+		rules_result = _load_json("res://content/config/game_rules_fallback.json")
+		if not bool(rules_result.get("ok", false)):
+			return rules_result
+		var fallback_errors: Array[Dictionary] = ContentValidator.validate(rules_result["data"])
+		if not fallback_errors.is_empty():
+			return {"ok": false, "error_code": "invalid_fallback_content", "field_path": fallback_errors[0]["field_path"], "errors": fallback_errors}
 	var localization_result := _load_json("res://content/catalogs/localization.json")
-	if not bool(localization_result.get("ok", false)):
-		return localization_result
+	var localization_error: Dictionary = {}
+	if bool(localization_result.get("ok", false)):
+		var primary_localization_errors: Array[Dictionary] = ContentValidator.validate_localization(localization_result["data"], rules_result["data"])
+		if not primary_localization_errors.is_empty():
+			localization_error = {"ok": false, "error_code": "invalid_localization", "field_path": primary_localization_errors[0]["field_path"], "errors": primary_localization_errors}
+	else:
+		localization_error = localization_result.duplicate(true)
+	if not localization_error.is_empty():
+		if not allow_fallback:
+			return localization_error
+		localization_result = _load_json("res://content/catalogs/localization_fallback.json")
+		if not bool(localization_result.get("ok", false)):
+			return localization_result
 	rules = rules_result["data"]
 	localization = localization_result["data"]
 	validation_errors = ContentValidator.validate(rules)
@@ -26,7 +54,11 @@ func load_builtin() -> Dictionary:
 			"field_path": validation_errors[0]["field_path"],
 			"errors": validation_errors
 		}
-	return {"ok": true, "config_version": rules["config_version"], "ruleset_version": rules["ruleset_version"]}
+	var result := {"ok": true, "config_version": rules["config_version"], "ruleset_version": rules["ruleset_version"]}
+	if not primary_rules_error.is_empty() or not localization_error.is_empty():
+		result["used_fallback"] = true
+		result["fallback_reason"] = primary_rules_error if not primary_rules_error.is_empty() else localization_error
+	return result
 
 
 func text(key: String, locale: String = "zh_CN") -> String:

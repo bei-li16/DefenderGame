@@ -7,6 +7,7 @@ signal run_finished(result: Dictionary)
 
 const RunModel = preload("res://src/core/combat/run_model.gd")
 const EventHasher = preload("res://src/core/replay/event_hasher.gd")
+const ReplayService = preload("res://src/application/replay_service.gd")
 
 var _model := RunModel.new()
 var _pending_commands: Array = []
@@ -14,6 +15,7 @@ var _command_log: Array = []
 var _event_log: Array = []
 var _started: bool = false
 var _finished_emitted: bool = false
+var replay_service := ReplayService.new()
 # Command and event logs serve replay export only (FR-083: debug builds).
 # Release builds skip logging so long sessions do not accumulate entries.
 var logging_enabled: bool = OS.is_debug_build()
@@ -67,6 +69,14 @@ func replay_record() -> Dictionary:
 		"commands": _command_log.duplicate(true),
 		"event_hash": EventHasher.hash_events(_event_log)
 	}
+
+
+func export_debug_replay() -> Dictionary:
+	if not logging_enabled:
+		return {"ok": false, "error_code": "debug_only"}
+	var record := replay_record()
+	record["result"] = _model.result()
+	return replay_service.export_record(record)
 
 
 func _physics_process(_delta: float) -> void:
