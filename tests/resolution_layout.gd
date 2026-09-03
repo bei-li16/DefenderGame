@@ -69,6 +69,17 @@ func _check_scene(scene: PackedScene, scene_name: String, viewport_size: Vector2
 		})
 		await process_frame
 		_check_current_view(instance, scene_name + "-result", viewport_size)
+		_check_result_actions(instance, scene_name + "-victory-result", true)
+		var victory_overlay := instance.get("_result_overlay") as Control
+		victory_overlay.free()
+		instance.set("_result_overlay", null)
+		instance.call("_show_result", {
+			"status": "defeat", "stage_number": 8, "wave": 2, "wave_total": 2,
+			"kills": 4, "wall_percent": 0, "coins": 32, "xp": 8
+		}, {"ok": true})
+		await process_frame
+		_check_current_view(instance, scene_name + "-defeat-result", viewport_size)
+		_check_result_actions(instance, scene_name + "-defeat-result", false)
 	paused = false
 	root.remove_child(viewport)
 	viewport.free()
@@ -81,6 +92,30 @@ func _check_current_view(instance: Node, view_name: String, viewport_size: Vecto
 		failures.append("%s at %dx%d: %s" % [view_name, viewport_size.x, viewport_size.y, out_of_bounds])
 	else:
 		print("[LAYOUT PASS] %s %dx%d" % [view_name, viewport_size.x, viewport_size.y])
+
+
+func _check_result_actions(instance: Node, view_name: String, victory: bool) -> void:
+	var app := instance.get_tree().root.get_node("GameApp")
+	var overlay := instance.get("_result_overlay") as Control
+	var stack := overlay.get_meta("stack") as VBoxContainer
+	var actions := stack.get_child(stack.get_child_count() - 1) as HBoxContainer
+	var expected_count := 3 if victory else 2
+	_expect(actions.get_child_count() == expected_count, "%s exposes %d result actions" % [view_name, expected_count])
+	if actions.get_child_count() < 2:
+		return
+	var restart := actions.get_child(0) as Button
+	var menu := actions.get_child(1) as Button
+	_expect(restart.text == app.call("text", "hud.restart"), "%s exposes restart action" % view_name)
+	_expect(menu.text == app.call("text", "hud.main_menu"), "%s exposes main-menu action" % view_name)
+	for child in actions.get_children():
+		var button := child as Button
+		_expect(button != null and button.process_mode == Node.PROCESS_MODE_ALWAYS, "%s keeps result buttons input-active" % view_name)
+	_expect(not paused, "%s leaves the scene unpaused" % view_name)
+
+
+func _expect(condition: bool, description: String) -> void:
+	if not condition:
+		failures.append(description)
 
 
 func _collect_out_of_bounds(node: Node, bounds: Rect2, output: Array[String], inside_scroll: bool = false) -> void:
