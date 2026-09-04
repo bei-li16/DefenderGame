@@ -122,12 +122,16 @@ func initialize() -> void:
 func start_new_profile() -> Dictionary:
 	if content.rules.is_empty():
 		return {"ok": false, "error_code": "content_unavailable", "field_path": "content/config"}
-	profile = _default_profile()
-	var result := save_service.save_profile(profile, int(content.rules.get("config_version", 0)))
+	# Build and persist a candidate first. A failed write must leave the active
+	# in-memory profile untouched; the recovery UI can then safely offer retry or
+	# exit without silently discarding the player's current session.
+	var candidate := _default_profile()
+	var result := save_service.save_profile(candidate, int(content.rules.get("config_version", 0)))
 	if not bool(result.get("ok", false)):
 		initialization_error = result
 		_record_failure("new_profile", result, "Bootstrap")
 		return result
+	profile = candidate
 	if settings.is_empty():
 		settings = _default_settings()
 		var settings_save := save_service.save_settings(settings, int(content.rules.get("config_version", 0)))
@@ -147,12 +151,33 @@ func text(key: String) -> String:
 	return content.text(key, str(settings.get("language", "zh_CN")))
 
 
-func start_stage(stage_id: String, run_seed: int = 0) -> void:
+
+func start_stage(stage_id: String, run_seed: int = 0) -> Dictionary:
+	# Keep the unlock check at the application boundary as well as in the run
+	# orchestrator. Menu buttons are not the only callers (result actions,
+	# automation and integrations can invoke this method directly), so a locked
+	# stage must never cause a scene transition or mutate run identity.
+	if not initialized_ok or content.rules.is_empty():
+		var unavailable := {"ok": false, "error_code": "content_unavailable", "field_path": "content/config"}
+		_record_failure("start_stage", unavailable, "MainMenu")
+		return unavailable
+	var stage := content.find_by_id("stages", stage_id)
+	if stage.is_empty():
+		var unknown := {"ok": false, "error_code": "unknown_stage", "field_path": "stage_id"}
+		_record_failure("start_stage", unknown, "MainMenu")
+		return unknown
+	var stage_number := int(stage.get("number", 0))
+	var highest_unlocked := int(profile.get("highest_unlocked_stage", 1))
+	if stage_number < 1 or stage_number > highest_unlocked:
+		var locked := {"ok": false, "error_code": "stage_locked", "field_path": "stage_id", "stage_number": stage_number, "highest_unlocked_stage": highest_unlocked}
+		_record_failure("start_stage", locked, "MainMenu")
+		return locked
 	current_stage_id = stage_id
 	current_seed = run_seed if run_seed != 0 else int(Time.get_unix_time_from_system()) & 0x7fffffff
 	current_run_id = Crypto.new().generate_random_bytes(16).hex_encode()
 	diagnostics.record("run_start", "", "Gameplay", {"stage_id": stage_id})
 	get_tree().change_scene_to_file("res://scenes/gameplay.tscn")
+	return {"ok": true, "stage_id": current_stage_id, "seed": current_seed, "run_id": current_run_id}
 
 
 func return_to_menu() -> void:

@@ -158,14 +158,30 @@ func _hover_blocks_fire() -> bool:
 
 func _update_fire_source() -> void:
 	if not _auto_fire_enabled():
+		# Settings can be changed while a run is alive (for example by an
+		# embedded/quick settings panel or an external profile update).  Clear
+		# the auto-fire edge before returning; otherwise the core keeps receiving
+		# no stop command and will continue firing after auto-fire is disabled.
+		_apply_fire_edge(false)
 		return
 	var want_fire := not _cast_dragging \
 		and not get_tree().paused \
 		and _result_overlay == null \
 		and str(snapshot.get("selected_skill", "")).is_empty() \
 		and str(snapshot.get("status", "running")) == "running" \
+		and _pointer_in_battlefield() \
 		and not _hover_blocks_fire()
 	_apply_fire_edge(want_fire)
+
+
+func _pointer_in_battlefield() -> bool:
+	# A null hovered Control can also mean that the pointer has left the game
+	# window.  Restrict hover-fire to the visible viewport so moving out of the
+	# window cannot keep the bow firing at a stale edge coordinate.
+	var viewport := get_viewport()
+	if viewport == null:
+		return false
+	return viewport.get_visible_rect().has_point(viewport.get_mouse_position())
 
 
 func _finish_cast_drag() -> void:
@@ -245,7 +261,8 @@ func _on_events(events_value: Array) -> void:
 				_shake_strength = _quality_shake(13.0)
 				_feedback("⚠  " + (GameApp.text("feedback.wall_damage") % int(event.get("amount", 0))), Color("ff7b6b"))
 			"skill_rejected":
-				var key := "feedback.no_mana" if str(event.get("reason", "")) == "no_mana" else "feedback.cooldown"
+				var reason := str(event.get("reason", ""))
+				var key := "feedback.no_mana" if reason == "no_mana" else ("feedback.cooldown" if reason == "cooldown" else "feedback.invalid_target")
 				_feedback("✕  " + GameApp.text(key), Color("ff9b7b"))
 			"boss_warning":
 				_feedback("⚠  " + GameApp.text("feedback.boss") + "  ⚠", Color("ff587d"), 3.5)

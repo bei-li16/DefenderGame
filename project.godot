@@ -7,7 +7,7 @@ config_version=5
 
 config/name="Aegis of Ember"
 config/description="A lightweight offline castle defense game for Windows."
-config/version="1.0.3-windows"
+config/version="1.0.4-windows"
 run/main_scene="res://scenes/bootstrap.tscn"
 
 [autoload]

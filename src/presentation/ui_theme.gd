@@ -19,6 +19,13 @@ static func create() -> Theme:
 	theme.set_stylebox("disabled", "Button", _box(Color("1c2734"), Color("4b5666"), 2, 12))
 	theme.set_stylebox("panel", "PanelContainer", _box(Color(0.045, 0.082, 0.13, 0.94), Color("657a96"), 2, 18))
 	theme.set_stylebox("panel", "Panel", _box(Color(0.035, 0.065, 0.105, 0.95), Color("657a96"), 2, 18))
+	# Progress bars are used for XP, wave, boss and honour progress.  Godot's
+	# default track is almost black on our navy panels, so zero/low progress
+	# becomes effectively invisible.  Give every bar a restrained, bordered
+	# track and an amber fill; specialised bars (wall/mana) still override the
+	# fill colour at the point of use.
+	theme.set_stylebox("background", "ProgressBar", _progress_box(Color("101d2d"), Color("536b86")))
+	theme.set_stylebox("fill", "ProgressBar", _progress_box(Color("c8942f"), Color("ffd166")))
 	theme.set_color("font_color", "CheckButton", Color("f4ead5"))
 	theme.set_color("font_color", "OptionButton", Color("f4ead5"))
 	return theme
@@ -40,3 +47,15 @@ static func _box(color: Color, border: Color, width: int, radius: int) -> StyleB
 	style.content_margin_bottom = 14.0
 	return style
 
+
+static func _progress_box(color: Color, border: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.border_color = border
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 0.0
+	style.content_margin_right = 0.0
+	style.content_margin_top = 0.0
+	style.content_margin_bottom = 0.0
+	return style

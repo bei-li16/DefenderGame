@@ -1,16 +1,20 @@
 # Windows / Godot 实施状态
 
-版本：1.0.3-windows
+版本：1.0.4-windows（以 `project.godot` 的 `application/config/version` 为准）
 
-文档日期：2026-09-04
+文档日期：2026-09-05
 
 分支：`windows-godot`
+
+> 文档口径：标为“历史快照”的章节保留当时的原始验收证据；当前源代码、配置、工作树和发布门禁状态以 §7 的复核为准。
 
 2026-09-04 参照 `参考/` 目录 Defender II 官方与实机截图完成一轮界面迭代：战斗 HUD 顶部新增关卡进度条(⚔→💀,按出怪进度填充),城墙(红)与魔力(蓝)双条移至左下角并带图标,技能按钮改为右下角圆形金环按钮(冷却弧形扫面 + 魔力不足红色提示);研究页从列表卡片改为经典树形布局(前置连线箭头 + 节点等级 + 底部详情面板:名称/描述/当前→下级效果/升级按钮)。
 
 2026-09-04 第二轮 `参考/` 界面迭代(Status / Stage Complete / Honor 弹窗)：新增玩家等级系统(第 N 级需 100×N 经验,由 XP 实时推导,存档免迁移)；主菜单顶栏显示 `Lv.N` 与经验进度条；荣誉页新增生涯战绩行(胜/负/胜率,`battles_won`/`battles_lost` 自结算起计)与每项成就的进度条 + 奖励预览；结算面板新增 Stage Complete 式等级进度条,升级时显示 `Lv.A → B`。回归 90/90 通过,实机验证败局正确计入 `battles_lost` 且 `Lv.20 → 21` 升级提示与进度数值与存档一致。
 
-## 0. Windows 1.0 内容(2026-09-03 落地)
+## 0. Windows 1.0 内容（历史落地快照，2026-09-03）
+
+本节记录 Windows 1.0 首次落地时的范围与验证结果；数字和测试计数按当日保留，不作为当前工作树的发布结论。
 
 需求文档 §4 的 Windows 1.0 内容已全部落地(Battle 联机按需求明确另立项目阶段,不在本次范围):
 
@@ -45,13 +49,13 @@
 | `tests/long_soak.gd` | 60 逻辑分钟内存平稳(29.95 MiB),节点无增长 |
 | 真实玩家游玩 | 同日玩家会话连续通关 Stage 001→021(含两个 Boss 关),生涯统计/荣誉解锁/武器解锁/存档迁移在生产路径全部生效(诊断日志 `run_settled` 序列佐证) |
 
-## 0.1 交互模型更新(2026-09-04,FR-022/FR-023 v3.1)
+## 0.1 交互模型更新（历史快照，2026-09-04，FR-022/FR-023 v3.1）
 
 - **悬停自动射击**:光标悬停战场即自动连续开火(`Viewport.gui_get_hovered_control()` 为 null 时),移入 HUD/覆盖层、选中法术、拖拽施法或暂停即停;边沿驱动,不逐帧重复发命令。设置 `auto_fire` 可关闭并回退按住左键射击。
 - **拖拽施法**:选中技能后按住左键拖拽,光标处实时绘制范围指示圈(合法性按目标边界/Mana/冷却红绿着色),松开在释放点施放;在 UI 上松开或右键/Esc 取消。释放检测轮询物理按键状态,覆盖释放事件被 UI 消耗的路径。
 - 验证:`inputmap_acceptance` 9/9(经典按住射击 + 悬停开火 + 拖拽施法/取消全路径);真实 Viewport 输入管线探测确认按键选择与拖拽施法入队正确;生产路径实证——连续 4 局无人值守对局(无按键按下,仅悬停)击杀数持续增长(425→431→436→442),回放日志每局恰好 1 次 `fire_started` + 连续 aim,符合边沿驱动设计。
 
-## 1. 当前结论(MVP 基线)
+## 1. 当前结论（Windows 1.0）
 
 需求文档定义的 Windows 单机 MVP 已形成可运行源码闭环：
 
@@ -61,9 +65,9 @@
 
 产品名为《余烬守望 / Aegis of Ember》。实现受参考资料的信息层级启发，但没有复制或打包 `参考/` 下的图片；战场、敌人、城堡、技能效果和短音效均由项目代码原创生成，保持轻量且无需额外制作软件。
 
-MVP 门禁 AT-001～AT-020 已在当前 Windows 开发机通过。Godot 4.7.2 官方 Windows x86_64 模板已安装，项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可；正式 Release 已生成独立 EXE/PCK 和便携 ZIP，并从全新解压目录以非管理员进程完成包内容、清单、图形启动及 `user://` 写入验收。
+Godot 4.7.2 官方 Windows x86_64 模板已安装，项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可；独立 EXE/PCK 和便携 ZIP 已生成。AT-001～AT-020 的历史验收证据保留在 §5；当前工作树是否满足发布门禁以 §7 为准。
 
-Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完整四页研究树和 Honors 已于 2026-09-03 全部落地(见 §0),Release 包 `Aegis-of-Ember-1.0.0-Windows-x64.zip` 已通过全部门禁重建。
+Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完整四页研究树和 Honors 已于 2026-09-03 全部落地（见 §0）。最新候选包名为 `Aegis-of-Ember-1.0.4-Windows-x64.zip`；源码或配置有变更时必须重新执行完整门禁并重建该包。
 
 ## 2. 已落地模块
 
@@ -73,10 +77,12 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | Application | GameSession、RunOrchestrator、ContentService、SaveService、UpgradeService、ReplayService；结算、购买、教学和设置采用“先持久化、后提交内存”的事务边界 |
 | Presentation | 启动恢复、主菜单、关卡选择、升级及前置条件、设置、教学、战场、HUD、暂停、快捷设置、结算、保存失败重试和原创 Canvas 视觉 |
 | Infrastructure | JSON、临时写入/校验/原子替换、备份/迁移、InputMap、程序合成音效、本地轮转日志和手动诊断 ZIP |
-| Content | 10 Stage、3 普通敌人、1 Boss、1 武器、3 技能、5 升级、中英文文本、难度倍率/上限和配置化生成规则 |
+| Content | 30 Stage、6 类普通敌人、3 个 Boss、4 把武器、3 技能、18 项研究升级、8 项 Honors、中英文文本、难度倍率/上限和配置化生成规则 |
 | Tooling | 内容校验、Godot 声明及项目许可生成、构建清单、headless 回归、自动通关、事务/输入/诊断/教学/设置/布局验收、崩溃恢复、压力/浸泡、真实窗口运行、PCK 预检和导出 EXE 普通用户验收脚本 |
 
-## 3. 最终自动验证结果
+## 3. 历史自动验证快照（2026-09-02）
+
+以下表格是 MVP 基线在 2026-09-02 的一次完整记录，保留用于追溯；它不覆盖之后的 Windows 1.0 内容、界面迭代或当前工作树变更。
 
 2026-09-02 在 i5-8400、16GB、GTX 1060、Windows 11、Godot 4.7.2 上执行：
 
@@ -110,19 +116,21 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 | 需求 | 状态 | 实现与证据 |
 |---|---|---|
-| FR-001～FR-005 启动/存档/设置 | MVP 源码通过 | 默认档和唯一安装 ID、事务保存、主档/备份/损坏副本、v1→v3 迁移、即时设置与失败回滚 |
-| FR-010～FR-014 菜单/Stage/结算 | MVP 源码通过 | 无占位入口、已解锁/重玩/奖励预览、确定性胜负、完整结算字段、暂停/确认退出 |
-| FR-020～FR-024 战场/输入/反馈 | MVP 源码通过 | 连续 2D 坐标、InputMap、缩放准星、持续射击、三法术目标校验、文字/形状/音频复合反馈 |
-| FR-030～FR-050 武器/技能/城墙 | MVP 源码通过 | 配置化 Strength/Agility、基础弓快照、Power Shot 击退、2× Fatal、火冰雷、Mana 和城墙 |
-| FR-051 后续防御设施 | 按范围后置 | Lava Moat、Magic Tower 属于 Windows 1.0，不阻塞 MVP |
-| FR-060～FR-064 敌人/生成/Boss | MVP 源码通过 | 3 种普通敌人、1 Boss、固定 seed 生成、难度维度及上限、Boss 预警/特殊行为/唯一死亡事件 |
-| FR-070～FR-073 经济/升级 | MVP 源码通过 | coins/xp、来源/规则版本/幂等键、5 项升级的效果/价格/前置/上限、永久奖励账本 |
-| FR-080～FR-083 配置/随机/回放 | MVP 源码通过 | v2 JSON 规则真源、启动/构建校验、注入 seed/run ID、命令日志和事件 SHA-256 |
+| FR-001～FR-005 启动/存档/设置 | Windows 1.0 源码通过（历史验收） | 默认档和唯一安装 ID、事务保存、主档/备份/损坏副本、v1→v4 迁移、即时设置与失败回滚 |
+| FR-010～FR-014 菜单/Stage/结算 | Windows 1.0 源码通过（历史验收） | 无占位入口、30 个已解锁/重玩 Stage、奖励预览、确定性胜负、完整结算字段、暂停/确认退出 |
+| FR-020～FR-024 战场/输入/反馈 | Windows 1.0 源码通过（历史验收） | 连续 2D 坐标、InputMap、缩放准星、悬停/按住射击、拖拽施法、三法术目标校验、文字/形状/音频复合反馈 |
+| FR-030～FR-050 武器/技能/城墙 | Windows 1.0 源码通过（历史验收） | 4 把配置化武器、Strength/Agility、Power Shot 击退、2× Fatal、火冰雷、Mana 和城墙 |
+| FR-051 防御设施 | Windows 1.0 已落地（历史验收） | Lava Moat、Magic Tower 及研究解锁、Boss 冻结行为 |
+| FR-060～FR-064 敌人/生成/Boss | Windows 1.0 源码通过（历史验收） | 6 类普通敌人、3 个 Boss、固定 seed 生成、难度四维及上限、Boss 预警/特殊行为/唯一死亡事件 |
+| FR-070～FR-073 经济/升级 | Windows 1.0 源码通过（历史验收） | coins/xp、来源/规则版本/幂等键、18 项研究升级的效果/价格/前置/上限、永久奖励账本 |
+| FR-080～FR-083 配置/随机/回放 | Windows 1.0 源码通过（历史验收） | v3 JSON 规则真源（`aegis-windows-v1`）、启动/构建校验、注入 seed/run ID、命令日志和事件 SHA-256 |
 | NFR-001～NFR-009 | 本机源码通过 | 性能、启动、60 分钟稳定性、离线、可靠性、分层、可复现、可访问性和双语均有自动证据 |
 | NFR-010 构建 | 通过 | Release EXE/PCK 和 ZIP 已生成；包内 manifest 的 Godot 版本、Git SHA、配置版本和配置 hash 通过一致性检查 |
 | NFR-011～NFR-012 | 源码通过 | 不采集/上传数据；无 Asset Library addon 或生产第三方插件 |
 
-## 5. AT-001～AT-020 状态
+## 5. 历史 AT-001～AT-020 验收快照
+
+本表保留 2026-09-02～09-04 已完成门禁的原始记录；当前工作树的复核结果见 §7。
 
 | ID | 状态 | 证据或剩余工作 |
 |---|---|---|
@@ -149,12 +157,29 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 ## 6. 发布结果与后续兼容性抽检
 
-当前本机没有发布阻塞项。正式构建产物位于被 Git 忽略的 `Builds/`：
+历史构建产物位于被 Git 忽略的 `Builds/`（旧版本 ZIP 仍保留，便于追溯）：
 
 1. `Builds/Windows/DefenderGame.exe` 与 `DefenderGame.pck`。
-2. `Builds/Aegis-of-Ember-0.1.0-Windows-x64.zip`。
+2. `Builds/Aegis-of-Ember-1.0.4-Windows-x64.zip`（最新候选包）。
 3. ZIP 只包含 EXE、PCK、`README.txt`、`GAME_LICENSE.txt` 和 `GODOT_COPYRIGHT.txt`。
 
 为减小本机负担，仅从官方 4.7.2 模板包安装了 `windows_debug_x86_64.exe` 和 `windows_release_x86_64.exe`（合计约 203 MiB）；约 1.19 GiB 的完整下载包在 SHA-512 校验和提取成功后已删除。Android、iOS、Web、Linux 和 macOS 模板均未安装。
 
-下一步不是继续安装开发软件，而是进行外部兼容性抽检：在另一台未安装 Godot、接近最低目标配置的 Windows 10/11 x64 电脑上直接解压 ZIP，复核冷启动、输入、Compatibility 渲染、存档权限和 60 分钟稳定性。若准备公开发布，还应补充图标、签名与发行渠道元数据；这些不影响当前 MVP 功能闭环。
+清洁工作树且当前回归全部通过后，下一步是进行外部兼容性抽检：在另一台未安装 Godot、接近最低目标配置的 Windows 10/11 x64 电脑上直接解压 ZIP，复核冷启动、输入、Compatibility 渲染、存档权限和 60 分钟稳定性。若准备公开发布，还应补充图标、签名与发行渠道元数据；这些不影响源码功能闭环，但会影响公开发行门禁。
+
+## 7. 当前工作树复核（2026-09-05，第二轮）
+
+第一轮复核发现的 Hurricane 齐射箭速断言失败已修复：`_fire_arrow` 由逐箭 max 范数归一化改为逐箭欧几里得归一化，三支箭实测速度偏差 ≤ 0.24（断言容差 2.0）。本轮修复同时合入工作树中另一会话遗留的加固集：旧档无 hash 迁移与损坏副本唯一命名、城墙归零后同 tick 不再产生后续伤害事件、未解锁武器回退基础弓（空列表不再视为全解锁）、`start_stage` 应用层关卡锁校验、悬停射击限定可见视口、skill_rejected 新增 invalid_target 反馈、校验器类型防护与显示键检查、ProgressBar 全局可读轨道主题。
+
+| 项目 | 当前结果 | 依据 |
+|---|---|---|
+| 应用/规则版本 | `1.0.4-windows` / config v3 / `aegis-windows-v1` | `project.godot`、`content/config/game_rules.json` |
+| 内容规模 | 30 Stage（3 Boss）、6 类普通敌人、4 武器、3 技能、18 升级、8 Honors、4 研究页 | `content/config/game_rules.json` 解析 |
+| 内容校验 | 通过 | `tools/validate_content.gd`（本轮运行） |
+| 核心回归 | **94 passed / 0 failed** | `tests/run_all.gd`（本轮运行，含 Hurricane 箭速与城墙归零断言） |
+| Stage 自动通关 | 30/30 victory；Boss 10/20/30 各 1 次 | `tests/stage_autoplay.gd`（本轮运行） |
+| 其余套件 | tutorial 8/8、settings 8/8、transaction 4/4、inputmap 9/9、diagnostic 10/10、resolution_layout 0 失败、window_mode 7/7 | 本轮运行 |
+| 压力/浸泡 | p95 1.390 ms；60 逻辑分钟内存平稳（26.84→30.00 MiB），节点 3→3 | `tests/performance_stress.gd`、`tests/long_soak.gd`（本轮运行） |
+| 发布清单 | 重建后 manifest 指向当前 HEAD | `content/build/build-manifest.json`（构建时刷新） |
+
+当前发布候选为 `Aegis-of-Ember-1.0.4-Windows-x64.zip`；已发布的 v1.0.3 不包含本轮加固修复，不应继续分发。

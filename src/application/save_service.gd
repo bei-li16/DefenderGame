@@ -2,7 +2,7 @@ class_name DefenderSaveService
 extends RefCounted
 
 const CURRENT_SCHEMA_VERSION := 4
-const APP_VERSION := "1.0.3-windows"
+const APP_VERSION := "1.0.4-windows"
 
 var base_directory: String
 
@@ -54,6 +54,12 @@ func _save_envelope(file_name: String, payload: Dictionary, config_version: int)
 		var current_main := _read_and_validate(main_path)
 		if bool(current_main.get("ok", false)):
 			if FileAccess.file_exists(backup_path):
+				# A stale/corrupt backup must not disappear silently when the next
+				# valid save rotates the main file.  Preserve it beside the save so
+				# support tooling can still diagnose the previous failure.
+				var existing_backup := _read_and_validate(backup_path)
+				if not bool(existing_backup.get("ok", false)):
+					_preserve_corrupt(backup_path)
 				var remove_backup_error := DirAccess.remove_absolute(ProjectSettings.globalize_path(backup_path))
 				if remove_backup_error != OK:
 					return {"ok": false, "error_code": "backup_remove_failed", "field_path": backup_path}
@@ -106,6 +112,10 @@ func _load_envelope(file_name: String, default_payload: Dictionary) -> Dictionar
 		var backup_result := _read_and_validate(backup_path)
 		if bool(backup_result.get("ok", false)):
 			return _migrate_loaded(backup_result["envelope"], "backup", true, default_payload)
+		# Keep a diagnostic copy of a bad backup as well.  The main file may be
+		# recoverable on a later launch, and losing the backup would erase the
+		# only evidence of the second failure.
+		_preserve_corrupt(backup_path)
 	return {
 		"ok": false,
 		"error_code": "no_valid_save",
@@ -197,7 +207,17 @@ func _read_and_validate(path: String) -> Dictionary:
 	var envelope: Dictionary = parser.data
 	if not envelope.has("payload") or not envelope["payload"] is Dictionary:
 		return {"ok": false, "error_code": "missing_payload", "field_path": path}
-	if str(envelope.get("payload_hash", "")) != _payload_hash(envelope["payload"]):
+	# Early schema files (v1-v3) shipped before payload hashes were added.  They
+	# remain migratable when the hash is absent, while current-schema files still
+	# require an integrity hash.  If a legacy file does contain a hash, verify it
+	# just like a current file so a tampered envelope is never accepted.
+	var schema_version := int(envelope.get("schema_version", 1))
+	if schema_version < 1 or schema_version > CURRENT_SCHEMA_VERSION:
+		return {"ok": false, "error_code": "unsupported_schema", "field_path": path + ".schema_version"}
+	var stored_hash := str(envelope.get("payload_hash", ""))
+	if stored_hash.is_empty() and schema_version >= CURRENT_SCHEMA_VERSION:
+		return {"ok": false, "error_code": "missing_payload_hash", "field_path": path + ".payload_hash"}
+	if not stored_hash.is_empty() and stored_hash != _payload_hash(envelope["payload"]):
 		return {"ok": false, "error_code": "hash_mismatch", "field_path": path}
 	return {"ok": true, "envelope": envelope}
 
@@ -223,7 +243,17 @@ func _preserve_corrupt(path: String) -> void:
 	var source := FileAccess.open(path, FileAccess.READ)
 	if source == null:
 		return
-	var diagnostic_path := path + ".corrupt-" + str(Time.get_unix_time_from_system())
+	# Use a microsecond token and a collision check.  Startup/retry loops can
+	# inspect the same broken file several times within one second; each copy is
+	# useful evidence and must not overwrite the previous one.
+	var unix_micros := int(Time.get_unix_time_from_system() * 1000000.0)
+	var diagnostic_path := path + ".corrupt-%d-%d" % [unix_micros, Time.get_ticks_usec()]
+	var suffix := 1
+	var candidate := diagnostic_path
+	while FileAccess.file_exists(candidate):
+		candidate = "%s-%d" % [diagnostic_path, suffix]
+		suffix += 1
+	diagnostic_path = candidate
 	var target := FileAccess.open(diagnostic_path, FileAccess.WRITE)
 	if target != null:
 		target.store_buffer(source.get_buffer(source.get_length()))

@@ -33,6 +33,7 @@ func _run() -> void:
 		_test_skill_rejections_and_mana_bounds(content.rules)
 		_test_fatal_blow_snapshot(content.rules)
 		_test_defeat_priority(content.rules)
+		_test_wall_zero_stops_same_tick_damage(content.rules)
 		_test_simultaneous_outcome_priority(content.rules)
 		_test_failure_keeps_kill_reward(content.rules)
 		_test_reward_idempotency()
@@ -45,6 +46,7 @@ func _run() -> void:
 		_test_aim_command_coalescing(content.rules)
 		_test_power_shot_resistance_and_boundary(content.rules)
 		_test_weapon_variants(content.rules)
+		_test_hurricane_velocity_consistency(content.rules)
 		_test_defenses(content.rules)
 		_test_frost_nova_freezes_defenses(content.rules)
 		_test_extended_upgrade_effects(content.rules)
@@ -52,8 +54,10 @@ func _run() -> void:
 		_test_progression_and_battle_record(content.rules)
 		_test_event_position_anchor_contract(content.rules)
 		_test_migration()
+		_test_hashless_legacy_load()
 		_test_current_schema_default_completion()
 		_test_save_backup_recovery()
+		_test_corrupt_copy_uniqueness()
 		_test_migration_backup_recovery()
 		_test_replay_export()
 		_test_bad_config_reports_path(content.rules)
@@ -518,6 +522,83 @@ func _test_weapon_variants(source_config: Dictionary) -> void:
 	_expect(pierce_deaths == 3, "phantom bow pierces through stacked enemies instead of stopping at the first")
 
 
+func _test_hurricane_velocity_consistency(source_config: Dictionary) -> void:
+	var expected_speed := 0
+	for candidate in source_config.get("weapons", []):
+		if candidate is Dictionary and str(candidate.get("id", "")) == "hurricane_bow":
+			expected_speed = int(candidate.get("projectile_speed_milli_per_tick", 0))
+			break
+	if expected_speed <= 0:
+		_expect(false, "hurricane bow config exposes a positive projectile speed")
+		return
+	var model := RunModel.new()
+	model.setup(source_config, "stage_001", 7004, {"current_weapon_id": "hurricane_bow", "unlocked_weapons": ["basic_bow", "hurricane_bow"], "upgrades": {}})
+	# Use a steep aim vector so each spread arrow has a different normalizing
+	# divisor.  A centre-vector divisor reused for all arrows would make the
+	# outer arrows visibly faster/slower than the configured projectile speed.
+	model.step([
+		{"type": "aim", "x_milli": 300000, "y_milli": 200000},
+		{"type": "fire_started"},
+		{"type": "fire_stopped"}
+	])
+	var consistent := model.projectiles.size() == 3
+	var distinct_directions := true
+	var vertical_components: Array[int] = []
+	for projectile in model.projectiles:
+		var vx := float(projectile.get("vx_milli", 0))
+		var vy := float(projectile.get("vy_milli", 0))
+		var magnitude := sqrt(vx * vx + vy * vy)
+		print("[DEBUG hurricane] vx=%s vy=%s speed=%s expected=%s" % [vx, vy, magnitude, expected_speed])
+		# Integer component quantization can introduce a sub-unit error.
+		if absf(magnitude - float(expected_speed)) > 2.0:
+			consistent = false
+		var vertical := int(projectile.get("vy_milli", 0))
+		if vertical_components.has(vertical):
+			distinct_directions = false
+		vertical_components.append(vertical)
+	_expect(consistent and distinct_directions, "hurricane volley keeps every arrow at configured speed across distinct spread directions")
+
+
+func _test_wall_zero_stops_same_tick_damage(source_config: Dictionary) -> void:
+	var model := RunModel.new()
+	model.setup(source_config, "stage_001", 7005, {"upgrades": {}})
+	var spawn_guard := 0
+	while model.enemies.is_empty() and spawn_guard < 60:
+		model.step([])
+		spawn_guard += 1
+	if model.enemies.is_empty():
+		_expect(false, "wall-zero regression can obtain an enemy fixture")
+		return
+	var template: Dictionary = model.enemies[0].duplicate(true)
+	model.enemies.clear()
+	model.projectiles.clear()
+	model.spawn_queue.clear()
+	model.spawn_cursor = 0
+	for index in range(2):
+		var enemy: Dictionary = template.duplicate(true)
+		enemy["entity_id"] = 9000 + index
+		enemy["hp"] = 100
+		enemy["max_hp"] = 100
+		enemy["x_milli"] = int(enemy.get("attack_x_milli", 350000))
+		enemy["speed_milli_per_tick"] = 0
+		enemy["attack_damage"] = 5
+		enemy["attack_interval_ticks"] = 1
+		enemy["attack_cooldown"] = 0
+		enemy["tags"] = []
+		enemy["special_interval_ticks"] = 0
+		model.enemies.append(enemy)
+	model.wall_max_hp = 5
+	model.wall_hp = 5
+	var events := model.step([])
+	var wall_damage_events := 0
+	var total_damage := 0
+	for event in events:
+		if str(event.get("type", "")) == "wall_damage":
+			wall_damage_events += 1
+			total_damage += int(event.get("amount", 0))
+	_expect(model.status == "defeat" and wall_damage_events == 1 and total_damage == 5, "wall reaching zero stops additional same-tick enemy attacks")
+
+
 func _test_defenses(source_config: Dictionary) -> void:
 	var idle_model := RunModel.new()
 	idle_model.setup(source_config, "stage_001", 7100, {"upgrades": {}})
@@ -769,6 +850,31 @@ func _test_migration() -> void:
 	_expect(payload.has("current_weapon_id") and payload.has("unlocked_weapons") and payload.has("stats") and payload.has("honors"), "migration adds Windows 1.0 weapon, stats and honors fields")
 
 
+func _test_hashless_legacy_load() -> void:
+	var directory := "user://automated-hashless-legacy-test"
+	var absolute_directory := ProjectSettings.globalize_path(directory)
+	_delete_test_directory(absolute_directory)
+	DirAccess.make_dir_recursive_absolute(absolute_directory)
+	var path := directory + "/profile.json"
+	var envelope := {
+		"schema_version": 1,
+		"app_version": "0.1.0-mvp",
+		"config_version": 1,
+		"payload": {"coins": 12, "xp": 3, "upgrades": {}}
+	}
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify(envelope, "  ", true))
+		file.flush()
+	file = null
+	var service := SaveService.new(directory)
+	var loaded := service.load_profile({"coins": 0, "xp": 0, "upgrades": {}})
+	var loaded_payload: Variant = loaded.get("payload", {})
+	var payload_ok := loaded_payload is Dictionary and int(loaded_payload.get("coins", 0)) == 12 and int(loaded_payload.get("xp", 0)) == 3
+	_expect(file == null and bool(loaded.get("ok", false)) and bool(loaded.get("migrated", false)) and payload_ok, "hashless v1 profile loads and migrates to the current schema")
+	_delete_test_directory(absolute_directory)
+
+
 func _test_current_schema_default_completion() -> void:
 	var directory := "user://automated-default-completion-test"
 	var absolute_directory := ProjectSettings.globalize_path(directory)
@@ -808,6 +914,37 @@ func _test_save_backup_recovery() -> void:
 	var repair_save := service.save_profile(recovered.get("payload", {}), 1)
 	var repaired := service.load_profile({})
 	_expect(bool(repair_save.get("ok", false)) and bool(repaired.get("ok", false)) and str(repaired.get("source", "")) == "main" and not bool(repaired.get("recovered", false)), "saving the recovered payload repairs the main profile and prevents a recovery loop: %s / %s" % [repair_save, repaired])
+	_delete_test_directory(absolute_directory)
+
+
+func _test_corrupt_copy_uniqueness() -> void:
+	var directory := "user://automated-corrupt-copy-test"
+	var absolute_directory := ProjectSettings.globalize_path(directory)
+	_delete_test_directory(absolute_directory)
+	DirAccess.make_dir_recursive_absolute(absolute_directory)
+	var path := directory + "/profile.json"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string("{broken")
+		file.flush()
+	file = null
+	var service := SaveService.new(directory)
+	service.call("_preserve_corrupt", path)
+	service.call("_preserve_corrupt", path)
+	var corrupt_names: Array[String] = []
+	var directory_access := DirAccess.open(absolute_directory)
+	if directory_access != null:
+		directory_access.list_dir_begin()
+		var item := directory_access.get_next()
+		while not item.is_empty():
+			if not directory_access.current_is_dir() and item.contains(".corrupt-"):
+				corrupt_names.append(item)
+			item = directory_access.get_next()
+		directory_access.list_dir_end()
+	var unique_names := {}
+	for name in corrupt_names:
+		unique_names[name] = true
+	_expect(corrupt_names.size() >= 2 and unique_names.size() == corrupt_names.size(), "consecutive corrupt-save copies retain unique diagnostic names")
 	_delete_test_directory(absolute_directory)
 
 

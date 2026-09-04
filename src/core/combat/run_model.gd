@@ -71,8 +71,12 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 		return {"ok": false, "error_code": "unknown_stage", "field_path": "stage_id"}
 	profile_snapshot = player_profile.duplicate(true)
 	weapon_id = str(profile_snapshot.get("current_weapon_id", "basic_bow"))
-	var unlocked_weapons: Array = profile_snapshot.get("unlocked_weapons", [])
-	if not unlocked_weapons.is_empty() and not unlocked_weapons.has(weapon_id):
+	var unlocked_value: Variant = profile_snapshot.get("unlocked_weapons", [])
+	var unlocked_weapons: Array = unlocked_value if unlocked_value is Array else []
+	# A missing/empty unlock list is a legacy or incomplete profile, not a
+	# wildcard entitlement.  Only the baseline bow is implicitly available;
+	# every other weapon must be explicitly unlocked before a run can equip it.
+	if weapon_id != "basic_bow" and not unlocked_weapons.has(weapon_id):
 		weapon_id = "basic_bow"
 	weapon = _find_by_id(config.get("weapons", []), weapon_id)
 	if weapon.is_empty():
@@ -343,8 +347,6 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 	var origin_x := int(player.get("bow_origin_x_milli", 245000))
 	var origin_y := int(player.get("bow_origin_y_milli", 555000))
 	var delta_x := aim_x_milli - origin_x
-	var delta_y := aim_y_milli - origin_y
-	var divisor := maxi(1, maxi(absi(delta_x), absi(delta_y)))
 	var speed := int(weapon.get("projectile_speed_milli_per_tick", 56000))
 	var strength_level := _upgrade_level("strength")
 	var agility_level := _upgrade_level("agility")
@@ -357,6 +359,13 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 		var centered_index := projectile_index - int((projectile_count - 1) / 2)
 		var adjusted_target_y := clampi(aim_y_milli + centered_index * spread, 0, int(config["world"]["height_milli"]))
 		var adjusted_delta_y := adjusted_target_y - origin_y
+		# Euclidean normalization per arrow: max-norm (Chebyshev) would make
+		# diagonal and outer volley arrows up to 41% faster than the configured
+		# projectile speed.  Normalizing by the true length keeps every arrow at
+		# the configured speed regardless of its spread direction.
+		var arrow_length := sqrt(float(delta_x) * float(delta_x) + float(adjusted_delta_y) * float(adjusted_delta_y))
+		if arrow_length < 1.0:
+			arrow_length = 1.0
 		var fatal := _combat_rng.chance_per_10000(int(weapon.get("fatal_chance_per_10000", 0)))
 		var power := _combat_rng.chance_per_10000(power_chance)
 		var damage := base_damage
@@ -366,8 +375,8 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 			"entity_id": next_entity_id,
 			"x_milli": origin_x,
 			"y_milli": origin_y,
-			"vx_milli": int(delta_x * speed / divisor),
-			"vy_milli": int(adjusted_delta_y * speed / maxi(1, maxi(absi(delta_x), absi(adjusted_delta_y)))),
+			"vx_milli": int(round(delta_x * speed / arrow_length)),
+			"vy_milli": int(round(adjusted_delta_y * speed / arrow_length)),
 			"damage": damage,
 			"fatal": fatal,
 			"power": power,
@@ -460,6 +469,12 @@ func _apply_lightning_skill(skill: Dictionary, target_x: int, target_y: int, eve
 
 func _update_enemies(events: Array[Dictionary]) -> void:
 	for enemy in enemies:
+		# Once the wall reaches zero, defeat is the terminal outcome for this
+		# tick.  Do not let later enemies emit additional attacks or boss specials
+		# after the lethal hit; this keeps the wall-damage event stream meaningful
+		# and honours the "stop on zero" rule.
+		if wall_hp <= 0:
+			break
 		if int(enemy["hp"]) <= 0:
 			continue
 		if int(enemy["burn_ticks"]) > 0:
@@ -490,6 +505,8 @@ func _update_enemies(events: Array[Dictionary]) -> void:
 			else:
 				enemy["attack_cooldown"] = int(enemy["attack_interval_ticks"])
 				_damage_wall(int(enemy["attack_damage"]), "enemy", enemy["entity_id"], events)
+				if wall_hp <= 0:
+					break
 		if enemy["tags"].has("boss") and int(enemy.get("special_interval_ticks", 0)) > 0:
 			enemy["special_counter"] = int(enemy["special_counter"]) + 1
 			if int(enemy["special_counter"]) >= int(enemy["special_interval_ticks"]):
@@ -505,6 +522,8 @@ func _update_enemies(events: Array[Dictionary]) -> void:
 				else:
 					_damage_wall(special_damage, "boss_special", enemy["entity_id"], events)
 				_emit(events, "boss_special", {"entity_id": enemy["entity_id"], "special": enemy["special"], "amount": special_damage, "wall_hp": wall_hp})
+				if wall_hp <= 0:
+					break
 
 
 func _update_projectiles(events: Array[Dictionary]) -> void:
@@ -728,6 +747,8 @@ func _effective_skill_cooldown(skill: Dictionary) -> int:
 
 
 func _damage_wall(raw_damage: int, source: String, entity_id: int, events: Array[Dictionary]) -> void:
+	if wall_hp <= 0:
+		return
 	var armor := _upgrade_level("wall_armor") * _upgrade_effect_per_level("wall_armor")
 	var actual_damage := maxi(0, raw_damage - armor)
 	wall_hp = maxi(0, wall_hp - actual_damage)
