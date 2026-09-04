@@ -3,6 +3,7 @@ extends Node2D
 const GameSession = preload("res://src/application/game_session.gd")
 const RunOrchestrator = preload("res://src/application/run_orchestrator.gd")
 const UiTheme = preload("res://src/presentation/ui_theme.gd")
+const SkillButton = preload("res://src/presentation/gameplay/skill_button.gd")
 
 var session: DefenderGameSession
 var snapshot: Dictionary = {}
@@ -10,6 +11,7 @@ var effects: Array[Dictionary] = []
 var floating_texts: Array[Dictionary] = []
 var _wall_bar: ProgressBar
 var _mana_bar: ProgressBar
+var _progress_bar: ProgressBar
 var _wall_value_label: Label
 var _mana_value_label: Label
 var _stage_label: Label
@@ -196,6 +198,9 @@ func _on_snapshot(value: Dictionary) -> void:
 	_mana_value_label.text = "%s  %d / %d" % [GameApp.text("hud.mana"), int(snapshot.get("mana", 0)), int(snapshot.get("max_mana", 0))]
 	_stage_label.text = "%s  %02d" % [GameApp.text("common.stage"), int(snapshot.get("stage_number", 0))]
 	_enemy_label.text = "%s  %d / %d" % [GameApp.text("hud.wave"), int(snapshot.get("kills", 0)), int(snapshot.get("spawn_total", 0))]
+	_progress_bar.max_value = maxi(1, int(snapshot.get("spawn_total", 1)))
+	_progress_bar.value = int(snapshot.get("spawned", 0))
+	_progress_bar.tooltip_text = "%d / %d" % [int(snapshot.get("spawned", 0)), int(snapshot.get("spawn_total", 0))]
 	_coin_label.text = "◆  %d" % int(snapshot.get("coins_earned", 0))
 	_weapon_label.text = "%s: %s" % [GameApp.text("hud.weapon"), GameApp.text(str(snapshot.get("weapon_name_key", "weapon.basic_bow")))]
 	var defenses: Dictionary = snapshot.get("defenses", {})
@@ -284,50 +289,94 @@ func _build_hud() -> void:
 	var top_row := HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", 22)
 	top_panel.add_child(top_row)
-	_stage_label = _hud_label(GameApp.text("common.stage"), 28, Color("ffd166"), 170)
-	top_row.add_child(_stage_label)
-	var wall_stack := VBoxContainer.new()
-	wall_stack.custom_minimum_size.x = 420
-	top_row.add_child(wall_stack)
-	_wall_value_label = Label.new()
-	_wall_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_wall_value_label.add_theme_font_size_override("font_size", 16)
-	wall_stack.add_child(_wall_value_label)
-	_wall_bar = ProgressBar.new()
-	_wall_bar.custom_minimum_size = Vector2(420, 24)
-	_wall_bar.show_percentage = false
-	wall_stack.add_child(_wall_bar)
-	var mana_stack := VBoxContainer.new()
-	mana_stack.custom_minimum_size.x = 300
-	top_row.add_child(mana_stack)
-	_mana_value_label = Label.new()
-	_mana_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_mana_value_label.add_theme_font_size_override("font_size", 16)
-	mana_stack.add_child(_mana_value_label)
-	_mana_bar = ProgressBar.new()
-	_mana_bar.custom_minimum_size = Vector2(300, 24)
-	_mana_bar.show_percentage = false
-	mana_stack.add_child(_mana_bar)
-	_enemy_label = _hud_label("", 21, Color.WHITE, 250)
-	top_row.add_child(_enemy_label)
-	_coin_label = _hud_label("", 24, Color("ffd166"), 150)
-	top_row.add_child(_coin_label)
 	var pause := Button.new()
 	pause.text = "Ⅱ"
 	pause.custom_minimum_size = Vector2(64, 54)
 	pause.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause.pressed.connect(_toggle_pause)
 	top_row.add_child(pause)
-	_weapon_label = _hud_label("", 18, Color("b9d7ea"), 220)
-	_weapon_label.position = Vector2(24, 1040)
+	_stage_label = _hud_label(GameApp.text("common.stage"), 28, Color("ffd166"), 170)
+	top_row.add_child(_stage_label)
+	_enemy_label = _hud_label("", 21, Color.WHITE, 200)
+	top_row.add_child(_enemy_label)
+	# Classic Defender II stage progress bar: fills as waves spawn, sword to skull.
+	var progress_stack := HBoxContainer.new()
+	progress_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	progress_stack.add_theme_constant_override("separation", 8)
+	top_row.add_child(progress_stack)
+	var sword := _hud_label("⚔", 24, Color("b9d7ea"), 34)
+	progress_stack.add_child(sword)
+	_progress_bar = ProgressBar.new()
+	_progress_bar.custom_minimum_size = Vector2(240, 22)
+	_progress_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_progress_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_progress_bar.show_percentage = false
+	_progress_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	progress_stack.add_child(_progress_bar)
+	var skull := _hud_label("💀", 24, Color("ff8d7a"), 40)
+	progress_stack.add_child(skull)
+	_coin_label = _hud_label("", 24, Color("ffd166"), 150)
+	top_row.add_child(_coin_label)
+
+	# Bottom-left status cluster: red wall HP bar over blue Mana bar with icons,
+	# matching the classic layout; weapon/defense readouts sit right of it.
+	var status_margin := MarginContainer.new()
+	status_margin.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	status_margin.position = Vector2(24, -180)
+	status_margin.size = Vector2(430, 160)
+	status_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(status_margin)
+	var status_stack := VBoxContainer.new()
+	status_stack.add_theme_constant_override("separation", 8)
+	status_margin.add_child(status_stack)
+	var wall_row := HBoxContainer.new()
+	wall_row.add_theme_constant_override("separation", 8)
+	wall_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status_stack.add_child(wall_row)
+	wall_row.add_child(_hud_label("🏰", 24, Color.WHITE, 36))
+	var wall_stack := VBoxContainer.new()
+	wall_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wall_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wall_row.add_child(wall_stack)
+	_wall_value_label = Label.new()
+	_wall_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_wall_value_label.add_theme_font_size_override("font_size", 16)
+	_wall_value_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wall_stack.add_child(_wall_value_label)
+	_wall_bar = ProgressBar.new()
+	_wall_bar.custom_minimum_size = Vector2(360, 24)
+	_wall_bar.show_percentage = false
+	_wall_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_wall_bar.add_theme_stylebox_override("fill", _bar_fill(Color("c0392b")))
+	wall_stack.add_child(_wall_bar)
+	var mana_row := HBoxContainer.new()
+	mana_row.add_theme_constant_override("separation", 8)
+	mana_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status_stack.add_child(mana_row)
+	mana_row.add_child(_hud_label("🔮", 24, Color.WHITE, 36))
+	var mana_stack := VBoxContainer.new()
+	mana_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mana_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mana_row.add_child(mana_stack)
+	_mana_value_label = Label.new()
+	_mana_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mana_value_label.add_theme_font_size_override("font_size", 16)
+	_mana_value_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mana_stack.add_child(_mana_value_label)
+	_mana_bar = ProgressBar.new()
+	_mana_bar.custom_minimum_size = Vector2(360, 24)
+	_mana_bar.show_percentage = false
+	_mana_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mana_bar.add_theme_stylebox_override("fill", _bar_fill(Color("2e86de")))
+	mana_stack.add_child(_mana_bar)
+	_weapon_label = _hud_label("", 18, Color("b9d7ea"), 430)
 	_weapon_label.size.y = 32
 	_weapon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_weapon_label)
-	_defense_label = _hud_label("", 17, Color("f2bd76"), 560)
-	_defense_label.position = Vector2(260, 1040)
+	status_stack.add_child(_weapon_label)
+	_defense_label = _hud_label("", 17, Color("f2bd76"), 430)
 	_defense_label.size.y = 32
 	_defense_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_defense_label)
+	status_stack.add_child(_defense_label)
 
 	_feedback_label = Label.new()
 	_feedback_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -360,20 +409,22 @@ func _build_hud() -> void:
 	skills_margin.size = Vector2(610, 130)
 	root.add_child(skills_margin)
 	var skills := HBoxContainer.new()
+	skills.alignment = BoxContainer.ALIGNMENT_END
 	skills.add_theme_constant_override("separation", 18)
 	skills_margin.add_child(skills)
 	for definition in [
-		["fire_ball", "①  🔥\n" + GameApp.text("skill.fire")],
-		["glacial_spike", "②  ❄\n" + GameApp.text("skill.ice")],
-		["lightning_strike", "③  ⚡\n" + GameApp.text("skill.lightning")]
+		["fire_ball", "🔥"],
+		["glacial_spike", "❄"],
+		["lightning_strike", "⚡"]
 	]:
-		var button := Button.new()
-		button.text = definition[1]
-		button.custom_minimum_size = Vector2(185, 112)
-		button.mouse_filter = Control.MOUSE_FILTER_STOP
-		button.pressed.connect(func() -> void: _select_skill(str(definition[0])))
+		var button := SkillButton.new()
+		button.skill_id = str(definition[0])
+		button.glyph = str(definition[1])
+		button.low_mana_text = GameApp.text("feedback.no_mana")
+		button.tooltip_text = GameApp.text("skill.fire" if definition[0] == "fire_ball" else ("skill.ice" if definition[0] == "glacial_spike" else "skill.lightning"))
+		button.pressed.connect(func() -> void: _select_skill(button.skill_id))
 		skills.add_child(button)
-		_skill_buttons[str(definition[0])] = button
+		_skill_buttons[button.skill_id] = button
 
 
 func _show_tutorial_hint() -> void:
@@ -675,6 +726,13 @@ func _hud_label(value: String, font_size: int, color: Color, width: float) -> La
 	return label
 
 
+func _bar_fill(color: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.set_corner_radius_all(6)
+	return style
+
+
 func _select_skill(skill_id: String) -> void:
 	if get_tree().paused or session == null:
 		return
@@ -688,15 +746,21 @@ func _select_skill(skill_id: String) -> void:
 func _update_skill_buttons() -> void:
 	var selected := str(snapshot.get("selected_skill", ""))
 	var cooldowns: Dictionary = snapshot.get("skill_cooldowns", {})
+	var mana := int(snapshot.get("mana", 0))
 	for skill_id in _skill_buttons.keys():
-		var button: Button = _skill_buttons[skill_id]
+		var button: Control = _skill_buttons[skill_id]
 		var cooldown := int(cooldowns.get(skill_id, 0))
-		button.modulate = Color.WHITE if selected == skill_id else Color(0.78, 0.82, 0.9, 1.0)
-		button.disabled = cooldown > 0
-		if cooldown > 0:
-			button.tooltip_text = GameApp.text("common.seconds_short") % (float(cooldown) / 30.0)
-		else:
-			button.tooltip_text = GameApp.text("skill.fire" if skill_id == "fire_ball" else ("skill.ice" if skill_id == "glacial_spike" else "skill.lightning"))
+		var definition := _skill_definition(skill_id)
+		var max_cooldown := maxi(1, int(definition.get("cooldown_ticks", 1)))
+		var mana_cost := int(definition.get("mana_cost", 0))
+		button.set_state(float(cooldown) / float(max_cooldown), mana >= mana_cost, selected == skill_id)
+
+
+func _skill_definition(skill_id: String) -> Dictionary:
+	for skill in GameApp.content.rules.get("skills", []):
+		if skill is Dictionary and str(skill.get("id", "")) == skill_id:
+			return skill
+	return {}
 
 
 func _update_boss_bar() -> void:

@@ -2,6 +2,7 @@ extends Control
 
 const UiTheme = preload("res://src/presentation/ui_theme.gd")
 const MenuBackdrop = preload("res://src/presentation/menus/menu_backdrop.gd")
+const ResearchTree = preload("res://src/presentation/menus/research_tree.gd")
 
 var _content_panel: PanelContainer
 var _content_margin: MarginContainer
@@ -207,18 +208,50 @@ func _show_research_page(page_id: String) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 12)
-	scroll.add_child(list)
-	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
+	# Tree layout (classic research pages): prerequisite chains linked by arrows.
+	var tree := ResearchTree.new()
+	tree.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(tree)
+	var page_definitions: Array = []
 	for definition in GameApp.content.rules.get("upgrades", []):
 		if not page_id.is_empty() and str(definition.get("page", "")) != page_id:
 			continue
-		var upgrade_id := str(definition.get("id", ""))
+		page_definitions.append(definition)
+
+	# Bottom detail panel: name, description, current→next effect and the
+	# upgrade button, mirroring the classic research page detail area.
+	var detail := PanelContainer.new()
+	detail.custom_minimum_size.y = 132
+	stack.add_child(detail)
+	var detail_row := HBoxContainer.new()
+	detail_row.add_theme_constant_override("separation", 16)
+	detail.add_child(detail_row)
+	var detail_info := VBoxContainer.new()
+	detail_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_row.add_child(detail_info)
+	var detail_name := Label.new()
+	detail_name.add_theme_font_size_override("font_size", 26)
+	detail_info.add_child(detail_name)
+	var detail_body := Label.new()
+	detail_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail_body.add_theme_font_size_override("font_size", 18)
+	detail_info.add_child(detail_body)
+	var detail_button := _button("", 76)
+	detail_button.custom_minimum_size = Vector2(180, 76)
+	detail_row.add_child(detail_button)
+
+	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
+	var definitions_by_id := {}
+	for definition in page_definitions:
+		definitions_by_id[str(definition.get("id", ""))] = definition
+
+	var refresh_detail := func() -> void:
+		var upgrade_id := tree.selected()
+		var definition: Dictionary = definitions_by_id.get(upgrade_id, {})
+		if definition.is_empty():
+			return
 		var level := int(upgrades.get(upgrade_id, 0))
 		var max_level := int(definition.get("max_level", 0))
-		var price := GameApp.upgrade_service.price_for_level(definition, level)
 		var effect_per_level := int(definition.get("effect_per_level", 0))
 		var current_effect := level * effect_per_level
 		var effect_text := GameApp.text("upgrade.effect_current") % current_effect
@@ -232,41 +265,29 @@ func _show_research_page(page_id: String) -> void:
 			if int(upgrades.get(prerequisite_id, 0)) <= 0:
 				prerequisites_met = false
 		var prerequisite_text := GameApp.text("upgrade.none") if prerequisite_names.is_empty() else ", ".join(prerequisite_names)
-		var card := PanelContainer.new()
-		list.add_child(card)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 14)
-		card.add_child(row)
-		var info := VBoxContainer.new()
-		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(info)
-		var name := Label.new()
-		name.text = "%s   %s%d / %d" % [GameApp.text(str(definition.get("name_key", upgrade_id))), GameApp.text("common.level"), level, max_level]
-		name.add_theme_font_size_override("font_size", 25)
-		name.add_theme_color_override("font_color", _upgrade_color(upgrade_id))
-		info.add_child(name)
-		var description := Label.new()
-		description.text = "%s\n%s  ·  %s: %s" % [
+		detail_name.text = "%s   %s%d / %d" % [GameApp.text(str(definition.get("name_key", upgrade_id))), GameApp.text("common.level"), level, max_level]
+		detail_name.add_theme_color_override("font_color", _upgrade_color(upgrade_id))
+		detail_body.text = "%s\n%s  ·  %s: %s" % [
 			GameApp.text(str(definition.get("description_key", ""))),
 			effect_text,
 			GameApp.text("upgrade.prerequisites"),
 			prerequisite_text
 		]
-		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		description.add_theme_font_size_override("font_size", 17)
-		info.add_child(description)
-		var purchase := _button(GameApp.text("common.max") if level >= max_level else "◆ %d\n%s" % [price, GameApp.text("common.upgrade")], 66)
-		purchase.custom_minimum_size.x = 146
-		purchase.disabled = level >= max_level or int(GameApp.profile.get("coins", 0)) < price or not prerequisites_met
-		purchase.pressed.connect(func() -> void:
-			var purchase_result := GameApp.purchase_upgrade(upgrade_id)
-			if not bool(purchase_result.get("ok", false)):
-				operation_error.text = GameApp.text("feedback.save_failed")
-				return
-			_refresh_header()
-			_show_upgrades()
-		)
-		row.add_child(purchase)
+		var price := GameApp.upgrade_service.price_for_level(definition, level)
+		detail_button.text = GameApp.text("common.max") if level >= max_level else "◆ %d\n%s" % [price, GameApp.text("common.upgrade")]
+		detail_button.disabled = level >= max_level or int(GameApp.profile.get("coins", 0)) < price or not prerequisites_met
+
+	tree.node_selected.connect(func(_upgrade_id: String) -> void: refresh_detail.call())
+	detail_button.pressed.connect(func() -> void:
+		var purchase_result := GameApp.purchase_upgrade(tree.selected())
+		if not bool(purchase_result.get("ok", false)):
+			operation_error.text = GameApp.text("feedback.save_failed")
+			return
+		_refresh_header()
+		_show_research_page(page_id)
+	)
+	tree.build(page_definitions, upgrades, int(GameApp.profile.get("coins", 0)))
+	refresh_detail.call()
 	_add_back_button(stack)
 
 
