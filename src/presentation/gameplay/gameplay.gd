@@ -38,6 +38,10 @@ var _auto_firing: bool = false
 # Drag-cast state (FR-023): left button held while a skill is selected; the cast
 # commits on release, releasing over UI cancels the spell.
 var _cast_dragging: bool = false
+# Last known battlefield position per entity id. The snapshot is one tick older
+# than the event stream, so same-tick spawn hits and just-died enemies would
+# otherwise fall back to a screen-center position for their floating texts.
+var _last_known_positions: Dictionary = {}
 
 
 func _ready() -> void:
@@ -189,12 +193,19 @@ func _on_snapshot(value: Dictionary) -> void:
 	]
 	_update_skill_buttons()
 	_update_boss_bar()
+	for enemy in snapshot.get("enemies", []):
+		_last_known_positions[int(enemy.get("entity_id", 0))] = Vector2(float(enemy.get("x_milli", 0)) / 1000.0, float(enemy.get("y_milli", 0)) / 1000.0)
 
 
 func _on_events(events_value: Array) -> void:
 	var sfx_volume := float(GameApp.settings.get("sfx_volume", 0.85))
 	for event_value in events_value:
 		var event: Dictionary = event_value
+		# Events arrive ordered (spawn < hit < damage < death). Recording spawn
+		# positions first keeps same-tick hits on freshly spawned enemies anchored
+		# to the real position instead of the unknown-entity fallback.
+		if str(event.get("type", "")) == "spawn":
+			_last_known_positions[int(event.get("entity_id", 0))] = Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0)
 		GameApp.audio.play_event(event, sfx_volume)
 		match str(event.get("type", "")):
 			"skill_cast":
@@ -750,6 +761,8 @@ func _entity_position(entity_id: int) -> Vector2:
 	for enemy in snapshot.get("enemies", []):
 		if int(enemy.get("entity_id", -1)) == entity_id:
 			return Vector2(float(enemy.get("x_milli", 0)) / 1000.0, float(enemy.get("y_milli", 0)) / 1000.0)
+	if _last_known_positions.has(entity_id):
+		return _last_known_positions[entity_id]
 	return Vector2(980, 520)
 
 

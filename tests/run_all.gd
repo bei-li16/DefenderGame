@@ -46,6 +46,7 @@ func _run() -> void:
 		_test_defenses(content.rules)
 		_test_frost_nova_freezes_defenses(content.rules)
 		_test_extended_upgrade_effects(content.rules)
+		_test_event_position_anchor_contract(content.rules)
 		_test_migration()
 		_test_current_schema_default_completion()
 		_test_save_backup_recovery()
@@ -657,6 +658,37 @@ func _test_extended_upgrade_effects(source_config: Dictionary) -> void:
 	_expect(fire_hit, "spell radius research extends the fire skill beyond its base radius")
 
 
+func _test_event_position_anchor_contract(source_config: Dictionary) -> void:
+	# Presentation anchors floating texts by entity id using the previous
+	# snapshot plus same-tick spawn events (event order: spawn < hit < damage
+	# < death). The core must keep every position-bearing event resolvable
+	# through that pair, including arrows hitting enemies on their spawn tick.
+	var profile := {"current_weapon_id": "phantom_bow", "unlocked_weapons": ["basic_bow", "phantom_bow"], "upgrades": {"strength": 10, "agility": 6, "power_mastery": 5, "phantom_mastery": 4, "fire_mastery": 7}}
+	for stage_id in ["stage_010", "stage_030"]:
+		var model := RunModel.new()
+		model.setup(source_config, stage_id, 777, profile)
+		var known := {}
+		for enemy in model.snapshot().get("enemies", []):
+			known[int(enemy["entity_id"])] = true
+		var misses := 0
+		var position_events := 0
+		for anchor_tick in range(1, 4000):
+			var events := model.step([{"type": "aim", "x_milli": 1400000, "y_milli": 540000}, {"type": "fire_started"}])
+			for event in events:
+				var event_type := str(event.get("type", ""))
+				if event_type == "spawn":
+					known[int(event.get("entity_id", 0))] = true
+				elif event_type == "hit" or event_type == "damage" or event_type == "death":
+					position_events += 1
+					if not known.has(int(event.get("entity_id", 0))):
+						misses += 1
+			for enemy in model.snapshot().get("enemies", []):
+				known[int(enemy["entity_id"])] = true
+			if model.status != "running":
+				break
+		_expect(position_events > 0 and misses == 0, "hit/damage/death events stay position-resolvable on %s" % stage_id)
+
+
 func _find_skill(config: Dictionary, skill_id: String) -> Dictionary:
 	for skill in config.get("skills", []):
 		if skill is Dictionary and str(skill.get("id", "")) == skill_id:
@@ -785,6 +817,10 @@ func _test_scene_smoke() -> void:
 		var gameplay := gameplay_resource.instantiate()
 		root.add_child(gameplay)
 		_expect(gameplay.get("session") != null, "gameplay scene creates application session")
+		gameplay.set("snapshot", {"enemies": []})
+		gameplay.get("_last_known_positions")[42] = Vector2(300, 200)
+		_expect(gameplay.call("_entity_position", 42) == Vector2(300, 200), "entity position resolves from the last-known-position map for same-tick spawn hits")
+		_expect(gameplay.call("_entity_position", 99) == Vector2(980, 520), "entity position falls back only for never-seen entities")
 		root.remove_child(gameplay)
 		gameplay.free()
 
