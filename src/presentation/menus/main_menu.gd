@@ -303,9 +303,10 @@ func _show_weapons() -> void:
 		name.add_theme_color_override("font_color", Color("8ce99a") if is_unlocked else Color("8693a6"))
 		info.add_child(name)
 		var description := Label.new()
-		description.text = "%s\n%s: %d  ·  %s: %d  ·  %s: %d" % [
+		description.text = "%s\n%s: %d  ·  %s: %.1f/s  ·  %s: %d  ·  %s: %d" % [
 			GameApp.text(str(definition.get("description_key", ""))),
 			GameApp.text("weapon.damage"), _weapon_effective_damage(definition),
+			GameApp.text("weapon.fire_rate"), _weapon_effective_fire_rate(definition),
 			GameApp.text("weapon.projectiles"), _weapon_effective_stat(definition, "projectile_count", "hurricane_mastery"),
 			GameApp.text("weapon.pierce"), _weapon_effective_stat(definition, "pierce", "phantom_mastery")
 		]
@@ -327,18 +328,28 @@ func _weapon_effective_damage(definition: Dictionary) -> int:
 	return _weapon_effective_stat(definition, "damage", "strength")
 
 
+# Shots per second at the 30 tick/s simulation rate, matching run_model's
+# fire_cooldown = max(min_interval_ticks, interval_ticks - agility * effect).
+func _weapon_effective_fire_rate(definition: Dictionary) -> float:
+	var agility_bonus := _weapon_mastery_bonus("agility")
+	var interval := maxi(int(definition.get("min_interval_ticks", 4)), int(definition.get("interval_ticks", 10)) - agility_bonus)
+	var tick_rate := float(maxi(1, int(GameApp.content.rules.get("simulation_tick_rate", 30))))
+	return tick_rate / float(maxi(1, interval))
+
+
+func _weapon_mastery_bonus(mastery_id: String) -> int:
+	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
+	var level := int(upgrades.get(mastery_id, 0))
+	for upgrade in GameApp.content.rules.get("upgrades", []):
+		if upgrade is Dictionary and str(upgrade.get("id", "")) == mastery_id:
+			return level * int(upgrade.get("effect_per_level", 0))
+	return 0
+
+
 # Mirrors the run_model formulas so the card shows what research actually
 # delivers in battle; raw base stats made upgraded research look lost.
 func _weapon_effective_stat(definition: Dictionary, field: String, mastery_id: String) -> int:
-	var base := int(definition.get(field, 1))
-	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
-	var level := int(upgrades.get(mastery_id, 0))
-	var effect_per_level := 0
-	for upgrade in GameApp.content.rules.get("upgrades", []):
-		if upgrade is Dictionary and str(upgrade.get("id", "")) == mastery_id:
-			effect_per_level = int(upgrade.get("effect_per_level", 0))
-			break
-	return base + level * effect_per_level
+	return int(definition.get(field, 1)) + _weapon_mastery_bonus(mastery_id)
 
 
 func _show_honors() -> void:

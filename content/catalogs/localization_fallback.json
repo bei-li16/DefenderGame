@@ -207,7 +207,8 @@
     "settings.auto_fire": "悬停自动射击",
     "weapon.damage": "伤害",
     "weapon.projectiles": "箭矢",
-    "weapon.pierce": "穿透"
+    "weapon.pierce": "穿透",
+    "weapon.fire_rate": "射速"
   },
   "en_US": {
     "app.title": "app.title",
@@ -417,6 +418,7 @@
     "settings.auto_fire": "Hover auto-fire",
     "weapon.damage": "Damage",
     "weapon.projectiles": "Arrows",
-    "weapon.pierce": "Pierce"
+    "weapon.pierce": "Pierce",
+    "weapon.fire_rate": "Fire rate"
   }
 }
