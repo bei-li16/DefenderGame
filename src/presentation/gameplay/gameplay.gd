@@ -141,6 +141,18 @@ func _apply_fire_edge(want_fire: bool) -> void:
 	session.queue_command({"type": "fire_started" if want_fire else "fire_stopped"})
 
 
+func _hover_blocks_fire() -> bool:
+	var hovered := get_viewport().gui_get_hovered_control()
+	if hovered == null:
+		return false
+	# Skill buttons are casting shortcuts, not fire blockers: hovering them
+	# must not silence the bow while the pointer travels across the HUD.
+	for button in _skill_buttons.values():
+		if hovered == button:
+			return false
+	return true
+
+
 func _update_fire_source() -> void:
 	if not _auto_fire_enabled():
 		return
@@ -149,7 +161,7 @@ func _update_fire_source() -> void:
 		and _result_overlay == null \
 		and str(snapshot.get("selected_skill", "")).is_empty() \
 		and str(snapshot.get("status", "running")) == "running" \
-		and get_viewport().gui_get_hovered_control() == null
+		and not _hover_blocks_fire()
 	_apply_fire_edge(want_fire)
 
 

@@ -46,6 +46,7 @@ func _run() -> void:
 		_test_defenses(content.rules)
 		_test_frost_nova_freezes_defenses(content.rules)
 		_test_extended_upgrade_effects(content.rules)
+		_test_weapon_switch_keeps_upgrades(content.rules)
 		_test_event_position_anchor_contract(content.rules)
 		_test_migration()
 		_test_current_schema_default_completion()
@@ -656,6 +657,42 @@ func _test_extended_upgrade_effects(source_config: Dictionary) -> void:
 		if str(event.get("type", "")) == "damage" and str(event.get("source", "")) == "fire" and int(event.get("entity_id", 0)) == int(radius_enemy["entity_id"]):
 			fire_hit = true
 	_expect(fire_hit, "spell radius research extends the fire skill beyond its base radius")
+
+
+func _test_weapon_switch_keeps_upgrades(source_config: Dictionary) -> void:
+	# Regression: research bonuses must survive switching the equipped weapon;
+	# the model reads upgrades from the profile snapshot regardless of weapon.
+	var all_weapons: Array = []
+	for weapon in source_config.get("weapons", []):
+		all_weapons.append(str(weapon.get("id", "")))
+	var strength_level := 5
+	for weapon_id in all_weapons:
+		var profile := {"current_weapon_id": weapon_id, "unlocked_weapons": all_weapons, "upgrades": {"strength": strength_level}}
+		var model := RunModel.new()
+		var setup: Dictionary = model.setup(source_config, "stage_001", 9100, profile)
+		_expect(bool(setup.get("ok", false)) and model.weapon_id == weapon_id, "run starts with %s equipped" % weapon_id)
+		var base := RunModel.new()
+		base.setup(source_config, "stage_001", 9101, {"current_weapon_id": weapon_id, "unlocked_weapons": all_weapons, "upgrades": {}})
+		var upgraded_damage := -1
+		var base_damage := -1
+		for step_index in range(30):
+			model.step([{"type": "aim", "x_milli": 1500000, "y_milli": 540000}, {"type": "fire_started"}])
+			base.step([{"type": "aim", "x_milli": 1500000, "y_milli": 540000}, {"type": "fire_started"}])
+			var shots: Array = model.snapshot().get("projectiles", [])
+			var base_shots: Array = base.snapshot().get("projectiles", [])
+			if not shots.is_empty() and not base_shots.is_empty():
+				upgraded_damage = int(shots[0].get("damage", -1))
+				base_damage = int(base_shots[0].get("damage", -1))
+				break
+		var bonus := strength_level * int(_find_upgrade(source_config, "strength").get("effect_per_level", 0))
+		_expect(upgraded_damage == base_damage + bonus, "strength research still applies after switching to %s" % weapon_id)
+
+
+func _find_upgrade(source_config: Dictionary, upgrade_id: String) -> Dictionary:
+	for upgrade in source_config.get("upgrades", []):
+		if upgrade is Dictionary and str(upgrade.get("id", "")) == upgrade_id:
+			return upgrade
+	return {}
 
 
 func _test_event_position_anchor_contract(source_config: Dictionary) -> void:

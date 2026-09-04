@@ -204,7 +204,10 @@
     "research.defense.desc": "research.defense.desc",
     "research.utility": "research.utility",
     "research.utility.desc": "research.utility.desc",
-    "settings.auto_fire": "悬停自动射击"
+    "settings.auto_fire": "悬停自动射击",
+    "weapon.damage": "伤害",
+    "weapon.projectiles": "箭矢",
+    "weapon.pierce": "穿透"
   },
   "en_US": {
     "app.title": "app.title",
@@ -411,6 +414,9 @@
     "research.defense.desc": "research.defense.desc",
     "research.utility": "research.utility",
     "research.utility.desc": "research.utility.desc",
-    "settings.auto_fire": "Hover auto-fire"
+    "settings.auto_fire": "Hover auto-fire",
+    "weapon.damage": "Damage",
+    "weapon.projectiles": "Arrows",
+    "weapon.pierce": "Pierce"
   }
 }

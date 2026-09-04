@@ -204,7 +204,10 @@
     "recovery.exit": "退出",
     "recovery.retrying": "正在重试…",
     "recovery.body": "无法读取有效配置或存档。原文件已保留，可重试、开始新档或退出。\n\n错误码：%s\n字段：%s",
-    "settings.auto_fire": "悬停自动射击"
+    "settings.auto_fire": "悬停自动射击",
+    "weapon.damage": "伤害",
+    "weapon.projectiles": "箭矢",
+    "weapon.pierce": "穿透"
   },
   "en_US": {
     "app.title": "Aegis of Ember",
@@ -411,6 +414,9 @@
     "recovery.exit": "Exit",
     "recovery.retrying": "Retrying…",
     "recovery.body": "Unable to load valid content or save data. Original files are preserved. Retry, start a new profile, or exit.\n\nCode: %s\nField: %s",
-    "settings.auto_fire": "Hover auto-fire"
+    "settings.auto_fire": "Hover auto-fire",
+    "weapon.damage": "Damage",
+    "weapon.projectiles": "Arrows",
+    "weapon.pierce": "Pierce"
   }
 }

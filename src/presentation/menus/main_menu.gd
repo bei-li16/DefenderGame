@@ -305,9 +305,9 @@ func _show_weapons() -> void:
 		var description := Label.new()
 		description.text = "%s\n%s: %d  ·  %s: %d  ·  %s: %d" % [
 			GameApp.text(str(definition.get("description_key", ""))),
-			GameApp.text("result.coins"), int(definition.get("damage", 0)),
-			GameApp.text("hud.wave"), int(definition.get("projectile_count", 1)),
-			GameApp.text("common.level"), int(definition.get("pierce", 0))
+			GameApp.text("weapon.damage"), _weapon_effective_damage(definition),
+			GameApp.text("weapon.projectiles"), _weapon_effective_stat(definition, "projectile_count", "hurricane_mastery"),
+			GameApp.text("weapon.pierce"), _weapon_effective_stat(definition, "pierce", "phantom_mastery")
 		]
 		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info.add_child(description)
@@ -321,6 +321,24 @@ func _show_weapons() -> void:
 		)
 		row.add_child(equip)
 	_add_back_button(stack)
+
+
+func _weapon_effective_damage(definition: Dictionary) -> int:
+	return _weapon_effective_stat(definition, "damage", "strength")
+
+
+# Mirrors the run_model formulas so the card shows what research actually
+# delivers in battle; raw base stats made upgraded research look lost.
+func _weapon_effective_stat(definition: Dictionary, field: String, mastery_id: String) -> int:
+	var base := int(definition.get(field, 1))
+	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
+	var level := int(upgrades.get(mastery_id, 0))
+	var effect_per_level := 0
+	for upgrade in GameApp.content.rules.get("upgrades", []):
+		if upgrade is Dictionary and str(upgrade.get("id", "")) == mastery_id:
+			effect_per_level = int(upgrade.get("effect_per_level", 0))
+			break
+	return base + level * effect_per_level
 
 
 func _show_honors() -> void:
