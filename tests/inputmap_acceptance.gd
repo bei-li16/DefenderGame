@@ -15,9 +15,13 @@ func _run() -> void:
 		quit(1)
 		return
 	var original_profile: Dictionary = app.get("profile").duplicate(true)
+	var original_settings: Dictionary = app.get("settings").duplicate(true)
 	var test_profile := original_profile.duplicate(true)
 	test_profile["tutorial_complete"] = true
 	app.set("profile", test_profile)
+	var legacy_settings := original_settings.duplicate(true)
+	legacy_settings["auto_fire"] = false
+	app.set("settings", legacy_settings)
 	var gameplay := (load("res://scenes/gameplay.tscn") as PackedScene).instantiate()
 	root.add_child(gameplay)
 	await process_frame
@@ -25,22 +29,40 @@ func _run() -> void:
 	var session: Node = gameplay.get("session")
 
 	gameplay.call("_unhandled_input", _action("combat_fire", true))
-	_expect(_last_command(session) == "fire_started", "combat_fire action starts continuous fire")
+	_expect(_last_command(session) == "fire_started", "combat_fire action starts continuous fire when auto-fire is off")
 	gameplay.call("_unhandled_input", _action("combat_fire", false))
-	_expect(_last_command(session) == "fire_stopped", "combat_fire release stops continuous fire")
-	gameplay.call("_unhandled_input", _action("combat_select_ice", true))
-	_expect(_last_command(session) == "select_skill", "combat_select_ice action selects the configured skill")
+	_expect(_last_command(session) == "fire_stopped", "combat_fire release stops continuous fire when auto-fire is off")
+
+	var auto_settings := legacy_settings.duplicate(true)
+	auto_settings["auto_fire"] = true
+	app.set("settings", auto_settings)
+	gameplay.call("_update_fire_source")
+	_expect(_last_command(session) == "fire_started", "hover auto-fire starts firing over the battlefield without any button press")
 
 	var selected_snapshot: Dictionary = gameplay.get("snapshot").duplicate(true)
 	selected_snapshot["selected_skill"] = "fire_ball"
 	gameplay.set("snapshot", selected_snapshot)
-	gameplay.call("_unhandled_input", _action("combat_cast", true))
-	_expect(_last_command(session) == "cast_skill", "combat_cast action queues a targeted spell")
+	gameplay.call("_update_fire_source")
+	_expect(_last_command(session) == "fire_stopped", "selecting a spell pauses hover auto-fire")
+
+	gameplay.call("_unhandled_input", _action("combat_fire", true))
+	_expect(bool(gameplay.get("_cast_dragging")) and _last_command(session) == "fire_stopped", "left press with a selected spell begins the drag without casting")
+	gameplay.call("_unhandled_input", _action("combat_fire", false))
+	_expect(not bool(gameplay.get("_cast_dragging")) and _last_command(session) == "cast_skill", "releasing the drag casts at the pointer")
+
+	gameplay.set("snapshot", selected_snapshot)
+	gameplay.call("_unhandled_input", _action("combat_fire", true))
 	gameplay.call("_unhandled_input", _action("combat_cancel_cast", true))
-	_expect(_last_command(session) == "cancel_skill", "combat_cancel_cast action cancels targeting")
+	var cancelled_command := _last_command(session)
+	gameplay.call("_unhandled_input", _action("combat_fire", false))
+	_expect(cancelled_command == "cancel_skill" and _last_command(session) == "cancel_skill", "cancel during drag aborts and the release does not cast")
+
+	gameplay.call("_unhandled_input", _action("combat_select_ice", true))
+	_expect(_last_command(session) == "select_skill", "combat_select_ice action selects the configured skill")
 
 	selected_snapshot["selected_skill"] = ""
 	gameplay.set("snapshot", selected_snapshot)
+	gameplay.call("_update_fire_source")
 	gameplay.call("_unhandled_input", _action("game_pause", true))
 	_expect(paused and gameplay.get("_pause_overlay") != null and _last_command(session) == "fire_stopped", "game_pause action stops firing, opens the pause overlay and pauses the tree")
 	gameplay.call("_resume_game")
@@ -49,6 +71,7 @@ func _run() -> void:
 	root.remove_child(gameplay)
 	gameplay.free()
 	app.set("profile", original_profile)
+	app.set("settings", original_settings)
 	if app.get("audio") != null:
 		app.get("audio").stop_all()
 	for failure in failures:

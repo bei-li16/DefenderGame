@@ -177,7 +177,7 @@
     "feedback.wall_damage": "城墙 -%d",
     "feedback.save_failed": "无法保存进度，请检查磁盘权限或空间后重试。",
     "tutorial.title": "守望者训练",
-    "tutorial.body": "移动鼠标瞄准，按住左键连续射击。\n按 1 / 2 / 3 选择火、冰、雷法术，再点击战场施放。\nEsc 暂停，右键取消法术。\n研究页可解锁新武器、自动防御和四类成长。",
+    "tutorial.body": "移动光标悬停战场即可自动射击(可在设置中关闭,改为按住左键射击)。\n按 1 / 2 / 3 选择火、冰、雷法术,按住左键拖拽到目标位置,松开施放;右键或 Esc 取消。\nEsc 暂停。研究页可解锁新武器、自动防御和四类成长。",
     "settings.title": "设置",
     "settings.language": "语言",
     "settings.master": "主音量",
@@ -203,7 +203,8 @@
     "recovery.new_profile": "保留诊断副本并开始新档",
     "recovery.exit": "退出",
     "recovery.retrying": "正在重试…",
-    "recovery.body": "无法读取有效配置或存档。原文件已保留，可重试、开始新档或退出。\n\n错误码：%s\n字段：%s"
+    "recovery.body": "无法读取有效配置或存档。原文件已保留，可重试、开始新档或退出。\n\n错误码：%s\n字段：%s",
+    "settings.auto_fire": "悬停自动射击"
   },
   "en_US": {
     "app.title": "Aegis of Ember",
@@ -383,7 +384,7 @@
     "feedback.wall_damage": "WALL -%d",
     "feedback.save_failed": "Progress could not be saved. Check disk permissions or free space, then retry.",
     "tutorial.title": "Sentinel Training",
-    "tutorial.body": "Move the mouse to aim and hold the left button to fire.\nPress 1 / 2 / 3 to select Fire, Ice or Lightning, then click the battlefield.\nEsc pauses and right click cancels a spell.\nResearch unlocks weapons, automatic defenses and four growth pages.",
+    "tutorial.body": "Hover the battlefield to fire automatically (disable in Settings to hold the left button instead).\nPress 1 / 2 / 3 to select Fire, Ice or Lightning, then hold and drag the left button to the target and release to cast. Right click or Esc cancels.\nEsc pauses. Research unlocks weapons, automatic defenses and four growth pages.",
     "settings.title": "Settings",
     "settings.language": "Language",
     "settings.master": "Master Volume",
@@ -409,6 +410,7 @@
     "recovery.new_profile": "Preserve Diagnostics and Start New Profile",
     "recovery.exit": "Exit",
     "recovery.retrying": "Retrying…",
-    "recovery.body": "Unable to load valid content or save data. Original files are preserved. Retry, start a new profile, or exit.\n\nCode: %s\nField: %s"
+    "recovery.body": "Unable to load valid content or save data. Original files are preserved. Retry, start a new profile, or exit.\n\nCode: %s\nField: %s",
+    "settings.auto_fire": "Hover auto-fire"
   }
 }

@@ -395,6 +395,7 @@ func _show_settings() -> void:
 	_add_toggle_row(settings_content, "settings.fullscreen", "fullscreen")
 	_add_toggle_row(settings_content, "settings.borderless", "borderless")
 	_add_toggle_row(settings_content, "settings.aim_assist", "aim_assist")
+	_add_toggle_row(settings_content, "settings.auto_fire", "auto_fire")
 	_add_toggle_row(settings_content, "settings.shake", "screen_shake")
 	_add_range_slider_row(settings_content, "settings.ui_scale", "ui_scale", 0.85, 1.25, 0.05)
 	var quality_row := _setting_row(GameApp.text("settings.quality"))

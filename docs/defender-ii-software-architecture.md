@@ -1,8 +1,8 @@
 # Defender II Windows / Godot 软件架构
 
-版本：3.0-godot-windows
+版本：3.1-godot-windows
 
-文档日期：2026-09-01
+文档日期：2026-09-03
 
 对应分支：`windows-godot`
 
@@ -291,6 +291,12 @@ SkillSelected(skill_id)
 CastSkill(x_milli, y_milli)
 PauseRequested
 ```
+
+交互模型（1.0，对应 FR-022/FR-023）：
+
+- **悬停自动射击**：光标位于战场且 `Viewport.gui_get_hovered_control()` 为 null（未悬停任何 HUD 控件或覆盖层）时，表现层向 core 发出一次 `fire_started`；光标移入 UI、打开暂停/结算/设置覆盖层、选中法术或处于拖拽施法中时发出一次 `fire_stopped`。开火状态按边沿驱动（状态变化才发命令），不逐帧重复。`settings.auto_fire=false` 时回退为按住左键开火、松手停止的经典模式。
+- **拖拽施法**：选中技能后按下左键开始拖拽，`CanvasItem._draw()` 在光标处绘制技能范围圈（合法性实时着色：目标边界、Mana、冷却任一不满足即红色），松开左键在释放点发出 `cast_skill`；释放在 UI 控件上视为取消（发出 `cancel_skill`）；右键/Esc 取消并中断拖拽。释放检测以轮询鼠标按键状态为准，覆盖释放事件被 UI 消耗的路径。
+- 法术选中与拖拽期间自动射击暂停，避免瞄准冲突；施法完成或取消后悬停射击自动恢复。
 
 设计视口为 1920×1080，stretch 保持宽高适配。HUD 使用 Control anchors/containers，战场 Camera2D 使用可配置逻辑边界。窗口变化只改变显示映射，不改变领域单位和攻击范围。
 

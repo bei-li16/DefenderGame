@@ -382,6 +382,7 @@ func _default_settings() -> Dictionary:
 		"resolution": "1920x1080",
 		"quality": "medium",
 		"aim_assist": true,
+		"auto_fire": true,
 		"screen_shake": true,
 		"ui_scale": 1.0
 	}

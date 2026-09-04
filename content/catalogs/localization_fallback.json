@@ -61,7 +61,7 @@
     "feedback.wall_damage": "feedback.wall_damage",
     "feedback.save_failed": "feedback.save_failed",
     "tutorial.title": "tutorial.title",
-    "tutorial.body": "tutorial.body",
+    "tutorial.body": "移动光标悬停战场即可自动射击(可在设置中关闭,改为按住左键射击)。\n按 1 / 2 / 3 选择火、冰、雷法术,按住左键拖拽到目标位置,松开施放;右键或 Esc 取消。\nEsc 暂停。研究页可解锁新武器、自动防御和四类成长。",
     "dialog.abandon_run": "dialog.abandon_run",
     "settings.title": "settings.title",
     "settings.language": "settings.language",
@@ -203,7 +203,8 @@
     "research.defense": "research.defense",
     "research.defense.desc": "research.defense.desc",
     "research.utility": "research.utility",
-    "research.utility.desc": "research.utility.desc"
+    "research.utility.desc": "research.utility.desc",
+    "settings.auto_fire": "悬停自动射击"
   },
   "en_US": {
     "app.title": "app.title",
@@ -267,7 +268,7 @@
     "feedback.wall_damage": "feedback.wall_damage",
     "feedback.save_failed": "feedback.save_failed",
     "tutorial.title": "tutorial.title",
-    "tutorial.body": "tutorial.body",
+    "tutorial.body": "Hover the battlefield to fire automatically (disable in Settings to hold the left button instead).\nPress 1 / 2 / 3 to select Fire, Ice or Lightning, then hold and drag the left button to the target and release to cast. Right click or Esc cancels.\nEsc pauses. Research unlocks weapons, automatic defenses and four growth pages.",
     "dialog.abandon_run": "dialog.abandon_run",
     "settings.title": "settings.title",
     "settings.language": "settings.language",
@@ -409,6 +410,7 @@
     "research.defense": "research.defense",
     "research.defense.desc": "research.defense.desc",
     "research.utility": "research.utility",
-    "research.utility.desc": "research.utility.desc"
+    "research.utility.desc": "research.utility.desc",
+    "settings.auto_fire": "Hover auto-fire"
   }
 }

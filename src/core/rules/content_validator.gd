@@ -13,6 +13,7 @@ const REQUIRED_UI_KEYS: Array[String] = [
 	"tutorial.title", "tutorial.body", "dialog.abandon_run",
 	"settings.title", "settings.language", "settings.master", "settings.music", "settings.sfx",
 	"settings.fullscreen", "settings.borderless", "settings.resolution", "settings.aim_assist",
+	"settings.auto_fire",
 	"settings.shake", "settings.quality", "settings.ui_scale", "settings.applied",
 	"settings.export_diagnostics", "settings.diagnostics_exported",
 	"quality.low", "quality.medium", "quality.high",

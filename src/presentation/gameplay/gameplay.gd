@@ -31,6 +31,13 @@ var _settled: bool = false
 var _shake_strength: float = 0.0
 var _feedback_timer: float = 0.0
 var _elapsed_visual: float = 0.0
+# Fire ownership (FR-022): with settings.auto_fire on, hovering the battlefield
+# fires without a button press; fire commands are edge-driven so the core log
+# stays replay-clean. With auto_fire off the classic hold-to-fire path applies.
+var _auto_firing: bool = false
+# Drag-cast state (FR-023): left button held while a skill is selected; the cast
+# commits on release, releasing over UI cancels the spell.
+var _cast_dragging: bool = false
 
 
 func _ready() -> void:
@@ -81,6 +88,11 @@ func _process(delta: float) -> void:
 		_feedback_timer -= delta
 		if _feedback_timer <= 0.0 and _feedback_label != null:
 			_feedback_label.text = ""
+	# Poll the physical button so a drag release consumed by UI still resolves
+	# (FR-023): releasing over a Control cancels the spell instead of casting.
+	if _cast_dragging and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		_finish_cast_drag()
+	_update_fire_source()
 	queue_redraw()
 
 
@@ -94,21 +106,64 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("combat_select_lightning"):
 		_select_skill("lightning_strike")
 	elif event.is_action_pressed("game_pause"):
-		if not str(snapshot.get("selected_skill", "")).is_empty():
-			session.queue_command({"type": "cancel_skill"})
+		if _cast_dragging or not str(snapshot.get("selected_skill", "")).is_empty():
+			_cancel_cast_drag()
 		else:
 			_toggle_pause()
 	elif event.is_action_pressed("combat_cancel_cast"):
-		session.queue_command({"type": "cancel_skill"})
+		_cancel_cast_drag()
 	elif event.is_action_pressed("combat_fire") or event.is_action_pressed("combat_cast"):
-		var selected := str(snapshot.get("selected_skill", ""))
-		if selected.is_empty():
+		if not str(snapshot.get("selected_skill", "")).is_empty():
+			# FR-023: with a skill selected the left button begins a drag; the
+			# cast commits on release at the pointer, not on press.
+			_cast_dragging = true
+		elif not _auto_fire_enabled():
 			session.queue_command({"type": "fire_started"})
-		else:
-			var mouse := get_global_mouse_position()
-			session.queue_command({"type": "cast_skill", "skill_id": selected, "x_milli": int(mouse.x * 1000.0), "y_milli": int(mouse.y * 1000.0)})
 	elif event.is_action_released("combat_fire"):
-		session.queue_command({"type": "fire_stopped"})
+		if _cast_dragging:
+			_finish_cast_drag()
+		elif not _auto_fire_enabled():
+			session.queue_command({"type": "fire_stopped"})
+
+
+func _auto_fire_enabled() -> bool:
+	return bool(GameApp.settings.get("auto_fire", true))
+
+
+func _apply_fire_edge(want_fire: bool) -> void:
+	if want_fire == _auto_firing or session == null:
+		return
+	_auto_firing = want_fire
+	session.queue_command({"type": "fire_started" if want_fire else "fire_stopped"})
+
+
+func _update_fire_source() -> void:
+	if not _auto_fire_enabled():
+		return
+	var want_fire := not _cast_dragging \
+		and not get_tree().paused \
+		and _result_overlay == null \
+		and str(snapshot.get("selected_skill", "")).is_empty() \
+		and str(snapshot.get("status", "running")) == "running" \
+		and get_viewport().gui_get_hovered_control() == null
+	_apply_fire_edge(want_fire)
+
+
+func _finish_cast_drag() -> void:
+	_cast_dragging = false
+	var selected := str(snapshot.get("selected_skill", ""))
+	if selected.is_empty():
+		return
+	if get_viewport().gui_get_hovered_control() != null:
+		session.queue_command({"type": "cancel_skill"})
+		return
+	var mouse := get_global_mouse_position()
+	session.queue_command({"type": "cast_skill", "skill_id": selected, "x_milli": int(mouse.x * 1000.0), "y_milli": int(mouse.y * 1000.0)})
+
+
+func _cancel_cast_drag() -> void:
+	_cast_dragging = false
+	session.queue_command({"type": "cancel_skill"})
 
 
 func _on_snapshot(value: Dictionary) -> void:
@@ -347,8 +402,12 @@ func _toggle_pause() -> void:
 func _show_pause() -> void:
 	if _pause_overlay != null:
 		return
+	_cast_dragging = false
 	if session != null:
-		session.queue_command({"type": "fire_stopped"})
+		if _auto_fire_enabled():
+			_apply_fire_edge(false)
+		else:
+			session.queue_command({"type": "fire_stopped"})
 	_pause_overlay = _overlay_panel(Vector2(520, 560))
 	var stack := _pause_overlay.get_meta("stack") as VBoxContainer
 	var title := _overlay_title(GameApp.text("hud.pause"))
@@ -596,7 +655,10 @@ func _hud_label(value: String, font_size: int, color: Color, width: float) -> La
 func _select_skill(skill_id: String) -> void:
 	if get_tree().paused or session == null:
 		return
-	session.queue_command({"type": "fire_stopped"})
+	_cast_dragging = false
+	if not _auto_fire_enabled():
+		# Legacy hold-to-fire: selecting a spell re-purposes the left button.
+		session.queue_command({"type": "fire_stopped"})
 	session.queue_command({"type": "select_skill", "skill_id": skill_id})
 
 
@@ -710,6 +772,7 @@ func _draw() -> void:
 		color.a = alpha
 		draw_string(ThemeDB.fallback_font, Vector2(float(text_data["x"]), float(text_data["y"])), str(text_data["text"]), HORIZONTAL_ALIGNMENT_CENTER, 180, int(text_data["font_size"]), color)
 	_draw_crosshair()
+	_draw_cast_drag_indicator()
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -859,6 +922,39 @@ func _draw_crosshair() -> void:
 		var target := _nearest_enemy(mouse, 130.0)
 		if target != Vector2.INF:
 			draw_line(mouse, target, Color(1.0, 0.84, 0.36, 0.28), 2)
+
+
+func _draw_cast_drag_indicator() -> void:
+	if not _cast_dragging:
+		return
+	var skill_id := str(snapshot.get("selected_skill", ""))
+	var skill := GameApp.content.find_by_id("skills", skill_id)
+	if skill.is_empty():
+		return
+	var mouse := get_global_mouse_position()
+	var radius := float(skill.get("radius_milli", 0)) / 1000.0
+	var valid := _cast_target_valid(skill, mouse)
+	var color := Color(0.44, 0.91, 0.63, 0.85) if valid else Color(1.0, 0.48, 0.42, 0.85)
+	draw_arc(mouse, maxf(14.0, radius), 0.0, TAU, 48, color, 4.0)
+	draw_arc(mouse, maxf(10.0, radius * 0.55), 0.0, TAU, 36, Color(color, 0.4), 2.0)
+	draw_circle(mouse, 5.0, color)
+	if not valid:
+		var cross := 12.0
+		draw_line(mouse + Vector2(-cross, -cross), mouse + Vector2(cross, cross), color, 3.0)
+		draw_line(mouse + Vector2(cross, -cross), mouse + Vector2(-cross, cross), color, 3.0)
+
+
+func _cast_target_valid(skill: Dictionary, position: Vector2) -> bool:
+	var skill_id := str(skill.get("id", ""))
+	var cooldowns: Dictionary = snapshot.get("skill_cooldowns", {})
+	if int(cooldowns.get(skill_id, 0)) > 0:
+		return false
+	if int(snapshot.get("mana", 0)) < int(skill.get("mana_cost", 0)):
+		return false
+	var world: Dictionary = GameApp.content.rules.get("world", {})
+	var x_milli := position.x * 1000.0
+	var y_milli := position.y * 1000.0
+	return x_milli >= float(world.get("castle_x_milli", 0)) and x_milli <= float(world.get("width_milli", 1920000)) and y_milli >= 0.0 and y_milli <= float(world.get("height_milli", 1080000))
 
 
 func _nearest_enemy(position: Vector2, maximum_distance: float) -> Vector2:
