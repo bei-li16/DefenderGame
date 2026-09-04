@@ -9,6 +9,8 @@ const GameSession = preload("res://src/application/game_session.gd")
 const UpgradeService = preload("res://src/application/upgrade_service.gd")
 const SaveService = preload("res://src/application/save_service.gd")
 const ReplayService = preload("res://src/application/replay_service.gd")
+const HonorService = preload("res://src/application/honor_service.gd")
+const Progression = preload("res://src/core/rules/progression.gd")
 
 var failures: Array[String] = []
 var passes: int = 0
@@ -47,6 +49,7 @@ func _run() -> void:
 		_test_frost_nova_freezes_defenses(content.rules)
 		_test_extended_upgrade_effects(content.rules)
 		_test_weapon_switch_keeps_upgrades(content.rules)
+		_test_progression_and_battle_record(content.rules)
 		_test_event_position_anchor_contract(content.rules)
 		_test_migration()
 		_test_current_schema_default_completion()
@@ -686,6 +689,30 @@ func _test_weapon_switch_keeps_upgrades(source_config: Dictionary) -> void:
 				break
 		var bonus := strength_level * int(_find_upgrade(source_config, "strength").get("effect_per_level", 0))
 		_expect(upgraded_damage == base_damage + bonus, "strength research still applies after switching to %s" % weapon_id)
+
+
+func _test_progression_and_battle_record(source_config: Dictionary) -> void:
+	# Level curve behind the Status header / Stage Complete panel: level N
+	# costs 100 * N xp, so xp 150 sits at level 2 with 50/200 on the bar.
+	var first_level: Dictionary = Progression.level_progress(0)
+	_expect(int(first_level.get("level", 0)) == 1, "zero xp stays at level 1")
+	_expect(int(first_level.get("into_level", -1)) == 0 and int(first_level.get("needed", 0)) == 100, "level 1 bar starts 0/100")
+	var mid_level: Dictionary = Progression.level_progress(150)
+	_expect(int(mid_level.get("level", 0)) == 2, "150 xp reaches level 2")
+	_expect(int(mid_level.get("into_level", 0)) == 50 and int(mid_level.get("needed", 0)) == 200, "level 2 bar shows 50/200")
+	var capped: Dictionary = Progression.level_progress(10000000)
+	_expect(int(capped.get("level", 0)) == int(Progression.MAX_LEVEL), "xp beyond the curve caps at max level")
+	# Status-page battle record: settled runs count wins and losses separately.
+	var honor_service := HonorService.new()
+	var base_profile := {"stats": {}, "honors": {}}
+	var victory := {"status": "victory", "kills": 5, "coins": 10, "xp": 20, "stage_number": 1, "wall_percent": 100, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
+	var after_win: Dictionary = honor_service.apply_result(base_profile, victory, source_config).get("profile", {})
+	_expect(int(after_win.get("stats", {}).get("battles_won", 0)) == 1, "victory counts battles_won")
+	_expect(int(after_win.get("stats", {}).get("battles_lost", 0)) == 0, "victory does not count battles_lost")
+	var defeat := {"status": "defeat", "kills": 2, "coins": 4, "xp": 6, "stage_number": 1, "wall_percent": 0, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
+	var after_loss: Dictionary = honor_service.apply_result(after_win, defeat, source_config).get("profile", {})
+	var loss_stats: Dictionary = after_loss.get("stats", {})
+	_expect(int(loss_stats.get("battles_won", 0)) == 1 and int(loss_stats.get("battles_lost", 0)) == 1, "defeat counts battles_lost separately")
 
 
 func _find_upgrade(source_config: Dictionary, upgrade_id: String) -> Dictionary:

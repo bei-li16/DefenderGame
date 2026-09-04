@@ -10,6 +10,7 @@ const REQUIRED_UI_KEYS: Array[String] = [
 		"hud.wall", "hud.mana", "hud.wave", "hud.weapon", "hud.defenses", "hud.lava_moat", "hud.magic_tower", "hud.pause", "hud.resume", "hud.restart", "hud.main_menu",
 		"weapon.damage", "weapon.projectiles", "weapon.pierce", "weapon.fire_rate",
 	"result.victory", "result.defeat", "result.kills", "result.wave", "result.coins", "result.xp", "result.wall", "result.next", "result.retry_save", "result.honors", "result.weapon", "result.stage_unlocked",
+	"result.wins", "result.losses", "result.win_rate", "result.level_up", "status.level_short", "honor.reward",
 	"feedback.no_mana", "feedback.cooldown", "feedback.fatal", "feedback.power", "feedback.boss", "feedback.defense", "feedback.wall_damage", "feedback.save_failed",
 	"tutorial.title", "tutorial.body", "dialog.abandon_run",
 	"settings.title", "settings.language", "settings.master", "settings.music", "settings.sfx",

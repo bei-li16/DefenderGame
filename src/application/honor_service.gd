@@ -11,6 +11,11 @@ func apply_result(profile: Dictionary, result: Dictionary, config: Dictionary) -
 	stats["total_coins_earned"] = int(stats.get("total_coins_earned", 0)) + int(result.get("coins", 0))
 	stats["highest_stage_reached"] = maxi(int(stats.get("highest_stage_reached", 0)), int(result.get("stage_number", 0)))
 	var victory := str(result.get("status", "")) == "victory"
+	# Status-page battle record (参考 Status screen: Win/Lose/Win%).
+	if victory:
+		stats["battles_won"] = int(stats.get("battles_won", 0)) + 1
+	else:
+		stats["battles_lost"] = int(stats.get("battles_lost", 0)) + 1
 	if victory:
 		stats["stages_completed"] = int(stats.get("stages_completed", 0)) + 1
 		if int(result.get("wall_percent", 0)) >= 100:

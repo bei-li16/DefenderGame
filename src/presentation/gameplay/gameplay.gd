@@ -3,6 +3,7 @@ extends Node2D
 const GameSession = preload("res://src/application/game_session.gd")
 const RunOrchestrator = preload("res://src/application/run_orchestrator.gd")
 const UiTheme = preload("res://src/presentation/ui_theme.gd")
+const Progression = preload("res://src/core/rules/progression.gd")
 const SkillButton = preload("res://src/presentation/gameplay/skill_button.gd")
 
 var session: DefenderGameSession
@@ -589,6 +590,44 @@ func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> 
 	var title := _overlay_title(GameApp.text("result.victory") if victory else GameApp.text("result.defeat"))
 	title.add_theme_color_override("font_color", Color("ffd166") if victory else Color("ff7697"))
 	stack.add_child(title)
+	# Stage Complete level bar (参考 Stage Complete screen: Level N [bar] into/needed).
+	var xp_after := int(GameApp.profile.get("xp", 0))
+	var xp_gain := int(result.get("xp", 0)) + int(settlement.get("honor_xp", 0))
+	var xp_before := xp_after
+	if bool(settlement.get("ok", false)) and not bool(settlement.get("duplicate", false)):
+		xp_before = maxi(0, xp_after - xp_gain)
+	var level_after: Dictionary = Progression.level_progress(xp_after)
+	var level_before: Dictionary = Progression.level_progress(xp_before)
+	var level_row := HBoxContainer.new()
+	level_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	level_row.add_theme_constant_override("separation", 12)
+	stack.add_child(level_row)
+	var level_label := Label.new()
+	level_label.text = GameApp.text("status.level_short") % int(level_after.get("level", 1))
+	level_label.add_theme_font_size_override("font_size", 24)
+	level_row.add_child(level_label)
+	var level_bar := ProgressBar.new()
+	level_bar.custom_minimum_size = Vector2(280, 18)
+	level_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	level_bar.max_value = maxi(1, int(level_after.get("needed", 1)))
+	level_bar.value = int(level_after.get("into_level", 0))
+	level_bar.show_percentage = false
+	level_bar.tooltip_text = "%d / %d" % [int(level_after.get("into_level", 0)), int(level_after.get("needed", 1))]
+	level_row.add_child(level_bar)
+	var level_value := Label.new()
+	level_value.text = "%d / %d" % [int(level_after.get("into_level", 0)), int(level_after.get("needed", 1))]
+	level_value.add_theme_font_size_override("font_size", 20)
+	level_row.add_child(level_value)
+	if int(level_after.get("level", 1)) > int(level_before.get("level", 1)):
+		var level_up := Label.new()
+		level_up.text = "✦  %s  %s → %s  ✦" % [
+			GameApp.text("result.level_up"),
+			GameApp.text("status.level_short") % int(level_before.get("level", 1)),
+			GameApp.text("status.level_short") % int(level_after.get("level", 1))
+		]
+		level_up.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		level_up.add_theme_color_override("font_color", Color("8ce99a"))
+		stack.add_child(level_up)
 	var summary := Label.new()
 	summary.text = "%s %02d\n\n%s        %d / %d\n%s        %d\n%s        %d%%\n%s     +%d\n%s       +%d" % [
 		GameApp.text("common.stage"), int(result.get("stage_number", 0)),

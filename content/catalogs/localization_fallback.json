@@ -208,7 +208,13 @@
     "weapon.damage": "伤害",
     "weapon.projectiles": "箭矢",
     "weapon.pierce": "穿透",
-    "weapon.fire_rate": "射速"
+    "weapon.fire_rate": "射速",
+    "status.level_short": "Lv.%d",
+    "result.wins": "胜",
+    "result.losses": "负",
+    "result.win_rate": "胜率",
+    "result.level_up": "等级提升",
+    "honor.reward": "奖励"
   },
   "en_US": {
     "app.title": "app.title",
@@ -419,6 +425,12 @@
     "weapon.damage": "Damage",
     "weapon.projectiles": "Arrows",
     "weapon.pierce": "Pierce",
-    "weapon.fire_rate": "Fire rate"
+    "weapon.fire_rate": "Fire rate",
+    "status.level_short": "Lv.%d",
+    "result.wins": "Wins",
+    "result.losses": "Losses",
+    "result.win_rate": "Win%",
+    "result.level_up": "Level up",
+    "honor.reward": "Reward"
   }
 }

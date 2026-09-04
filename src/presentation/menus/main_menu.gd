@@ -3,11 +3,13 @@ extends Control
 const UiTheme = preload("res://src/presentation/ui_theme.gd")
 const MenuBackdrop = preload("res://src/presentation/menus/menu_backdrop.gd")
 const ResearchTree = preload("res://src/presentation/menus/research_tree.gd")
+const Progression = preload("res://src/core/rules/progression.gd")
 
 var _content_panel: PanelContainer
 var _content_margin: MarginContainer
 var _coins_label: Label
 var _xp_label: Label
+var _xp_bar: ProgressBar
 var _stage_label: Label
 var _settings_note: Label
 
@@ -55,6 +57,12 @@ func _build_layout() -> void:
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		label.add_theme_font_size_override("font_size", 23)
 		top_row.add_child(label)
+	# Status-page style level bar: Lv N [====] into/needed.
+	_xp_bar = ProgressBar.new()
+	_xp_bar.custom_minimum_size = Vector2(190, 16)
+	_xp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_xp_bar.show_percentage = false
+	top_row.add_child(_xp_bar)
 	_refresh_header()
 
 	var body := HBoxContainer.new()
@@ -384,6 +392,20 @@ func _show_honors() -> void:
 	]
 	progress.add_theme_font_size_override("font_size", 21)
 	stack.add_child(progress)
+	# Battle record line (参考 Status screen: Win / Lose / Win%).
+	var won := int(stats.get("battles_won", 0))
+	var lost := int(stats.get("battles_lost", 0))
+	var battles := won + lost
+	var win_rate := (100.0 * float(won) / float(battles)) if battles > 0 else 0.0
+	var record := Label.new()
+	record.text = "%s %d  ·  %s %d  ·  %s %.1f%%" % [
+		GameApp.text("result.wins"), won,
+		GameApp.text("result.losses"), lost,
+		GameApp.text("result.win_rate"), win_rate
+	]
+	record.add_theme_font_size_override("font_size", 21)
+	record.add_theme_color_override("font_color", Color("9bc5e6"))
+	stack.add_child(record)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(scroll)
@@ -395,19 +417,49 @@ func _show_honors() -> void:
 	for definition in GameApp.content.rules.get("honors", []):
 		var honor_id := str(definition.get("id", ""))
 		var unlocked := bool(honors.get(honor_id, false))
+		var threshold := maxi(1, int(definition.get("threshold", 1)))
+		var current := _honor_progress(definition, stats)
 		var card := PanelContainer.new()
 		list.add_child(card)
+		var honor_stack := VBoxContainer.new()
+		honor_stack.add_theme_constant_override("separation", 6)
+		card.add_child(honor_stack)
 		var label := Label.new()
-		label.text = "%s  ·  %s\n%s\n%s" % [
+		label.text = "%s  ·  %s\n%s" % [
 			"✦" if unlocked else "◇",
 			GameApp.text(str(definition.get("name_key", honor_id))),
-			GameApp.text(str(definition.get("description_key", ""))),
-			GameApp.text("menu.unlocked") if unlocked else GameApp.text("menu.locked")
+			GameApp.text(str(definition.get("description_key", "")))
 		]
 		label.add_theme_font_size_override("font_size", 19)
 		label.add_theme_color_override("font_color", Color("ffd166") if unlocked else Color("8693a6"))
-		card.add_child(label)
+		honor_stack.add_child(label)
+		# Honor popup progress (参考 honor popup: bar + current/threshold).
+		var honor_bar := ProgressBar.new()
+		honor_bar.custom_minimum_size = Vector2(0, 14)
+		honor_bar.max_value = threshold
+		honor_bar.value = mini(threshold, current)
+		honor_bar.show_percentage = false
+		honor_bar.tooltip_text = "%d / %d" % [mini(current, threshold), threshold]
+		honor_stack.add_child(honor_bar)
+		var reward := Label.new()
+		reward.text = "%s: ◆ %d   %s %d" % [
+			GameApp.text("honor.reward"),
+			int(definition.get("reward_coins", 0)),
+			GameApp.text("common.xp"),
+			int(definition.get("reward_xp", 0))
+		]
+		reward.add_theme_font_size_override("font_size", 15)
+		reward.add_theme_color_override("font_color", Color("9fb2c8"))
+		honor_stack.add_child(reward)
 	_add_back_button(stack)
+
+
+# Same semantics as honor_service._condition_met: counts behind the honor bar.
+static func _honor_progress(definition: Dictionary, stats: Dictionary) -> int:
+	var condition := str(definition.get("condition_type", ""))
+	if condition == "weapons_used_count":
+		return stats.get("weapons_used", []).size()
+	return int(stats.get(condition, 0))
 
 
 func _show_settings() -> void:
@@ -574,7 +626,11 @@ func _refresh_header() -> void:
 		return
 	_stage_label.text = "%s  %02d" % [GameApp.text("common.stage"), int(GameApp.profile.get("highest_unlocked_stage", 1))]
 	_coins_label.text = "◆  %d" % int(GameApp.profile.get("coins", 0))
-	_xp_label.text = "%s  %d" % [GameApp.text("common.xp"), int(GameApp.profile.get("xp", 0))]
+	var progress: Dictionary = Progression.level_progress(int(GameApp.profile.get("xp", 0)))
+	_xp_label.text = GameApp.text("status.level_short") % int(progress.get("level", 1))
+	_xp_bar.max_value = maxi(1, int(progress.get("needed", 1)))
+	_xp_bar.value = int(progress.get("into_level", 0))
+	_xp_bar.tooltip_text = "%d / %d %s" % [int(progress.get("into_level", 0)), int(progress.get("needed", 1)), GameApp.text("common.xp")]
 
 
 func _refresh_after_language_change() -> void:
