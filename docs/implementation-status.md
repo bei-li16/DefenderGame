@@ -1,6 +1,6 @@
 # Windows / Godot 实施状态
 
-版本：1.0.1-windows
+版本：1.0.2-windows
 
 文档日期：2026-09-04
 

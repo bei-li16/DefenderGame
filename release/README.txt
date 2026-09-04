@@ -1,5 +1,5 @@
 AEGIS OF EMBER / 余烬守望
-Version 1.0.1-windows - Windows x86_64
+Version 1.0.2-windows - Windows x86_64
 
 An offline, single-player castle defense game. No account, server, payment,
 telemetry, or mandatory network connection is used.
