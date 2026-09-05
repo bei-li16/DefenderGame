@@ -2,7 +2,7 @@ class_name DefenderSaveService
 extends RefCounted
 
 const CURRENT_SCHEMA_VERSION := 4
-const APP_VERSION := "1.0.4-windows"
+const APP_VERSION := "1.0.5-windows"
 
 var base_directory: String
 
