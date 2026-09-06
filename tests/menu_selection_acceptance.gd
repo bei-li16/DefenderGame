@@ -1,7 +1,6 @@
 extends SceneTree
 
 const SaveService = preload("res://src/application/save_service.gd")
-const ResearchTreeScript = preload("res://src/presentation/menus/research_tree.gd")
 
 var failures: Array[String] = []
 var passes: int = 0
@@ -78,8 +77,11 @@ func _run() -> void:
 
 
 func _research_tree(menu: Node) -> Node:
+	# Match by script path: preloading the tree script here would compile it
+	# before autoload registration and break its GameApp references.
 	for child in menu.find_children("*", "", true, false):
-		if child.get_script() == ResearchTreeScript:
+		var script: Variant = child.get_script()
+		if script != null and str(script.resource_path).ends_with("research_tree.gd"):
 			return child
 	return null
 
@@ -115,5 +117,6 @@ func _delete_test_directory(absolute_path: String) -> void:
 			_delete_test_directory(item_path)
 		else:
 			DirAccess.remove_absolute(item_path)
-		directory.list_dir_end()
+		item = directory.get_next()
+	directory.list_dir_end()
 	DirAccess.remove_absolute(absolute_path)
