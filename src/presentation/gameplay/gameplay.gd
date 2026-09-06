@@ -730,8 +730,11 @@ func _draw_castle() -> void:
 	var origin := Vector2(245, 555)
 	var mouse := get_global_mouse_position()
 	var direction := (mouse - origin).normalized()
+	var aim_angle := direction.angle()
 	draw_line(origin, origin + direction * 132.0, Color("f0c36a"), 13)
-	draw_arc(origin, 68, -1.15, 1.15, 22, Color("d8a44c"), 8)
+	# Bow limbs straddle the firing line: the arc span is centered on the aim
+	# angle so limbs and crossbow body rotate together.
+	draw_arc(origin, 68, aim_angle - 1.15, aim_angle + 1.15, 22, Color("d8a44c"), 8)
 	draw_circle(origin, 24, Color("243447"))
 
 
