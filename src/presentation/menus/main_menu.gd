@@ -452,37 +452,53 @@ func _show_honors() -> void:
 	var honors: Dictionary = GameApp.profile.get("honors", {})
 	for definition in GameApp.content.rules.get("honors", []):
 		var honor_id := str(definition.get("id", ""))
-		var unlocked := bool(honors.get(honor_id, false))
-		var threshold := maxi(1, int(definition.get("threshold", 1)))
+		var honor_value: Variant = honors.get(honor_id, 0)
+		var honor_level: int = (1 if bool(honor_value) else 0) if honor_value is bool else clampi(int(honor_value), 0, 3)
 		var current := _honor_progress(definition, stats)
+		var milestones: Array = definition.get("milestones", [])
+		var maxed := honor_level >= milestones.size()
 		var card := PanelContainer.new()
 		list.add_child(card)
 		var honor_stack := VBoxContainer.new()
 		honor_stack.add_theme_constant_override("separation", 6)
 		card.add_child(honor_stack)
+		# Badge pips light up per achieved level (参考 Status badge row).
+		var pips := ""
+		for pip in range(milestones.size()):
+			pips += "✦" if pip < honor_level else "◇"
 		var label := Label.new()
-		label.text = "%s  ·  %s\n%s" % [
-			"✦" if unlocked else "◇",
+		label.text = "%s  ·  %s %d/%d\n%s" % [
+			pips,
 			GameApp.text(str(definition.get("name_key", honor_id))),
+			honor_level, milestones.size(),
 			GameApp.text(str(definition.get("description_key", "")))
 		]
 		label.add_theme_font_size_override("font_size", 19)
-		label.add_theme_color_override("font_color", Color("ffd166") if unlocked else Color("8693a6"))
+		label.add_theme_color_override("font_color", Color("ffd166") if honor_level > 0 else Color("8693a6"))
 		honor_stack.add_child(label)
-		# Honor popup progress (参考 honor popup: bar + current/threshold).
+		# Progress toward the next milestone (full bar at max level).
 		var honor_bar := ProgressBar.new()
 		honor_bar.custom_minimum_size = Vector2(0, 14)
-		honor_bar.max_value = threshold
-		honor_bar.value = mini(threshold, current)
-		honor_bar.show_percentage = false
-		honor_bar.tooltip_text = "%d / %d" % [mini(current, threshold), threshold]
+		if maxed:
+			honor_bar.max_value = 1
+			honor_bar.value = 1
+			honor_bar.tooltip_text = GameApp.text("honor.maxed")
+		else:
+			var next_milestone := int(milestones[honor_level])
+			honor_bar.max_value = next_milestone
+			honor_bar.value = mini(next_milestone, current)
+			honor_bar.show_percentage = false
+			honor_bar.tooltip_text = "%s %d / %d" % [GameApp.text("honor.next_milestone"), mini(current, next_milestone), next_milestone]
 		honor_stack.add_child(honor_bar)
 		var reward := Label.new()
+		var reward_coins: Array = definition.get("reward_coins", [])
+		var reward_xp: Array = definition.get("reward_xp", [])
+		var reward_level := mini(honor_level, maxi(0, reward_coins.size() - 1))
 		reward.text = "%s: ◆ %d   %s %d" % [
 			GameApp.text("honor.reward"),
-			int(definition.get("reward_coins", 0)),
+			int(reward_coins[reward_level]) if not reward_coins.is_empty() else 0,
 			GameApp.text("common.xp"),
-			int(definition.get("reward_xp", 0))
+			int(reward_xp[reward_level]) if not reward_xp.is_empty() else 0
 		]
 		reward.add_theme_font_size_override("font_size", 15)
 		reward.add_theme_color_override("font_color", Color("9fb2c8"))

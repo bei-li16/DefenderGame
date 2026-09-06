@@ -184,13 +184,38 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 	var honors: Array = _as_array(config.get("honors", []))
 	if honors.size() < 8:
 		_add_error(errors, "honors", "requires_honors")
+	var bonus_types := ["coin_per_kill", "wall_hp_pct", "weapon_damage_pct", "xp_pct", "max_mana_pct", "fire_damage_pct", "ice_damage_pct", "lightning_damage_pct"]
+	var honor_ids: Array[String] = []
 	for honor_index in range(honors.size()):
 		var honor: Dictionary = _as_dictionary(honors[honor_index])
-		if str(honor.get("name_key", "")).is_empty() or str(honor.get("description_key", "")).is_empty():
+		var honor_id := str(honor.get("id", ""))
+		honor_ids.append(honor_id)
+		if honor_id.is_empty() or str(honor.get("name_key", "")).is_empty() or str(honor.get("description_key", "")).is_empty():
 			_add_error(errors, "honors[%d]" % honor_index, "missing_display_keys")
-		_require_positive_int(honor, "threshold", errors, "honors[%d]." % honor_index)
-		_require_non_negative_int(honor, "reward_coins", errors, "honors[%d]." % honor_index)
-		_require_non_negative_int(honor, "reward_xp", errors, "honors[%d]." % honor_index)
+		var milestones: Array = _as_array(honor.get("milestones", []))
+		if milestones.size() != 3:
+			_add_error(errors, "honors[%d].milestones" % honor_index, "requires_three_milestones")
+		else:
+			for milestone_index in range(milestones.size()):
+				var milestone := int(milestones[milestone_index])
+				if milestone <= 0:
+					_add_error(errors, "honors[%d].milestones[%d]" % [honor_index, milestone_index], "out_of_range")
+				elif milestone_index > 0 and milestone <= int(milestones[milestone_index - 1]):
+					_add_error(errors, "honors[%d].milestones[%d]" % [honor_index, milestone_index], "milestones_must_ascending")
+		for reward_field in ["reward_coins", "reward_xp"]:
+			var rewards: Array = _as_array(honor.get(reward_field, []))
+			if rewards.size() != 3:
+				_add_error(errors, "honors[%d].%s" % [honor_index, reward_field], "requires_three_rewards")
+			else:
+				for reward_index in range(rewards.size()):
+					if int(rewards[reward_index]) < 0:
+						_add_error(errors, "honors[%d].%s[%d]" % [honor_index, reward_field, reward_index], "out_of_range")
+		var bonus_type := str(honor.get("bonus_type", ""))
+		if not bonus_types.has(bonus_type):
+			_add_error(errors, "honors[%d].bonus_type" % honor_index, "unknown_reference")
+		if int(honor.get("bonus_per_level", 0)) <= 0:
+			_add_error(errors, "honors[%d].bonus_per_level" % honor_index, "out_of_range")
+
 
 	var stage_numbers: Array[int] = []
 	for index in range(stages.size()):

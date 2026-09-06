@@ -43,6 +43,9 @@ var coins_earned: int = 0
 var xp_earned: int = 0
 var kills: int = 0
 var spells_cast: int = 0
+var fire_casts: int = 0
+var ice_casts: int = 0
+var lightning_casts: int = 0
 var current_wave: int = 0
 var enemies: Array[Dictionary] = []
 var projectiles: Array[Dictionary] = []
@@ -101,6 +104,9 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	xp_earned = 0
 	kills = 0
 	spells_cast = 0
+	fire_casts = 0
+	ice_casts = 0
+	lightning_casts = 0
 	current_wave = 0
 	enemies.clear()
 	projectiles.clear()
@@ -117,6 +123,8 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	_boss_rewarded = false
 	bosses_slain = 0
 	wall_max_hp = int(player.get("wall_hp", 500)) + _upgrade_level("wall_repair") * _upgrade_effect_per_level("wall_repair")
+	wall_max_hp = _percent_boosted(wall_max_hp, "wall_hp_pct")
+	max_mana = _percent_boosted(max_mana, "max_mana_pct")
 	wall_hp = wall_max_hp
 	_build_spawn_queue()
 	return {"ok": true, "run_id": run_id}
@@ -167,6 +175,9 @@ func snapshot() -> Dictionary:
 		"xp_earned": xp_earned,
 		"kills": kills,
 		"spells_cast": spells_cast,
+		"fire_casts": fire_casts,
+		"ice_casts": ice_casts,
+		"lightning_casts": lightning_casts,
 		"wave": current_wave,
 		"wave_total": stage.get("groups", []).size(),
 		"spawned": spawn_cursor,
@@ -186,7 +197,7 @@ func result() -> Dictionary:
 	var clear_reward: Dictionary = stage.get("clear_reward", {}) if status == STATUS_VICTORY else {}
 	var reward_version := str(config.get("ruleset_version", "unknown"))
 	var clear_coins := int(clear_reward.get("coins", 0)) + _reward_bonus("coin_bounty")
-	var clear_xp := int(clear_reward.get("xp", 0)) + _reward_bonus("xp_bounty")
+	var clear_xp := _percent_boosted(int(clear_reward.get("xp", 0)) + _reward_bonus("xp_bounty"), "xp_pct")
 	return {
 		"run_id": run_id,
 		"weapon_id": weapon_id,
@@ -262,7 +273,7 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 	var speed := int(weapon.get("projectile_speed_milli_per_tick", 56000))
 	var strength_level := _upgrade_level("strength")
 	var agility_level := _upgrade_level("agility")
-	var base_damage := int(weapon.get("damage", 1)) + strength_level * _upgrade_effect_per_level("strength")
+	var base_damage := _percent_boosted(int(weapon.get("damage", 1)) + strength_level * _upgrade_effect_per_level("strength"), "weapon_damage_pct")
 	var power_chance := clampi(int(weapon.get("power_shot_chance_per_10000", 0)) + _upgrade_level("power_mastery") * _upgrade_effect_per_level("power_mastery"), 0, 10000)
 	var projectile_count := maxi(1, int(weapon.get("projectile_count", 1)) + _upgrade_level("hurricane_mastery") * _upgrade_effect_per_level("hurricane_mastery"))
 	var pierce := maxi(0, int(weapon.get("pierce", 0)) + _upgrade_level("phantom_mastery") * _upgrade_effect_per_level("phantom_mastery"))
@@ -378,8 +389,8 @@ func _resolve_deaths(events: Array[Dictionary]) -> void:
 		if int(enemy["hp"]) > 0:
 			continue
 		kills += 1
-		var coins := int(enemy.get("reward_coins", 0)) + _reward_bonus("coin_bounty")
-		var xp := int(enemy.get("reward_xp", 0)) + _reward_bonus("xp_bounty")
+		var coins := int(enemy.get("reward_coins", 0)) + _reward_bonus("coin_bounty") + _honor_level("big_spender")
+		var xp := _percent_boosted(int(enemy.get("reward_xp", 0)) + _reward_bonus("xp_bounty"), "xp_pct")
 		coins_earned += coins
 		xp_earned += xp
 		_emit(events, "death", {"entity_id": enemy["entity_id"], "enemy_id": enemy["enemy_id"], "boss": enemy["tags"].has("boss")})
@@ -463,6 +474,28 @@ func _upgrade_level(upgrade_id: String) -> int:
 func _upgrade_effect_per_level(upgrade_id: String) -> int:
 	var definition := _find_by_id(config.get("upgrades", []), upgrade_id)
 	return int(definition.get("effect_per_level", 0))
+
+
+# Honor chain helpers: profile_snapshot.honors maps honor id -> achieved level
+# (0-3). Legacy bool saves were migrated to ints, but treat true as level 1 for
+# extra safety. Bonus magnitudes come from the honor definitions in config.
+func _honor_level(honor_id: String) -> int:
+	var honors: Dictionary = profile_snapshot.get("honors", {})
+	var value: Variant = honors.get(honor_id, 0)
+	if value is bool:
+		return 1 if bool(value) else 0
+	return clampi(int(value), 0, 3)
+
+
+func _honor_bonus_permille(bonus_type: String) -> int:
+	for honor in config.get("honors", []):
+		if honor is Dictionary and str(honor.get("bonus_type", "")) == bonus_type:
+			return _honor_level(str(honor.get("id", ""))) * maxi(0, int(honor.get("bonus_per_level", 0))) * 10
+	return 0
+
+
+func _percent_boosted(value: int, bonus_type: String) -> int:
+	return value * (1000 + _honor_bonus_permille(bonus_type)) / 1000
 
 
 func _reward_bonus(upgrade_id: String) -> int:

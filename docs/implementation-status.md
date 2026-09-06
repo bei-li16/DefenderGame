@@ -1,6 +1,6 @@
 # Windows / Godot 实施状态
 
-版本：1.0.6-windows（以 `project.godot` 的 `application/config/version` 为准）
+版本：1.0.7-windows（以 `project.godot` 的 `application/config/version` 为准）
 
 文档日期：2026-09-05
 
@@ -15,6 +15,8 @@
 2026-09-05 应用图标落地（文档 §6 公开发布项之一）：新增原创盾徽城塔图标 `icon.png`(256) 与多尺寸 `icon.ico`(256/64/48/32/16)，接入 `config/icon`、`config/windows_native_icon` 与 Windows 导出预设 `application/icon`/`console_wrapper_icon`；exe 版本资源从 0.1.0.0 修正为随应用版本。签名与发行渠道元数据需证书与外部渠道，仍留待公开发布阶段。
 
 2026-09-06 全量改进轮（开发项 10/10）：等级曲线数据驱动(`player.level_base_xp`,FR-080)；存档 schema v4→v5(荣誉页战绩回填 `battles_won`=已完成关卡数、新增 `player_name` 字段,荣誉页可编辑玩家名)；完美守卫奖励水晶(结算面板"水晶 +1",荣誉页生涯统计显示水晶)；技能按钮增加 1/2/3 键位角标；窗口标题携带版本号；Core 拆分(run_model.gd 811→530 行,生成/投射物/技能/防御四个子系统文件,逐字迁移+确定性测试守护)；表现层拆分(新增 gameplay_hud.gd 独立 HUD 类,gameplay.gd 1122→893 行)；构建脚本 ZIP 打包失败自动重试；移除测试遗留调试输出。回归 100/100,全套件通过,实机验证无人值守通关+水晶结算+键位角标+改名持久化。
+
+2026-09-07 荣誉系统按原作 Defender II 重构为 8 条三级成就链(参考 Exophase/GameFAQs 公开的 24 项成就结构)：挥金如土(消费 5 万/25 万/100 万,每级每杀 +1 金币)、中流砥柱(通关 10/20/30,城墙生命 +5%/级——按本作 30 关改编原作 50/150/350)、怪物猎人(击杀 5,000/30,000/100,000,武器伤害 +2%/级)、战术大师(胜场 30/100/300,经验 +5%/级)、大法师(水晶 3/15/50,魔力上限 +5%/级)、烈焰/冰霜/雷电大师(施法 200/1,000/3,000,对应元素伤害 +3%/级)。配套：逐元素施法与消费/水晶生涯统计；存档 v6(honors 存等级 0-3,账本键 `id:level`,旧布尔档迁移)；启动对账(reconcile)为已达标统计补发等级奖励；荣誉页三级徽章点亮 + 下一里程碑进度；结算面板新荣誉带等级。回归 120/120,全套件通过;实机验证对账发放与徽章点亮(中流砥柱 3/3 金满条)。
 
 ## 0. Windows 1.0 内容（历史落地快照，2026-09-03）
 
@@ -177,7 +179,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 | 项目 | 当前结果 | 依据 |
 |---|---|---|
-| 应用/规则版本 | `1.0.6-windows` / config v3 / `aegis-windows-v1` | `project.godot`、`content/config/game_rules.json` |
+| 应用/规则版本 | `1.0.7-windows` / config v3 / `aegis-windows-v1` | `project.godot`、`content/config/game_rules.json` |
 | 内容规模 | 30 Stage（3 Boss）、6 类普通敌人、4 武器、3 技能、18 升级、8 Honors、4 研究页 | `content/config/game_rules.json` 解析 |
 | 内容校验 | 通过 | `tools/validate_content.gd`（本轮运行） |
 | 核心回归 | **94 passed / 0 failed** | `tests/run_all.gd`（本轮运行，含 Hurricane 箭速与城墙归零断言） |

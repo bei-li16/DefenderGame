@@ -52,6 +52,8 @@ func _run() -> void:
 		_test_extended_upgrade_effects(content.rules)
 		_test_weapon_switch_keeps_upgrades(content.rules)
 		_test_progression_and_battle_record(content.rules)
+		_test_honor_chains(content.rules)
+		_test_honor_bonuses(content.rules)
 		_test_event_position_anchor_contract(content.rules)
 		_test_migration()
 		_test_hashless_legacy_load()
@@ -809,6 +811,98 @@ func _test_progression_and_battle_record(source_config: Dictionary) -> void:
 	_expect(int(imperfect_result.get("crystals_awarded", 0)) == 0, "damaged-wall victory awards no crystal")
 
 
+func _test_honor_chains(source_config: Dictionary) -> void:
+	# Chain honors evaluate three milestone levels and pay each level once.
+	var honor_service := HonorService.new()
+	var killer_profile := {"stats": {"total_kills": 30000}, "honors": {}, "honor_reward_ledger": []}
+	var evaluation: Dictionary = honor_service.evaluate(killer_profile, source_config)
+	_expect(int(evaluation.get("honors", {}).get("monster_hunter", 0)) == 2, "30k kills reach Monster Hunter Lv.2")
+	_expect(evaluation.get("ledger", []).has("monster_hunter:1") and evaluation.get("ledger", []).has("monster_hunter:2"), "chain levels append id:level ledger keys")
+	var monster := _find_honor(source_config, "monster_hunter")
+	var expected_coins := int(monster.get("reward_coins", [])[0]) + int(monster.get("reward_coins", [])[1])
+	_expect(int(evaluation.get("coins", 0)) == expected_coins, "each reached chain level pays its own reward")
+	var settled: Dictionary = honor_service.evaluate({"stats": killer_profile.get("stats"), "honors": evaluation.get("honors"), "honor_reward_ledger": evaluation.get("ledger")}, source_config)
+	_expect(int(settled.get("coins", 0)) == 0 and settled.get("ledger", []).size() == evaluation.get("ledger", []).size(), "re-evaluating a settled chain pays nothing again")
+	# Legacy single-level unlock counts as its level-1 reward being paid.
+	var legacy: Dictionary = honor_service.evaluate({"stats": {"total_kills": 30000}, "honors": {"monster_hunter": true}, "honor_reward_ledger": []}, source_config)
+	_expect(int(legacy.get("honors", {}).get("monster_hunter", 0)) == 2 and not legacy.get("new_honors", []).has("monster_hunter:1"), "legacy boolean honor marks level 1 as already paid")
+
+
+func _test_honor_bonuses(source_config: Dictionary) -> void:
+	# Defender chain boosts wall HP by 5% per level during setup.
+	var base_model := RunModel.new()
+	base_model.setup(source_config, "stage_001", 4242, {"current_weapon_id": "basic_bow", "unlocked_weapons": ["basic_bow"], "upgrades": {}, "honors": {}})
+	var boosted_model := RunModel.new()
+	boosted_model.setup(source_config, "stage_001", 4242, {"current_weapon_id": "basic_bow", "unlocked_weapons": ["basic_bow"], "upgrades": {}, "honors": {"defender": 2}})
+	_expect(int(boosted_model.snapshot()["wall_max_hp"]) == int(round(float(int(base_model.snapshot()["wall_max_hp"])) * 1.10)), "Defender honor boosts wall HP by 5% per level")
+	# Big Spender pays +1 coin per kill per level via the reward event.
+	var kill_coins := -1
+	var boosted_kill_coins := -1
+	for run_index in range(2):
+		var model := RunModel.new()
+		var honors := {} if run_index == 0 else {"big_spender": 2}
+		model.setup(source_config, "stage_001", 777, {"current_weapon_id": "basic_bow", "unlocked_weapons": ["basic_bow"], "upgrades": {}, "honors": honors})
+		var coins_before := 0
+		for step_index in range(140):
+			var commands: Array = []
+			var visible: Array = model.snapshot().get("enemies", [])
+			if not visible.is_empty():
+				commands.append({"type": "aim", "x_milli": int(visible[0]["x_milli"]), "y_milli": int(visible[0]["y_milli"])})
+			commands.append({"type": "fire_started"})
+			var events: Array[Dictionary] = model.step(commands)
+			for event in events:
+				if str(event.get("type", "")) == "reward" and str(event.get("source", "")) == "kill":
+					coins_before = int(event.get("coins", 0))
+					break
+			if coins_before > 0:
+				break
+		if run_index == 0:
+			kill_coins = coins_before
+		else:
+			boosted_kill_coins = coins_before
+	_expect(kill_coins > 0 and boosted_kill_coins == kill_coins + 2, "Big Spender honor adds +1 coin per kill per level")
+	# Fire Master boosts fire skill damage by 3% per level (same seed, same target).
+	var fire_damage := -1
+	var boosted_fire_damage := -1
+	for run_index in range(2):
+		var model := RunModel.new()
+		var honors := {} if run_index == 0 else {"fire_master": 1}
+		model.setup(source_config, "stage_001", 999, {"current_weapon_id": "basic_bow", "unlocked_weapons": ["basic_bow"], "upgrades": {"mana_capacity": 5}, "honors": honors})
+		var fire_radius := 0
+		for skill in source_config.get("skills", []):
+			if skill is Dictionary and str(skill.get("id", "")) == "fire_ball":
+				fire_radius = int(skill.get("radius_milli", 0))
+				break
+		var target_x := 0
+		var target_y := 0
+		for step_index in range(220):
+			var enemies: Array = model.snapshot().get("enemies", [])
+			if not enemies.is_empty():
+				var enemy_x := int(enemies[0]["x_milli"])
+				var enemy_y := int(enemies[0]["y_milli"])
+				if enemy_x <= int(source_config["world"]["castle_x_milli"]) + 1400000 and enemy_x >= 300000:
+					target_x = enemy_x
+					target_y = enemy_y
+					break
+			model.step([{"type": "aim", "x_milli": 1500000, "y_milli": 540000}])
+		_expect(target_x > 0, "enemy in fire range for honor spell probe %d" % run_index)
+		var damage_events: Array[Dictionary] = model.step([{"type": "select_skill", "skill_id": "fire_ball"}, {"type": "cast_skill", "x_milli": target_x, "y_milli": target_y}])
+		for event in damage_events:
+			if str(event.get("type", "")) == "damage" and str(event.get("source", "")) == "fire":
+				if run_index == 0:
+					fire_damage = int(event.get("amount", 0))
+				else:
+					boosted_fire_damage = int(event.get("amount", 0))
+	_expect(fire_damage > 0 and boosted_fire_damage == fire_damage * 1030 / 1000, "Fire Master honor boosts fire damage by 3% per level")
+
+
+func _find_honor(source_config: Dictionary, honor_id: String) -> Dictionary:
+	for honor in source_config.get("honors", []):
+		if honor is Dictionary and str(honor.get("id", "")) == honor_id:
+			return honor
+	return {}
+
+
 func _find_upgrade(source_config: Dictionary, upgrade_id: String) -> Dictionary:
 	for upgrade in source_config.get("upgrades", []):
 		if upgrade is Dictionary and str(upgrade.get("id", "")) == upgrade_id:
@@ -858,7 +952,7 @@ func _test_migration() -> void:
 	var old_envelope := {"schema_version": 1, "payload": {"coins": 12, "xp": 3, "upgrades": {}}}
 	var migrated := SaveService.migrate_envelope(old_envelope)
 	var payload: Dictionary = migrated.get("envelope", {}).get("payload", {})
-	_expect(bool(migrated.get("ok", false)) and int(migrated["envelope"]["schema_version"]) == 5, "profile migrates v1 to v5")
+	_expect(bool(migrated.get("ok", false)) and int(migrated["envelope"]["schema_version"]) == 6, "profile migrates v1 to v6")
 	_expect(payload.has("reward_ledger") and payload.has("crystals"), "migration adds required fields")
 	_expect(payload.has("current_weapon_id") and payload.has("unlocked_weapons") and payload.has("stats") and payload.has("honors"), "migration adds Windows 1.0 weapon, stats and honors fields")
 	_expect(payload.has("player_name"), "migration adds the player display name field")
@@ -866,7 +960,13 @@ func _test_migration() -> void:
 	var v4_envelope := {"schema_version": 4, "payload": {"coins": 5, "xp": 1, "stats": {"stages_completed": 7}}}
 	var migrated_v4 := SaveService.migrate_envelope(v4_envelope)
 	var v5_stats: Dictionary = migrated_v4.get("envelope", {}).get("payload", {}).get("stats", {})
-	_expect(int(migrated_v4.get("envelope", {}).get("schema_version", 0)) == 5 and int(v5_stats.get("battles_won", -1)) == 7 and int(v5_stats.get("battles_lost", -1)) == 0, "v4 to v5 backfills battles_won from stages_completed")
+	_expect(int(migrated_v4.get("envelope", {}).get("schema_version", 0)) == 6 and int(v5_stats.get("battles_won", -1)) == 7 and int(v5_stats.get("battles_lost", -1)) == 0, "v4 to v5 backfills battles_won from stages_completed")
+	# v5 to v6 converts honor booleans to levels and seeds lifetime counters.
+	var v5_envelope := {"schema_version": 5, "payload": {"coins": 1, "honors": {"defender": true, "big_spender": 2}, "stats": {"stages_completed": 3}}}
+	var migrated_v5 := SaveService.migrate_envelope(v5_envelope)
+	var v6_payload: Dictionary = migrated_v5.get("envelope", {}).get("payload", {})
+	_expect(int(migrated_v5.get("envelope", {}).get("schema_version", 0)) == 6 and int(v6_payload.get("honors", {}).get("defender", 0)) == 1 and int(v6_payload.get("honors", {}).get("big_spender", 0)) == 2, "v5 to v6 converts honor booleans to levels")
+	_expect(int(v6_payload.get("stats", {}).get("coins_spent", -1)) == 0 and int(v6_payload.get("stats", {}).get("fire_casts", -1)) == 0, "v5 to v6 seeds lifetime honor counters")
 
 
 func _test_hashless_legacy_load() -> void:

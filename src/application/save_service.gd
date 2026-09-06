@@ -1,8 +1,8 @@
 class_name DefenderSaveService
 extends RefCounted
 
-const CURRENT_SCHEMA_VERSION := 5
-const APP_VERSION := "1.0.6-windows"
+const CURRENT_SCHEMA_VERSION := 6
+const APP_VERSION := "1.0.7-windows"
 # Fixed slot layout: each save is one portable file inside the save directory
 # (savedata/ next to the EXE), so the whole folder can be copied between machines.
 const SAVE_SLOT_COUNT := 3
@@ -270,6 +270,23 @@ static func migrate_envelope(source_envelope: Dictionary) -> Dictionary:
 				payload_v4["stats"] = stats_v4
 				envelope["payload"] = payload_v4
 				version = 5
+			5:
+				# v6 stores honor levels (0-3) instead of unlock booleans and
+				# adds the lifetime counters the honor chains evaluate.
+				var payload_v5: Dictionary = envelope.get("payload", {})
+				var honors_v5: Dictionary = payload_v5.get("honors", {})
+				var honors_v6: Dictionary = {}
+				for honor_id in honors_v5.keys():
+					var value: Variant = honors_v5[honor_id]
+					honors_v6[str(honor_id)] = (1 if bool(value) else 0) if value is bool else int(value)
+				payload_v5["honors"] = honors_v6
+				var stats_v5: Dictionary = payload_v5.get("stats", {})
+				for counter in ["coins_spent", "fire_casts", "ice_casts", "lightning_casts", "crystals_earned"]:
+					if not stats_v5.has(counter):
+						stats_v5[counter] = 0
+				payload_v5["stats"] = stats_v5
+				envelope["payload"] = payload_v5
+				version = 6
 		envelope["schema_version"] = version
 		migrated = true
 	var payload: Dictionary = envelope.get("payload", {})

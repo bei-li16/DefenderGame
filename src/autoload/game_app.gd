@@ -154,6 +154,10 @@ func initialize() -> void:
 		return
 	var loaded_profile: Dictionary = profile_result["payload"]
 	profile = _normalize_profile(loaded_profile)
+	# Honor chains: pay any levels the loaded stats already justify (legacy
+	# saves and backfilled counters) before the next save refreshes them.
+	var reconcile_result: Dictionary = honor_service.reconcile(profile, content.rules)
+	profile = reconcile_result["profile"]
 	if bool(profile_result.get("needs_save", false)) or bool(profile_result.get("migrated", false)) or profile != loaded_profile:
 		var profile_save := save_service.save_profile_slot(active_save_slot, profile, int(content.rules["config_version"]))
 		if not bool(profile_save.get("ok", false)):
@@ -345,6 +349,10 @@ func purchase_upgrade(upgrade_id: String) -> Dictionary:
 	var result := upgrade_service.purchase(profile, content.rules, upgrade_id)
 	if bool(result.get("ok", false)):
 		var updated: Dictionary = result["profile"]
+		# Big Spender honor chain tracks lifetime coin spending.
+		var updated_stats: Dictionary = updated.get("stats", {}).duplicate(true)
+		updated_stats["coins_spent"] = int(updated_stats.get("coins_spent", 0)) + int(result.get("price", 0))
+		updated["stats"] = updated_stats
 		var save_result := save_service.save_profile_slot(active_save_slot, updated, int(content.rules["config_version"]))
 		if not bool(save_result.get("ok", false)):
 			_record_failure("upgrade_save", save_result, "MainMenu")
@@ -476,7 +484,7 @@ func _default_profile() -> Dictionary:
 		"best_results": {},
 		"reward_ledger": [],
 		"reward_ledger_pruned": 0,
-		"stats": {"total_kills": 0, "stages_completed": 0, "battles_won": 0, "battles_lost": 0, "bosses_defeated": 0, "perfect_stages": 0, "spells_cast": 0, "total_coins_earned": 0, "highest_stage_reached": 0, "weapons_used": []},
+		"stats": {"total_kills": 0, "stages_completed": 0, "battles_won": 0, "battles_lost": 0, "coins_spent": 0, "fire_casts": 0, "ice_casts": 0, "lightning_casts": 0, "crystals_earned": 0, "bosses_defeated": 0, "perfect_stages": 0, "spells_cast": 0, "total_coins_earned": 0, "highest_stage_reached": 0, "weapons_used": []},
 		"honors": {},
 		"honor_reward_ledger": [],
 		"tutorial_complete": false

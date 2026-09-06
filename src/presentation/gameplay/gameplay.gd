@@ -507,10 +507,13 @@ func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> 
 	actions.add_child(menu)
 	if not settlement.get("new_honors", []).is_empty():
 		var honor_names: Array[String] = []
-		for honor_id in settlement.get("new_honors", []):
-			var honor := GameApp.content.find_by_id("honors", str(honor_id))
+		for honor_key in settlement.get("new_honors", []):
+			# Chain keys look like "honor_id:level"; show the achieved level.
+			var parts := str(honor_key).split(":")
+			var honor := GameApp.content.find_by_id("honors", str(parts[0]))
 			if not honor.is_empty():
-				honor_names.append(GameApp.text(str(honor.get("name_key", honor_id))))
+				var honor_name := GameApp.text(str(honor.get("name_key", str(parts[0]))))
+				honor_names.append("%s %s" % [honor_name, GameApp.text("status.level_short") % int(parts[1]) if parts.size() > 1 else honor_name])
 		var honors_label := Label.new()
 		honors_label.text = "✦  %s: %s  ✦" % [GameApp.text("result.honors"), ", ".join(honor_names)]
 		honors_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

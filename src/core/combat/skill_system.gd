@@ -30,6 +30,13 @@ static func cast(model, skill_id: String, target_x: int, target_y: int, events: 
 	model._emit(events, "skill_cast", {"skill_id": skill_id, "x_milli": target_x, "y_milli": target_y, "mana": model.mana})
 	match skill_id:
 		"fire_ball":
+			model.fire_casts += 1
+		"glacial_spike":
+			model.ice_casts += 1
+		"lightning_strike":
+			model.lightning_casts += 1
+	match skill_id:
+		"fire_ball":
 			apply_fire(model, skill, target_x, target_y, events)
 		"glacial_spike":
 			apply_ice(model, skill, target_x, target_y, events)
@@ -38,7 +45,7 @@ static func cast(model, skill_id: String, target_x: int, target_y: int, events: 
 
 
 static func apply_fire(model, skill: Dictionary, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
-	var damage: int = int(skill.get("damage", 0)) + model._upgrade_level("fire_mastery") * model._upgrade_effect_per_level("fire_mastery")
+	var damage: int = model._percent_boosted(int(skill.get("damage", 0)) + model._upgrade_level("fire_mastery") * model._upgrade_effect_per_level("fire_mastery"), "fire_damage_pct")
 	var radius: int = model._skill_radius(skill)
 	for enemy in model.enemies:
 		if model._distance_squared(enemy["x_milli"], enemy["y_milli"], target_x, target_y) <= model._square(radius):
@@ -51,7 +58,7 @@ static func apply_fire(model, skill: Dictionary, target_x: int, target_y: int, e
 
 
 static func apply_ice(model, skill: Dictionary, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
-	var damage: int = int(skill.get("damage", 0)) + model._upgrade_level("ice_mastery") * model._upgrade_effect_per_level("ice_mastery")
+	var damage: int = model._percent_boosted(int(skill.get("damage", 0)) + model._upgrade_level("ice_mastery") * model._upgrade_effect_per_level("ice_mastery"), "ice_damage_pct")
 	var radius: int = model._skill_radius(skill)
 	for enemy in model.enemies:
 		if model._distance_squared(enemy["x_milli"], enemy["y_milli"], target_x, target_y) <= model._square(radius):
@@ -71,7 +78,7 @@ static func apply_lightning(model, skill: Dictionary, target_x: int, target_y: i
 			candidates.append({"enemy": enemy, "distance": distance})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["distance"]) < int(b["distance"]))
 	var count := mini(int(skill.get("max_targets", 1)), candidates.size())
-	var damage: int = int(skill.get("damage", 0)) + model._upgrade_level("lightning_mastery") * model._upgrade_effect_per_level("lightning_mastery")
+	var damage: int = model._percent_boosted(int(skill.get("damage", 0)) + model._upgrade_level("lightning_mastery") * model._upgrade_effect_per_level("lightning_mastery"), "lightning_damage_pct")
 	for index in range(count):
 		var enemy: Dictionary = candidates[index]["enemy"]
 		model._apply_enemy_damage(enemy, damage, "lightning", events)
