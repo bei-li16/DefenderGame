@@ -5,7 +5,8 @@ signal pressed
 
 # Circular skill button matching the classic Defender II battle HUD: a gold
 # ring, the spell glyph in the middle, a dark radial sweep for the remaining
-# cooldown, and a red "low mana" state when the spell is unaffordable.
+# cooldown, a draining cooldown ring just outside the circle, and a red
+# "low mana" state when the spell is unaffordable.
 var skill_id: String = ""
 var glyph: String = ""
 var hotkey: String = ""
@@ -51,6 +52,10 @@ func _draw() -> void:
 			var angle := start + (end - start) * float(i) / float(steps)
 			points.append(center + Vector2(cos(angle), sin(angle)) * (radius - 2.0))
 		draw_colored_polygon(points, Color(0.02, 0.03, 0.06, 0.78))
+		# 经典参考的环形冷却条：按钮外圈亮色圆弧与内部扇形同步排空，
+		# 施放时满圈、冷却结束刚好转完消失。
+		var cooldown_ring := Color("ffd166") if mana_ok else Color("ff6b5e")
+		draw_arc(center, radius + 3.0, start, end, 48, cooldown_ring, 4.0, true)
 	var font := ThemeDB.fallback_font
 	var glyph_size := int(radius * 0.72)
 	var glyph_color := Color.WHITE if mana_ok else Color("ff8d7a")
