@@ -43,17 +43,18 @@ func _draw() -> void:
 	draw_arc(center, radius, 0.0, TAU, 48, ring, 4.0, true)
 	draw_arc(center, radius - 6.0, 0.0, TAU, 48, Color(1, 1, 1, 0.12), 1.5, true)
 	if cooldown_ratio > 0.0:
-		# Dark wedge sweeping clockwise from the top covers the recharging share.
+		# 顺时针由缺到满：施放后整钮压暗，已恢复的份额从顶部顺时针补亮，
+		# 冷却结束时整钮复原；外圈亮弧同步生长（施放时无，就绪前接近满圈）。
+		draw_circle(center, radius - 2.0, Color(0.02, 0.03, 0.06, 0.78))
+		var recovered := 1.0 - cooldown_ratio
 		var start := -PI * 0.5
-		var end := start + TAU * cooldown_ratio
+		var end := start + TAU * recovered
 		var points := PackedVector2Array([center])
 		var steps := 24
 		for i in range(steps + 1):
 			var angle := start + (end - start) * float(i) / float(steps)
 			points.append(center + Vector2(cos(angle), sin(angle)) * (radius - 2.0))
-		draw_colored_polygon(points, Color(0.02, 0.03, 0.06, 0.78))
-		# 经典参考的环形冷却条：按钮外圈亮色圆弧与内部扇形同步排空，
-		# 施放时满圈、冷却结束刚好转完消失。
+		draw_colored_polygon(points, base.lightened(0.08))
 		var cooldown_ring := Color("ffd166") if mana_ok else Color("ff6b5e")
 		draw_arc(center, radius + 3.0, start, end, 48, cooldown_ring, 4.0, true)
 	var font := ThemeDB.fallback_font
