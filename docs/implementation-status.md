@@ -1,6 +1,6 @@
 # Windows / Godot 实施状态
 
-版本：1.0.5-windows（以 `project.godot` 的 `application/config/version` 为准）
+版本：1.0.6-windows（以 `project.godot` 的 `application/config/version` 为准）
 
 文档日期：2026-09-05
 
@@ -13,6 +13,8 @@
 2026-09-04 第二轮 `参考/` 界面迭代(Status / Stage Complete / Honor 弹窗)：新增玩家等级系统(第 N 级需 100×N 经验,由 XP 实时推导,存档免迁移)；主菜单顶栏显示 `Lv.N` 与经验进度条；荣誉页新增生涯战绩行(胜/负/胜率,`battles_won`/`battles_lost` 自结算起计)与每项成就的进度条 + 奖励预览；结算面板新增 Stage Complete 式等级进度条,升级时显示 `Lv.A → B`。回归 90/90 通过,实机验证败局正确计入 `battles_lost` 且 `Lv.20 → 21` 升级提示与进度数值与存档一致。
 
 2026-09-05 应用图标落地（文档 §6 公开发布项之一）：新增原创盾徽城塔图标 `icon.png`(256) 与多尺寸 `icon.ico`(256/64/48/32/16)，接入 `config/icon`、`config/windows_native_icon` 与 Windows 导出预设 `application/icon`/`console_wrapper_icon`；exe 版本资源从 0.1.0.0 修正为随应用版本。签名与发行渠道元数据需证书与外部渠道，仍留待公开发布阶段。
+
+2026-09-06 全量改进轮（开发项 10/10）：等级曲线数据驱动(`player.level_base_xp`,FR-080)；存档 schema v4→v5(荣誉页战绩回填 `battles_won`=已完成关卡数、新增 `player_name` 字段,荣誉页可编辑玩家名)；完美守卫奖励水晶(结算面板"水晶 +1",荣誉页生涯统计显示水晶)；技能按钮增加 1/2/3 键位角标；窗口标题携带版本号；Core 拆分(run_model.gd 811→530 行,生成/投射物/技能/防御四个子系统文件,逐字迁移+确定性测试守护)；表现层拆分(新增 gameplay_hud.gd 独立 HUD 类,gameplay.gd 1122→893 行)；构建脚本 ZIP 打包失败自动重试；移除测试遗留调试输出。回归 100/100,全套件通过,实机验证无人值守通关+水晶结算+键位角标+改名持久化。
 
 ## 0. Windows 1.0 内容（历史落地快照，2026-09-03）
 
@@ -69,7 +71,7 @@
 
 Godot 4.7.2 官方 Windows x86_64 模板已安装，项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可；独立 EXE/PCK 和便携 ZIP 已生成。AT-001～AT-020 的历史验收证据保留在 §5；当前工作树是否满足发布门禁以 §7 为准。
 
-Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完整四页研究树和 Honors 已于 2026-09-03 全部落地（见 §0）。最新候选包名为 `Aegis-of-Ember-1.0.5-Windows-x64.zip`；源码或配置有变更时必须重新执行完整门禁并重建该包。
+Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完整四页研究树和 Honors 已于 2026-09-03 全部落地（见 §0）。最新候选包名为 `Aegis-of-Ember-1.0.6-Windows-x64.zip`；源码或配置有变更时必须重新执行完整门禁并重建该包。
 
 ## 2. 已落地模块
 
@@ -175,7 +177,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 | 项目 | 当前结果 | 依据 |
 |---|---|---|
-| 应用/规则版本 | `1.0.5-windows` / config v3 / `aegis-windows-v1` | `project.godot`、`content/config/game_rules.json` |
+| 应用/规则版本 | `1.0.6-windows` / config v3 / `aegis-windows-v1` | `project.godot`、`content/config/game_rules.json` |
 | 内容规模 | 30 Stage（3 Boss）、6 类普通敌人、4 武器、3 技能、18 升级、8 Honors、4 研究页 | `content/config/game_rules.json` 解析 |
 | 内容校验 | 通过 | `tools/validate_content.gd`（本轮运行） |
 | 核心回归 | **94 passed / 0 failed** | `tests/run_all.gd`（本轮运行，含 Hurricane 箭速与城墙归零断言） |
@@ -184,4 +186,4 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | 压力/浸泡 | p95 1.390 ms；60 逻辑分钟内存平稳（26.84→30.00 MiB），节点 3→3 | `tests/performance_stress.gd`、`tests/long_soak.gd`（本轮运行） |
 | 发布清单 | 重建后 manifest 指向当前 HEAD | `content/build/build-manifest.json`（构建时刷新） |
 
-当前发布候选为 `Aegis-of-Ember-1.0.5-Windows-x64.zip`；已发布的 v1.0.3/v1.0.4 不包含本轮修复，不应继续分发。
+当前发布候选为 `Aegis-of-Ember-1.0.6-Windows-x64.zip`；已发布的 v1.0.3～v1.0.5 不包含本轮改进，不应继续分发。

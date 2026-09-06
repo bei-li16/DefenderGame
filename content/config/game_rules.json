@@ -18,6 +18,7 @@
     "spawn_group_gap_ticks": 36
   },
   "player": {
+    "level_base_xp": 100,
     "wall_hp": 650,
     "max_mana": 120,
     "mana_regen_interval_ticks": 15,

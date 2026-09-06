@@ -548,7 +548,6 @@ func _test_hurricane_velocity_consistency(source_config: Dictionary) -> void:
 		var vx := float(projectile.get("vx_milli", 0))
 		var vy := float(projectile.get("vy_milli", 0))
 		var magnitude := sqrt(vx * vx + vy * vy)
-		print("[DEBUG hurricane] vx=%s vy=%s speed=%s expected=%s" % [vx, vy, magnitude, expected_speed])
 		# Integer component quantization can introduce a sub-unit error.
 		if absf(magnitude - float(expected_speed)) > 2.0:
 			consistent = false
@@ -775,14 +774,19 @@ func _test_weapon_switch_keeps_upgrades(source_config: Dictionary) -> void:
 func _test_progression_and_battle_record(source_config: Dictionary) -> void:
 	# Level curve behind the Status header / Stage Complete panel: level N
 	# costs 100 * N xp, so xp 150 sits at level 2 with 50/200 on the bar.
-	var first_level: Dictionary = Progression.level_progress(0)
+	var first_level: Dictionary = Progression.level_progress(source_config, 0)
 	_expect(int(first_level.get("level", 0)) == 1, "zero xp stays at level 1")
 	_expect(int(first_level.get("into_level", -1)) == 0 and int(first_level.get("needed", 0)) == 100, "level 1 bar starts 0/100")
-	var mid_level: Dictionary = Progression.level_progress(150)
+	var mid_level: Dictionary = Progression.level_progress(source_config, 150)
 	_expect(int(mid_level.get("level", 0)) == 2, "150 xp reaches level 2")
 	_expect(int(mid_level.get("into_level", 0)) == 50 and int(mid_level.get("needed", 0)) == 200, "level 2 bar shows 50/200")
-	var capped: Dictionary = Progression.level_progress(10000000)
+	var capped: Dictionary = Progression.level_progress(source_config, 10000000)
 	_expect(int(capped.get("level", 0)) == int(Progression.MAX_LEVEL), "xp beyond the curve caps at max level")
+	# The curve is data-driven (FR-080): a config base of 50 halves every step.
+	var tuned_rules: Dictionary = source_config.duplicate(true)
+	tuned_rules["player"] = {"level_base_xp": 50}
+	var tuned: Dictionary = Progression.level_progress(tuned_rules, 60)
+	_expect(int(tuned.get("level", 0)) == 2 and int(tuned.get("into_level", 0)) == 10, "level curve follows player.level_base_xp from config")
 	# Status-page battle record: settled runs count wins and losses separately.
 	var honor_service := HonorService.new()
 	var base_profile := {"stats": {}, "honors": {}}
@@ -794,6 +798,14 @@ func _test_progression_and_battle_record(source_config: Dictionary) -> void:
 	var after_loss: Dictionary = honor_service.apply_result(after_win, defeat, source_config).get("profile", {})
 	var loss_stats: Dictionary = after_loss.get("stats", {})
 	_expect(int(loss_stats.get("battles_won", 0)) == 1 and int(loss_stats.get("battles_lost", 0)) == 1, "defeat counts battles_lost separately")
+	# Perfect victories earn one crystal (参考 Stage Complete bonus column).
+	var perfect := {"status": "victory", "kills": 5, "coins": 10, "xp": 20, "stage_number": 2, "wall_percent": 100, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
+	var perfect_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 3}, perfect, source_config)
+	_expect(int(perfect_result.get("profile", {}).get("crystals", 0)) == 4, "perfect victory awards one crystal")
+	_expect(int(perfect_result.get("crystals_awarded", 0)) == 1, "settlement reports the awarded crystals")
+	var imperfect := {"status": "victory", "kills": 5, "coins": 10, "xp": 20, "stage_number": 2, "wall_percent": 87, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
+	var imperfect_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 3}, imperfect, source_config)
+	_expect(int(imperfect_result.get("crystals_awarded", 0)) == 0, "damaged-wall victory awards no crystal")
 
 
 func _find_upgrade(source_config: Dictionary, upgrade_id: String) -> Dictionary:
@@ -845,9 +857,15 @@ func _test_migration() -> void:
 	var old_envelope := {"schema_version": 1, "payload": {"coins": 12, "xp": 3, "upgrades": {}}}
 	var migrated := SaveService.migrate_envelope(old_envelope)
 	var payload: Dictionary = migrated.get("envelope", {}).get("payload", {})
-	_expect(bool(migrated.get("ok", false)) and int(migrated["envelope"]["schema_version"]) == 4, "profile migrates v1 to v4")
+	_expect(bool(migrated.get("ok", false)) and int(migrated["envelope"]["schema_version"]) == 5, "profile migrates v1 to v5")
 	_expect(payload.has("reward_ledger") and payload.has("crystals"), "migration adds required fields")
 	_expect(payload.has("current_weapon_id") and payload.has("unlocked_weapons") and payload.has("stats") and payload.has("honors"), "migration adds Windows 1.0 weapon, stats and honors fields")
+	_expect(payload.has("player_name"), "migration adds the player display name field")
+	# v5 backfills the Status battle record from completed stages.
+	var v4_envelope := {"schema_version": 4, "payload": {"coins": 5, "xp": 1, "stats": {"stages_completed": 7}}}
+	var migrated_v4 := SaveService.migrate_envelope(v4_envelope)
+	var v5_stats: Dictionary = migrated_v4.get("envelope", {}).get("payload", {}).get("stats", {})
+	_expect(int(migrated_v4.get("envelope", {}).get("schema_version", 0)) == 5 and int(v5_stats.get("battles_won", -1)) == 7 and int(v5_stats.get("battles_lost", -1)) == 0, "v4 to v5 backfills battles_won from stages_completed")
 
 
 func _test_hashless_legacy_load() -> void:

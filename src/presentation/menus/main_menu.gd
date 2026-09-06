@@ -187,7 +187,9 @@ func _show_upgrades() -> void:
 	_show_research_page(str(pages[0].get("id", "attack")) if not pages.is_empty() else "")
 
 
-func _show_research_page(page_id: String) -> void:
+# The page rebuilds after every purchase, so the highlighted node and the view
+# offset must be passed back in; otherwise selection snaps to the first entry.
+func _show_research_page(page_id: String, selected_id: String = "", saved_scroll: int = 0) -> void:
 	var page_title := GameApp.text("menu.upgrades")
 	for page in GameApp.content.rules.get("research_pages", []):
 		if str(page.get("id", "")) == page_id:
@@ -287,19 +289,27 @@ func _show_research_page(page_id: String) -> void:
 
 	tree.node_selected.connect(func(_upgrade_id: String) -> void: refresh_detail.call())
 	detail_button.pressed.connect(func() -> void:
-		var purchase_result := GameApp.purchase_upgrade(tree.selected())
+		var upgrade_id := tree.selected()
+		var purchase_result := GameApp.purchase_upgrade(upgrade_id)
 		if not bool(purchase_result.get("ok", false)):
 			operation_error.text = GameApp.text("feedback.save_failed")
 			return
 		_refresh_header()
-		_show_research_page(page_id)
+		_show_research_page(page_id, upgrade_id, scroll.scroll_vertical)
 	)
-	tree.build(page_definitions, upgrades, int(GameApp.profile.get("coins", 0)))
+	tree.build(page_definitions, upgrades, int(GameApp.profile.get("coins", 0)), selected_id)
 	refresh_detail.call()
 	_add_back_button(stack)
+	if saved_scroll > 0:
+		# Layout must run once before the scrollbar range exists to clamp into.
+		await get_tree().process_frame
+		if is_instance_valid(scroll):
+			scroll.scroll_vertical = saved_scroll
 
 
-func _show_weapons() -> void:
+# Equipping rebuilds the list; saved_scroll keeps the view anchored on the
+# card the player acted on instead of jumping back to the top.
+func _show_weapons(saved_scroll: int = 0) -> void:
 	var stack := _new_content_stack(GameApp.text("menu.weapons"))
 	var current_id := str(GameApp.profile.get("current_weapon_id", "basic_bow"))
 	var unlocked: Array = GameApp.profile.get("unlocked_weapons", [])
@@ -347,10 +357,15 @@ func _show_weapons() -> void:
 		equip.pressed.connect(func() -> void:
 			var result := GameApp.select_weapon(weapon_id)
 			if bool(result.get("ok", false)):
-				_show_weapons()
+				_show_weapons(scroll.scroll_vertical)
 		)
 		row.add_child(equip)
 	_add_back_button(stack)
+	if saved_scroll > 0:
+		# Layout must run once before the scrollbar range exists to clamp into.
+		await get_tree().process_frame
+		if is_instance_valid(scroll):
+			scroll.scroll_vertical = saved_scroll
 
 
 func _weapon_effective_damage(definition: Dictionary) -> int:
@@ -383,12 +398,39 @@ func _weapon_effective_stat(definition: Dictionary, field: String, mastery_id: S
 
 func _show_honors() -> void:
 	var stack := _new_content_stack(GameApp.text("menu.honors"))
+	# Editable player name (参考 Status page: name header above the record).
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 12)
+	stack.add_child(name_row)
+	var name_caption := Label.new()
+	name_caption.text = GameApp.text("status.player_name")
+	name_caption.add_theme_font_size_override("font_size", 21)
+	name_row.add_child(name_caption)
+	var name_edit := LineEdit.new()
+	name_edit.text = str(GameApp.profile.get("player_name", ""))
+	name_edit.placeholder_text = GameApp.text("status.name_hint")
+	name_edit.max_length = 16
+	name_edit.custom_minimum_size = Vector2(260, 44)
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_row.add_child(name_edit)
+	var name_save_error := Label.new()
+	name_save_error.add_theme_color_override("font_color", Color("ff8d7a"))
+	var save_name := func() -> void:
+		var result := GameApp.update_profile_field("player_name", name_edit.text.strip_edges())
+		if not bool(result.get("ok", false)):
+			name_save_error.text = GameApp.text("feedback.save_failed")
+		else:
+			name_save_error.text = ""
+	name_edit.text_submitted.connect(func(_text: String) -> void: save_name.call())
+	name_edit.focus_exited.connect(save_name)
+	stack.add_child(name_save_error)
 	var stats: Dictionary = GameApp.profile.get("stats", {})
 	var progress := Label.new()
-	progress.text = "%s %d  ·  %s %d  ·  %s %d" % [
+	progress.text = "%s %d  ·  %s %d  ·  %s %d  ·  %s %d" % [
 		GameApp.text("result.kills"), int(stats.get("total_kills", 0)),
 		GameApp.text("common.stage"), int(stats.get("stages_completed", 0)),
-		GameApp.text("menu.coins"), int(stats.get("total_coins_earned", 0))
+		GameApp.text("menu.coins"), int(stats.get("total_coins_earned", 0)),
+		GameApp.text("result.crystals"), int(GameApp.profile.get("crystals", 0))
 	]
 	progress.add_theme_font_size_override("font_size", 21)
 	stack.add_child(progress)
@@ -626,7 +668,7 @@ func _refresh_header() -> void:
 		return
 	_stage_label.text = "%s  %02d" % [GameApp.text("common.stage"), int(GameApp.profile.get("highest_unlocked_stage", 1))]
 	_coins_label.text = "◆  %d" % int(GameApp.profile.get("coins", 0))
-	var progress: Dictionary = Progression.level_progress(int(GameApp.profile.get("xp", 0)))
+	var progress: Dictionary = Progression.level_progress(GameApp.content.rules, int(GameApp.profile.get("xp", 0)))
 	_xp_label.text = GameApp.text("status.level_short") % int(progress.get("level", 1))
 	_xp_bar.max_value = maxi(1, int(progress.get("needed", 1)))
 	_xp_bar.value = int(progress.get("into_level", 0))

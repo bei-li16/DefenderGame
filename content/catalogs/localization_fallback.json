@@ -215,7 +215,10 @@
     "result.losses": "负",
     "result.win_rate": "胜率",
     "result.level_up": "等级提升",
-    "honor.reward": "奖励"
+    "honor.reward": "奖励",
+    "status.player_name": "玩家",
+    "status.name_hint": "输入名字…",
+    "result.crystals": "水晶"
   },
   "en_US": {
     "app.title": "app.title",
@@ -433,6 +436,9 @@
     "result.losses": "Losses",
     "result.win_rate": "Win%",
     "result.level_up": "Level up",
-    "honor.reward": "Reward"
+    "honor.reward": "Reward",
+    "status.player_name": "Player",
+    "status.name_hint": "Enter a name…",
+    "result.crystals": "Crystals"
   }
 }

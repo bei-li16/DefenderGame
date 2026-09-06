@@ -11,6 +11,7 @@ const REQUIRED_UI_KEYS: Array[String] = [
 		"weapon.damage", "weapon.projectiles", "weapon.pierce", "weapon.fire_rate",
 	"result.victory", "result.defeat", "result.kills", "result.wave", "result.coins", "result.xp", "result.wall", "result.next", "result.retry_save", "result.honors", "result.weapon", "result.stage_unlocked",
 	"result.wins", "result.losses", "result.win_rate", "result.level_up", "status.level_short", "honor.reward",
+	"result.crystals", "status.player_name", "status.name_hint",
 	"feedback.no_mana", "feedback.cooldown", "feedback.invalid_target", "feedback.fatal", "feedback.power", "feedback.boss", "feedback.defense", "feedback.wall_damage", "feedback.save_failed",
 	"tutorial.title", "tutorial.body", "dialog.abandon_run",
 	"settings.title", "settings.language", "settings.master", "settings.music", "settings.sfx",
@@ -48,6 +49,8 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 		if int(scaling.get(field, 0)) < 1000:
 			_add_error(errors, "difficulty_scaling.%s" % field, "less_than_base_scale")
 
+	var player: Dictionary = _as_dictionary(config.get("player", {}))
+	_require_positive_int(player, "level_base_xp", errors, "player.")
 	var rules: Dictionary = _as_dictionary(config.get("rules", {}))
 	if rules.has("status_resistance_floor_permille"):
 		var resistance_floor := int(rules.get("status_resistance_floor_permille", -1))

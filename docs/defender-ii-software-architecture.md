@@ -133,6 +133,8 @@ docs/
 
 ### 6.1 Core
 
+> 实现现状：子系统的职责当前合并在 `src/core/combat/run_model.gd` 单文件内，生成/投射物/技能/防御的纯函数已拆至 `spawn_system.gd`、`projectile_system.gd`、`skill_system.gd`、`defense_system.gd`（RunModel 作为门面持有状态并保持 tick 顺序）。进一步按状态对象拆分属已知技术债。
+
 - `RunModel`：本局状态和固定 tick 入口。
 - `StageSystem`：Stage 目标、进度、Boss 周期和胜负候选。
 - `SpawnSystem`：模板、seed、顺序、位置和间隔。

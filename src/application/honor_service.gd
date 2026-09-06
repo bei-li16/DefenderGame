@@ -16,6 +16,7 @@ func apply_result(profile: Dictionary, result: Dictionary, config: Dictionary) -
 		stats["battles_won"] = int(stats.get("battles_won", 0)) + 1
 	else:
 		stats["battles_lost"] = int(stats.get("battles_lost", 0)) + 1
+	var perfect_victory := victory and int(result.get("wall_percent", 0)) >= 100
 	if victory:
 		stats["stages_completed"] = int(stats.get("stages_completed", 0)) + 1
 		if int(result.get("wall_percent", 0)) >= 100:
@@ -48,12 +49,17 @@ func apply_result(profile: Dictionary, result: Dictionary, config: Dictionary) -
 	updated["honor_reward_ledger"] = honor_reward_ledger
 	updated["coins"] = int(updated.get("coins", 0)) + honor_coins
 	updated["xp"] = int(updated.get("xp", 0)) + honor_xp
+	# Perfect guards earn one crystal (参考 Stage Complete bonus column); the
+	# surrounding reward-ledger duplicate check makes this idempotent per run.
+	var crystals_awarded := 1 if perfect_victory else 0
+	updated["crystals"] = int(updated.get("crystals", 0)) + crystals_awarded
 	return {
 		"ok": true,
 		"profile": updated,
 		"new_honors": new_honors,
 		"honor_coins": honor_coins,
-		"honor_xp": honor_xp
+		"honor_xp": honor_xp,
+		"crystals_awarded": crystals_awarded
 	}
 
 

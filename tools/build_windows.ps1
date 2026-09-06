@@ -95,11 +95,20 @@ if ($Configuration -eq 'Release') {
     Copy-Item -LiteralPath $releaseReadme -Destination $packagedReadme -Force
     Copy-Item -LiteralPath $gameLicense -Destination $packagedGameLicense -Force
     Copy-Item -LiteralPath $godotCopyright -Destination $packagedGodotCopyright -Force
-    $archivePath = Join-Path $repository 'Builds\Aegis-of-Ember-1.0.5-Windows-x64.zip'
+    $archivePath = Join-Path $repository 'Builds\Aegis-of-Ember-1.0.6-Windows-x64.zip'
     if (Test-Path -LiteralPath $archivePath -PathType Leaf) {
         Remove-Item -LiteralPath $archivePath -Force
     }
-    Compress-Archive -LiteralPath @($outputPath, $pckPath, $packagedReadme, $packagedGameLicense, $packagedGodotCopyright) -DestinationPath $archivePath -CompressionLevel Optimal
+    # Antivirus scanners transiently lock the freshly exported EXE and fail the
+    # first Compress-Archive with UnauthorizedAccess.  Wait and retry once.
+    $archiveInputs = @($outputPath, $pckPath, $packagedReadme, $packagedGameLicense, $packagedGodotCopyright)
+    try {
+        Compress-Archive -LiteralPath $archiveInputs -DestinationPath $archivePath -CompressionLevel Optimal
+    } catch [System.IO.IOException] {
+        Write-Output "[BUILD] ZIP packaging hit an IO lock, retrying once after 8s"
+        Start-Sleep -Seconds 8
+        Compress-Archive -LiteralPath $archiveInputs -DestinationPath $archivePath -CompressionLevel Optimal
+    }
     Write-Output "[BUILD] PASS: $outputPath and $archivePath"
 } else {
     Write-Output "[BUILD] PASS: $outputPath"

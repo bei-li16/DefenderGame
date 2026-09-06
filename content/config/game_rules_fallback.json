@@ -5,7 +5,7 @@
   "simulation_tick_rate": 30,
   "rules": {"status_resistance_floor_permille": 950},
   "world": {"width_milli":1920000,"height_milli":1080000,"castle_x_milli":210000,"enemy_spawn_x_milli":1880000,"enemy_attack_x_milli":350000,"enemy_y_min_milli":250000,"enemy_y_max_milli":920000,"spawn_start_tick":24,"spawn_group_gap_ticks":36},
-  "player": {"wall_hp":650,"max_mana":120,"mana_regen_interval_ticks":15,"mana_regen_amount":1,"bow_origin_x_milli":245000,"bow_origin_y_milli":555000},
+  "player": {"level_base_xp":100,"wall_hp":650,"max_mana":120,"mana_regen_interval_ticks":15,"mana_regen_amount":1,"bow_origin_x_milli":245000,"bow_origin_y_milli":555000},
   "difficulty_scaling": {"hp_per_stage_permille":20,"damage_per_stage_permille":15,"speed_per_stage_permille":5,"count_per_stage_permille":5,"max_hp_scale_permille":1500,"max_damage_scale_permille":1350,"max_speed_scale_permille":1150,"max_count_scale_permille":1200},
   "weapons": [
     {"id":"basic_bow","name_key":"weapon.basic_bow","description_key":"weapon.basic_bow.desc","unlock_stage":1,"damage":34,"interval_ticks":10,"min_interval_ticks":4,"projectile_speed_milli_per_tick":56000,"collision_radius_milli":26000,"knockback_milli":70000,"power_shot_chance_per_10000":1200,"fatal_chance_per_10000":800,"fatal_multiplier":2,"pierce":0,"projectile_count":1,"spread_milli":0},

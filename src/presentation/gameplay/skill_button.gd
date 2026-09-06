@@ -8,6 +8,7 @@ signal pressed
 # cooldown, and a red "low mana" state when the spell is unaffordable.
 var skill_id: String = ""
 var glyph: String = ""
+var hotkey: String = ""
 var cooldown_ratio: float = 0.0
 var mana_ok: bool = true
 var selected: bool = false
@@ -54,6 +55,15 @@ func _draw() -> void:
 	var glyph_size := int(radius * 0.72)
 	var glyph_color := Color.WHITE if mana_ok else Color("ff8d7a")
 	draw_string(font, center + Vector2(-radius, glyph_size * 0.35), glyph, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, glyph_size, glyph_color)
+	if not hotkey.is_empty():
+		# Numbered keybind badge (参考 skill buttons show the hotkey); top-right
+		# chip so keyboard players can match the 1/2/3 keys without guessing.
+		var badge_center := center + Vector2(radius * 0.62, -radius * 0.62)
+		var badge_radius := radius * 0.24
+		draw_circle(badge_center, badge_radius + 1.5, Color(0.02, 0.05, 0.09, 0.9))
+		draw_circle(badge_center, badge_radius, Color("ffd166") if mana_ok else Color("8a6a3a"))
+		var badge_size := int(badge_radius * 1.7)
+		draw_string(font, badge_center + Vector2(-badge_radius, badge_size * 0.34), hotkey, HORIZONTAL_ALIGNMENT_CENTER, badge_radius * 2.0, badge_size, Color("101d2d"))
 	if not mana_ok:
 		var text_size := 15
 		draw_string(font, center + Vector2(-radius, radius * 0.62), low_mana_text, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, text_size, Color("ff6b5e"))

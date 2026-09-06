@@ -1,8 +1,8 @@
 class_name DefenderSaveService
 extends RefCounted
 
-const CURRENT_SCHEMA_VERSION := 4
-const APP_VERSION := "1.0.5-windows"
+const CURRENT_SCHEMA_VERSION := 5
+const APP_VERSION := "1.0.6-windows"
 
 var base_directory: String
 
@@ -188,6 +188,21 @@ static func migrate_envelope(source_envelope: Dictionary) -> Dictionary:
 						payload_v3["honor_reward_ledger"] = []
 					envelope["payload"] = payload_v3
 				version = 4
+			4:
+				# v5 backfills the Status battle record and the display name.
+				# battles_won is honestly approximated by stages_completed: every
+				# completed stage was a victory, defeats were never recorded.
+				var payload_v4: Dictionary = envelope.get("payload", {})
+				if not payload_v4.has("player_name"):
+					payload_v4["player_name"] = ""
+				var stats_v4: Dictionary = payload_v4.get("stats", {})
+				if not stats_v4.has("battles_won"):
+					stats_v4["battles_won"] = int(stats_v4.get("stages_completed", 0))
+				if not stats_v4.has("battles_lost"):
+					stats_v4["battles_lost"] = 0
+				payload_v4["stats"] = stats_v4
+				envelope["payload"] = payload_v4
+				version = 5
 		envelope["schema_version"] = version
 		migrated = true
 	var payload: Dictionary = envelope.get("payload", {})

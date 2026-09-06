@@ -72,6 +72,11 @@ func _remove_directory_recursive(absolute_path: String) -> void:
 func initialize() -> void:
 	initialized_ok = false
 	initialization_error = {}
+	# Show the app version in the window title so screenshots and bug reports
+	# identify the running build without opening the diagnostics export.
+	var window := get_window()
+	if window != null:
+		window.title = "%s v%s" % [ProjectSettings.get_setting("application/config/name", "Aegis of Ember"), save_service.APP_VERSION.trim_suffix("-windows")]
 	var content_result := content.load_builtin()
 	if not bool(content_result.get("ok", false)):
 		initialization_error = content_result
@@ -228,6 +233,7 @@ func settle_run(result: Dictionary) -> Dictionary:
 	reward_result["new_honors"] = honor_result.get("new_honors", [])
 	reward_result["honor_coins"] = honor_result.get("honor_coins", 0)
 	reward_result["honor_xp"] = honor_result.get("honor_xp", 0)
+	reward_result["crystals_awarded"] = honor_result.get("crystals_awarded", 0)
 	profile_changed.emit(profile.duplicate(true))
 	diagnostics.record("run_settled", "", "Gameplay", {"stage_id": stage_id, "status": str(result.get("status", ""))})
 	return reward_result
@@ -300,6 +306,22 @@ func update_setting(key: String, value: Variant) -> Dictionary:
 	return save_result
 
 
+func update_profile_field(key: String, value: Variant) -> Dictionary:
+	# Save-first transaction, mirroring update_setting: the in-memory profile
+	# only moves forward when persistence succeeded.
+	var previous := profile.duplicate(true)
+	var updated := profile.duplicate(true)
+	updated[key] = value
+	var save_result := save_service.save_profile(updated, int(content.rules["config_version"]))
+	if not bool(save_result.get("ok", false)):
+		_record_failure("profile_field_save", save_result, "MainMenu")
+		profile = previous
+		return save_result
+	profile = updated
+	profile_changed.emit(profile.duplicate(true))
+	return save_result
+
+
 func export_diagnostics() -> Dictionary:
 	return diagnostics.export_zip()
 
@@ -341,6 +363,7 @@ func _default_profile() -> Dictionary:
 			upgrades[str(definition.get("id", ""))] = 0
 	return {
 		"install_id": bytes.hex_encode(),
+		"player_name": "",
 		"coins": 180,
 		"xp": 0,
 		"crystals": 0,
@@ -351,7 +374,7 @@ func _default_profile() -> Dictionary:
 		"best_results": {},
 		"reward_ledger": [],
 		"reward_ledger_pruned": 0,
-		"stats": {"total_kills": 0, "stages_completed": 0, "bosses_defeated": 0, "perfect_stages": 0, "spells_cast": 0, "total_coins_earned": 0, "highest_stage_reached": 0, "weapons_used": []},
+		"stats": {"total_kills": 0, "stages_completed": 0, "battles_won": 0, "battles_lost": 0, "bosses_defeated": 0, "perfect_stages": 0, "spells_cast": 0, "total_coins_earned": 0, "highest_stage_reached": 0, "weapons_used": []},
 		"honors": {},
 		"honor_reward_ledger": [],
 		"tutorial_complete": false
