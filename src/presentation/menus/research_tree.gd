@@ -5,11 +5,22 @@ signal node_selected(upgrade_id: String)
 
 # Tree-shaped research layout matching the classic Defender II research pages:
 # root upgrades on the left, each prerequisite→child pair linked by an arrow,
-# the selected node highlighted with a gold frame.
-const NODE_SIZE := Vector2(250, 88)
-const COLUMN_GAP := 278.0
+# the selected node highlighted with a gold frame.  Each node bar carries an
+# element-tinted icon square with the level badge (top-right) and the
+# next-level price (bottom-left), then the upgrade name.
+const NODE_SIZE := Vector2(280, 92)
+const COLUMN_GAP := 308.0
 const ROW_GAP := 118.0
 const ORIGIN := Vector2(24, 24)
+const ICON_SIZE := 64.0
+
+const NODE_GLYPHS := {
+	"strength": "💪", "agility": "🎯", "power_mastery": "💥", "hurricane_mastery": "🌪",
+	"phantom_mastery": "👻", "fire_mastery": "🔥", "ice_mastery": "❄", "lightning_mastery": "⚡",
+	"mana_capacity": "🔮", "mana_regen": "✨", "spell_radius": "🔆", "cooldown_mastery": "⏱",
+	"wall_armor": "🛡", "wall_repair": "🔨", "lava_moat": "🌋", "magic_tower": "🗼",
+	"coin_bounty": "🪙", "xp_bounty": "⭐"
+}
 
 var _definitions: Array = []
 var _levels: Dictionary = {}
@@ -54,9 +65,7 @@ func build(definitions: Array, levels: Dictionary, coins: int, selected_id: Stri
 		button.position = _node_rects[upgrade_id].position
 		button.size = NODE_SIZE
 		button.mouse_filter = Control.MOUSE_FILTER_STOP
-		var level := int(_levels.get(upgrade_id, 0))
-		var max_level := int(definition.get("max_level", 0))
-		button.text = "%s\nLv %d/%d" % [GameApp.text(str(definition.get("name_key", upgrade_id))), level, max_level]
+		_populate_node(button, definition)
 		var unlocked := _prerequisites_met(definition)
 		button.modulate = Color(1, 1, 1, 1) if unlocked else Color(0.55, 0.6, 0.68, 1)
 		button.pressed.connect(func() -> void: select(upgrade_id))
@@ -68,6 +77,67 @@ func build(definitions: Array, levels: Dictionary, coins: int, selected_id: Stri
 	custom_minimum_size = Vector2((max_depth + 1) * COLUMN_GAP + 60, rows_total * ROW_GAP + 80)
 	_selected_id = ""
 	select(selected_id if _node_buttons.has(selected_id) else (str(_definitions[0].get("id", "")) if not _definitions.is_empty() else ""))
+
+
+# Original-style node bar: icon square (glyph, level badge, price badge) plus
+# the display name; children ignore the mouse so the Button keeps ownership.
+func _populate_node(button: Button, definition: Dictionary) -> void:
+	var upgrade_id := str(definition.get("id", ""))
+	var level := int(_levels.get(upgrade_id, 0))
+	var max_level := int(definition.get("max_level", 0))
+	var icon_origin := Vector2(14, 14)
+	var icon := ColorRect.new()
+	icon.position = icon_origin
+	icon.size = Vector2(ICON_SIZE, ICON_SIZE)
+	icon.color = _icon_color(upgrade_id)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(icon)
+	var glyph := Label.new()
+	glyph.text = str(NODE_GLYPHS.get(upgrade_id, "✦"))
+	glyph.position = Vector2.ZERO
+	glyph.size = icon.size
+	glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	glyph.add_theme_font_size_override("font_size", 34)
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.add_child(glyph)
+	var level_badge := Label.new()
+	level_badge.text = "Lv %d" % level
+	level_badge.position = icon_origin + Vector2(ICON_SIZE - 44.0, -6.0)
+	level_badge.size = Vector2(50, 18)
+	level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	level_badge.add_theme_font_size_override("font_size", 13)
+	level_badge.add_theme_color_override("font_color", Color("8ce99a"))
+	level_badge.add_theme_color_override("font_outline_color", Color("101d2d"))
+	level_badge.add_theme_constant_override("outline_size", 4)
+	level_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(level_badge)
+	var price_badge := Label.new()
+	if level >= max_level:
+		price_badge.text = GameApp.text("common.max")
+		price_badge.add_theme_color_override("font_color", Color("9fb2c8"))
+	else:
+		var price := GameApp.upgrade_service.price_for_level(definition, level)
+		price_badge.text = "◆ %d" % price
+		price_badge.add_theme_color_override("font_color", Color("ffd166") if _coins >= price else Color("8693a6"))
+	price_badge.position = icon_origin + Vector2(-2.0, ICON_SIZE - 4.0)
+	price_badge.size = Vector2(72, 18)
+	price_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	price_badge.add_theme_font_size_override("font_size", 13)
+	price_badge.add_theme_color_override("font_outline_color", Color("101d2d"))
+	price_badge.add_theme_constant_override("outline_size", 4)
+	price_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(price_badge)
+	var name_label := Label.new()
+	name_label.text = GameApp.text(str(definition.get("name_key", upgrade_id)))
+	name_label.position = Vector2(icon_origin.x + ICON_SIZE + 12.0, 0.0)
+	name_label.size = Vector2(NODE_SIZE.x - icon_origin.x - ICON_SIZE - 24.0, NODE_SIZE.y)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 25)
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(name_label)
 
 
 func select(upgrade_id: String) -> void:
@@ -137,3 +207,19 @@ func _node_box(highlighted: bool) -> StyleBoxFlat:
 	style.set_border_width_all(3 if highlighted else 2)
 	style.set_corner_radius_all(10)
 	return style
+
+
+func _icon_color(upgrade_id: String) -> Color:
+	if upgrade_id.contains("fire") or upgrade_id == "strength":
+		return Color("a8543a")
+	if upgrade_id.contains("ice") or upgrade_id == "agility":
+		return Color("3a7d8c")
+	if upgrade_id.contains("lightning"):
+		return Color("7a5aa8")
+	if upgrade_id.contains("mana") or upgrade_id.contains("spell") or upgrade_id.contains("cooldown"):
+		return Color("44549c")
+	if upgrade_id.contains("wall") or upgrade_id.contains("moat") or upgrade_id.contains("tower"):
+		return Color("56684a")
+	if upgrade_id.contains("bounty"):
+		return Color("8a7a3a")
+	return Color("4a5a6a")

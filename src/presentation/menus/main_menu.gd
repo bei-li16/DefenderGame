@@ -8,10 +8,19 @@ const Progression = preload("res://src/core/rules/progression.gd")
 var _content_panel: PanelContainer
 var _content_margin: MarginContainer
 var _coins_label: Label
+var _crystals_label: Label
 var _xp_label: Label
 var _xp_bar: ProgressBar
 var _stage_label: Label
+var _loadout_row: HBoxContainer
 var _settings_note: Label
+
+const WEAPON_GLYPHS := {
+	"basic_bow": "🏹",
+	"power_bow": "💪",
+	"hurricane_bow": "🌀",
+	"phantom_bow": "👻"
+}
 
 
 func _ready() -> void:
@@ -38,31 +47,45 @@ func _build_layout() -> void:
 	vertical.add_theme_constant_override("separation", 24)
 	outer.add_child(vertical)
 
+	# Original-style top bar: stage label, loadout strip (equipped bow + battle
+	# spells), then stacked coin/crystal purses and the level progress.
 	var top := PanelContainer.new()
-	top.custom_minimum_size.y = 78
+	top.custom_minimum_size.y = 118
 	vertical.add_child(top)
 	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 28)
+	top_row.add_theme_constant_override("separation", 22)
 	top.add_child(top_row)
-	var title := Label.new()
-	title.text = GameApp.text("app.title")
-	title.add_theme_font_size_override("font_size", 38)
-	title.add_theme_color_override("font_color", Color("ffd166"))
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_row.add_child(title)
 	_stage_label = Label.new()
+	_stage_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_stage_label.add_theme_font_size_override("font_size", 32)
+	_stage_label.add_theme_color_override("font_color", Color("ffd166"))
+	top_row.add_child(_stage_label)
+	_loadout_row = HBoxContainer.new()
+	_loadout_row.add_theme_constant_override("separation", 8)
+	_loadout_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_loadout_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	top_row.add_child(_loadout_row)
+	var assets := VBoxContainer.new()
+	assets.alignment = BoxContainer.ALIGNMENT_CENTER
+	assets.add_theme_constant_override("separation", 6)
+	top_row.add_child(assets)
 	_coins_label = Label.new()
+	_crystals_label = Label.new()
+	assets.add_child(_make_asset_pill("◆", Color("ffd166"), _coins_label))
+	assets.add_child(_make_asset_pill("✦", Color("8fd3ff"), _crystals_label))
+	var level_stack := VBoxContainer.new()
+	level_stack.alignment = BoxContainer.ALIGNMENT_CENTER
+	level_stack.add_theme_constant_override("separation", 4)
+	top_row.add_child(level_stack)
 	_xp_label = Label.new()
-	for label in [_stage_label, _coins_label, _xp_label]:
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 23)
-		top_row.add_child(label)
+	_xp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_xp_label.add_theme_font_size_override("font_size", 20)
+	level_stack.add_child(_xp_label)
 	# Status-page style level bar: Lv N [====] into/needed.
 	_xp_bar = ProgressBar.new()
-	_xp_bar.custom_minimum_size = Vector2(190, 16)
-	_xp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_xp_bar.custom_minimum_size = Vector2(170, 14)
 	_xp_bar.show_percentage = false
-	top_row.add_child(_xp_bar)
+	level_stack.add_child(_xp_bar)
 	_refresh_header()
 
 	var body := HBoxContainer.new()
@@ -132,7 +155,6 @@ func _show_main_navigation() -> void:
 	for entry in [
 		["menu.stage", Callable(self, "_show_stage_select")],
 		["menu.upgrades", Callable(self, "_show_upgrades")],
-		["menu.weapons", Callable(self, "_show_weapons")],
 		["menu.honors", Callable(self, "_show_honors")],
 		["menu.saves", Callable(self, "_show_save_data")],
 		["menu.settings", Callable(self, "_show_settings")],
@@ -207,11 +229,16 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 		page_button.pressed.connect(func() -> void: _show_research_page(selected_page))
 		page_tabs.add_child(page_button)
 	stack.add_child(page_tabs)
-	var wallet := Label.new()
-	wallet.text = "◆  %d %s" % [int(GameApp.profile.get("coins", 0)), GameApp.text("menu.coins")]
-	wallet.add_theme_font_size_override("font_size", 26)
-	wallet.add_theme_color_override("font_color", Color("ffd166"))
-	stack.add_child(wallet)
+	# Asset purses (参考 top bar): coin and crystal pills.
+	var wallet_row := HBoxContainer.new()
+	wallet_row.add_theme_constant_override("separation", 14)
+	stack.add_child(wallet_row)
+	var wallet_coins := Label.new()
+	wallet_coins.text = str(int(GameApp.profile.get("coins", 0)))
+	wallet_row.add_child(_make_asset_pill("◆", Color("ffd166"), wallet_coins))
+	var wallet_crystals := Label.new()
+	wallet_crystals.text = str(int(GameApp.profile.get("crystals", 0)))
+	wallet_row.add_child(_make_asset_pill("✦", Color("8fd3ff"), wallet_crystals))
 	var operation_error := Label.new()
 	operation_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	operation_error.add_theme_color_override("font_color", Color("ff8d7a"))
@@ -247,9 +274,19 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	detail_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail_body.add_theme_font_size_override("font_size", 18)
 	detail_info.add_child(detail_body)
-	var detail_button := _button("", 76)
-	detail_button.custom_minimum_size = Vector2(180, 76)
-	detail_row.add_child(detail_button)
+	# Bottom-right purchase block (参考 detail panel): price above the button.
+	var detail_right := VBoxContainer.new()
+	detail_right.alignment = BoxContainer.ALIGNMENT_CENTER
+	detail_right.add_theme_constant_override("separation", 4)
+	detail_row.add_child(detail_right)
+	var detail_price := Label.new()
+	detail_price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	detail_price.add_theme_font_size_override("font_size", 22)
+	detail_price.add_theme_color_override("font_color", Color("ffd166"))
+	detail_right.add_child(detail_price)
+	var detail_button := _button("", 64)
+	detail_button.custom_minimum_size = Vector2(180, 64)
+	detail_right.add_child(detail_button)
 
 	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
 	var definitions_by_id := {}
@@ -285,7 +322,8 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			prerequisite_text
 		]
 		var price := GameApp.upgrade_service.price_for_level(definition, level)
-		detail_button.text = GameApp.text("common.max") if level >= max_level else "◆ %d\n%s" % [price, GameApp.text("common.upgrade")]
+		detail_price.text = GameApp.text("common.max") if level >= max_level else "◆ %d" % price
+		detail_button.text = GameApp.text("common.upgrade") if level < max_level else GameApp.text("common.max")
 		detail_button.disabled = level >= max_level or int(GameApp.profile.get("coins", 0)) < price or not prerequisites_met
 
 	tree.node_selected.connect(func(_upgrade_id: String) -> void: refresh_detail.call())
@@ -308,65 +346,14 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			scroll.scroll_vertical = saved_scroll
 
 
-# Equipping rebuilds the list; saved_scroll keeps the view anchored on the
-# card the player acted on instead of jumping back to the top.
-func _show_weapons(saved_scroll: int = 0) -> void:
-	var stack := _new_content_stack(GameApp.text("menu.weapons"))
-	var current_id := str(GameApp.profile.get("current_weapon_id", "basic_bow"))
-	var unlocked: Array = GameApp.profile.get("unlocked_weapons", [])
-	var note := Label.new()
-	note.text = "%s: %s" % [GameApp.text("menu.selected"), GameApp.text(str(GameApp.content.find_by_id("weapons", current_id).get("name_key", current_id)))]
-	note.add_theme_font_size_override("font_size", 22)
-	note.add_theme_color_override("font_color", Color("ffd166"))
-	stack.add_child(note)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stack.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 12)
-	scroll.add_child(list)
-	for definition in GameApp.content.rules.get("weapons", []):
-		var weapon_id := str(definition.get("id", ""))
-		var is_unlocked := unlocked.has(weapon_id)
-		var card := PanelContainer.new()
-		list.add_child(card)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 14)
-		card.add_child(row)
-		var info := VBoxContainer.new()
-		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(info)
-		var name := Label.new()
-		name.text = "%s  ·  %s %d" % [GameApp.text(str(definition.get("name_key", weapon_id))), GameApp.text("common.stage"), int(definition.get("unlock_stage", 1))]
-		name.add_theme_font_size_override("font_size", 25)
-		name.add_theme_color_override("font_color", Color("8ce99a") if is_unlocked else Color("8693a6"))
-		info.add_child(name)
-		var description := Label.new()
-		description.text = "%s\n%s: %d  ·  %s: %.1f/s  ·  %s: %d  ·  %s: %d" % [
-			GameApp.text(str(definition.get("description_key", ""))),
-			GameApp.text("weapon.damage"), _weapon_effective_damage(definition),
-			GameApp.text("weapon.fire_rate"), _weapon_effective_fire_rate(definition),
-			GameApp.text("weapon.projectiles"), _weapon_effective_stat(definition, "projectile_count", "hurricane_mastery"),
-			GameApp.text("weapon.pierce"), _weapon_effective_stat(definition, "pierce", "phantom_mastery")
-		]
-		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		info.add_child(description)
-		var equip := _button(GameApp.text("menu.selected") if weapon_id == current_id else (GameApp.text("menu.unlocked") if is_unlocked else GameApp.text("menu.locked")), 66)
-		equip.custom_minimum_size.x = 150
-		equip.disabled = not is_unlocked or weapon_id == current_id
-		equip.pressed.connect(func() -> void:
-			var result := GameApp.select_weapon(weapon_id)
-			if bool(result.get("ok", false)):
-				_show_weapons(scroll.scroll_vertical)
-		)
-		row.add_child(equip)
-	_add_back_button(stack)
-	if saved_scroll > 0:
-		# Layout must run once before the scrollbar range exists to clamp into.
-		await get_tree().process_frame
-		if is_instance_valid(scroll):
-			scroll.scroll_vertical = saved_scroll
+# One-line effective stats for the loadout icon tooltips.
+func _weapon_summary(definition: Dictionary) -> String:
+	return "%s: %d  ·  %s: %.1f/s  ·  %s: %d  ·  %s: %d" % [
+		GameApp.text("weapon.damage"), _weapon_effective_damage(definition),
+		GameApp.text("weapon.fire_rate"), _weapon_effective_fire_rate(definition),
+		GameApp.text("weapon.projectiles"), _weapon_effective_stat(definition, "projectile_count", "hurricane_mastery"),
+		GameApp.text("weapon.pierce"), _weapon_effective_stat(definition, "pierce", "phantom_mastery")
+	]
 
 
 func _weapon_effective_damage(definition: Dictionary) -> int:
@@ -777,13 +764,102 @@ func _add_toggle_row(stack: VBoxContainer, label_key: String, setting_key: Strin
 func _refresh_header() -> void:
 	if _stage_label == null:
 		return
-	_stage_label.text = "%s  %02d" % [GameApp.text("common.stage"), int(GameApp.profile.get("highest_unlocked_stage", 1))]
-	_coins_label.text = "◆  %d" % int(GameApp.profile.get("coins", 0))
+	_stage_label.text = "%s %02d" % [GameApp.text("common.stage"), int(GameApp.profile.get("highest_unlocked_stage", 1))]
+	_coins_label.text = str(int(GameApp.profile.get("coins", 0)))
+	_crystals_label.text = str(int(GameApp.profile.get("crystals", 0)))
 	var progress: Dictionary = Progression.level_progress(GameApp.content.rules, int(GameApp.profile.get("xp", 0)))
 	_xp_label.text = GameApp.text("status.level_short") % int(progress.get("level", 1))
 	_xp_bar.max_value = maxi(1, int(progress.get("needed", 1)))
 	_xp_bar.value = int(progress.get("into_level", 0))
 	_xp_bar.tooltip_text = "%d / %d %s" % [int(progress.get("into_level", 0)), int(progress.get("needed", 1)), GameApp.text("common.xp")]
+	_rebuild_loadout()
+
+
+# Original-style loadout strip in the top bar: every bow is an icon (click to
+# equip; the gold frame marks the equipped one) followed by the three battle
+# spell icons, replacing the old weapons list page.
+func _rebuild_loadout() -> void:
+	if _loadout_row == null:
+		return
+	for child in _loadout_row.get_children():
+		_loadout_row.remove_child(child)
+		child.queue_free()
+	var current_id := str(GameApp.profile.get("current_weapon_id", "basic_bow"))
+	var unlocked: Array = GameApp.profile.get("unlocked_weapons", [])
+	for definition in GameApp.content.rules.get("weapons", []):
+		var weapon_id := str(definition.get("id", ""))
+		var weapon_name := GameApp.text(str(definition.get("name_key", weapon_id)))
+		var is_unlocked := unlocked.has(weapon_id)
+		var icon := Button.new()
+		icon.text = str(WEAPON_GLYPHS.get(weapon_id, "🏹"))
+		icon.custom_minimum_size = Vector2(56, 56)
+		icon.add_theme_font_size_override("font_size", 27)
+		icon.disabled = not is_unlocked
+		if is_unlocked:
+			icon.tooltip_text = "%s\n%s" % [weapon_name, _weapon_summary(definition)]
+			if weapon_id != current_id:
+				icon.pressed.connect(func() -> void:
+					if bool(GameApp.select_weapon(weapon_id).get("ok", false)):
+						_refresh_header()
+				)
+		else:
+			icon.modulate = Color(0.55, 0.6, 0.68, 1)
+			icon.tooltip_text = "%s\n🔒 %s %02d" % [weapon_name, GameApp.text("common.stage"), int(definition.get("unlock_stage", 1))]
+		if weapon_id == current_id:
+			for state in ["normal", "hover", "pressed", "disabled"]:
+				icon.add_theme_stylebox_override(state, _loadout_frame(true))
+		_loadout_row.add_child(icon)
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(16, 0)
+	_loadout_row.add_child(gap)
+	for spell_definition in [["🔥", "skill.fire"], ["❄", "skill.ice"], ["⚡", "skill.lightning"]]:
+		var spell := Label.new()
+		spell.text = str(spell_definition[0])
+		spell.custom_minimum_size = Vector2(56, 56)
+		spell.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		spell.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		spell.add_theme_font_size_override("font_size", 27)
+		spell.add_theme_stylebox_override("normal", _loadout_frame(false))
+		spell.tooltip_text = GameApp.text(str(spell_definition[1]))
+		_loadout_row.add_child(spell)
+
+
+func _loadout_frame(highlighted: bool) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("16263c")
+	style.border_color = Color("ffd166") if highlighted else Color("33465e")
+	style.set_border_width_all(2 if highlighted else 1)
+	style.set_corner_radius_all(10)
+	return style
+
+
+# Coin/crystal purse pill (参考 top bar assets): glyph + amount in a framed box.
+func _make_asset_pill(glyph: String, color: Color, value_label: Label) -> PanelContainer:
+	var pill := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("16263c")
+	style.border_color = Color("33465e")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 12.0
+	style.content_margin_right = 14.0
+	style.content_margin_top = 3.0
+	style.content_margin_bottom = 3.0
+	pill.add_theme_stylebox_override("panel", style)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	pill.add_child(row)
+	var icon := Label.new()
+	icon.text = glyph
+	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon.add_theme_font_size_override("font_size", 20)
+	icon.add_theme_color_override("font_color", color)
+	row.add_child(icon)
+	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	value_label.add_theme_font_size_override("font_size", 21)
+	value_label.custom_minimum_size = Vector2(64, 0)
+	row.add_child(value_label)
+	return pill
 
 
 func _refresh_after_language_change() -> void:
