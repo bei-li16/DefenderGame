@@ -57,6 +57,7 @@ func _run() -> void:
 		_test_hashless_legacy_load()
 		_test_current_schema_default_completion()
 		_test_save_backup_recovery()
+		_test_save_slots()
 		_test_corrupt_copy_uniqueness()
 		_test_migration_backup_recovery()
 		_test_replay_export()
@@ -933,6 +934,47 @@ func _test_save_backup_recovery() -> void:
 	var repaired := service.load_profile({})
 	_expect(bool(repair_save.get("ok", false)) and bool(repaired.get("ok", false)) and str(repaired.get("source", "")) == "main" and not bool(repaired.get("recovered", false)), "saving the recovered payload repairs the main profile and prevents a recovery loop: %s / %s" % [repair_save, repaired])
 	_delete_test_directory(absolute_directory)
+
+
+func _test_save_slots() -> void:
+	var directory := "user://automated-slot-test"
+	var absolute_directory := ProjectSettings.globalize_path(directory)
+	_delete_test_directory(absolute_directory)
+	var service := SaveService.new(directory)
+	var slot_one := {"coins": 11, "xp": 1, "reward_ledger": [], "stats": {"total_kills": 7, "stages_completed": 2, "playtime_seconds": 5400}}
+	var slot_two := {"coins": 22, "xp": 2, "reward_ledger": [], "stats": {"total_kills": 99, "stages_completed": 8, "playtime_seconds": 60}}
+	var first_save := service.save_profile_slot(1, slot_one, 1)
+	var second_save := service.save_profile_slot(2, slot_two, 1)
+	_expect(bool(first_save.get("ok", false)) and bool(second_save.get("ok", false)), "slot saves write independent portable files")
+	_expect(FileAccess.file_exists(directory + "/slot_1.json") and FileAccess.file_exists(directory + "/slot_2.json"), "each slot materializes as its own file beside the EXE directory")
+	var reloaded_one := service.load_profile_slot(1, {"reward_ledger": []})
+	var reloaded_two := service.load_profile_slot(2, {"reward_ledger": []})
+	_expect(int(reloaded_one.get("payload", {}).get("coins", 0)) == 11 and int(reloaded_two.get("payload", {}).get("coins", 0)) == 22, "slot payloads stay isolated per slot file")
+	var fresh := service.load_profile_slot(3, {"coins": 180, "reward_ledger": []})
+	_expect(bool(fresh.get("ok", false)) and str(fresh.get("source", "")) == "default", "an empty slot resolves to the defaults payload")
+	var summary_one := service.read_slot_summary(1)
+	_expect(bool(summary_one.get("exists", false)) and int(summary_one.get("coins", 0)) == 11 and int(summary_one.get("stats", {}).get("total_kills", 0)) == 7 and int(summary_one.get("stats", {}).get("playtime_seconds", 0)) == 5400, "slot summaries expose career stats for the save page")
+	_expect(not bool(service.read_slot_summary(3).get("exists", true)), "empty slot summaries report exists=false")
+	# Portability contract: the file is self-contained, so copying it to another
+	# machine's save directory must restore the same profile.
+	var portable_directory := "user://automated-slot-portable-test"
+	var portable_absolute := ProjectSettings.globalize_path(portable_directory)
+	_delete_test_directory(portable_absolute)
+	DirAccess.make_dir_recursive_absolute(portable_absolute)
+	DirAccess.copy_absolute(directory + "/slot_1.json", portable_directory + "/slot_1.json")
+	var portable_load := SaveService.new(portable_directory).load_profile_slot(1, {"reward_ledger": []})
+	_expect(bool(portable_load.get("ok", false)) and int(portable_load.get("payload", {}).get("coins", 0)) == 11, "a copied slot file loads identically from another save directory")
+	# Migration: a pre-slot install's profile.json is adopted by slot 1.
+	var legacy_directory := "user://automated-slot-legacy-test"
+	var legacy_absolute := ProjectSettings.globalize_path(legacy_directory)
+	_delete_test_directory(legacy_absolute)
+	var legacy_service := SaveService.new(legacy_directory)
+	legacy_service.save_profile({"coins": 66, "xp": 5, "reward_ledger": []}, 1)
+	var legacy_load := legacy_service.load_profile_slot(1, {"reward_ledger": []})
+	_expect(bool(legacy_load.get("ok", false)) and str(legacy_load.get("source", "")) == "legacy" and int(legacy_load.get("payload", {}).get("coins", 0)) == 66, "slot 1 adopts the legacy single-save profile on first load")
+	_delete_test_directory(absolute_directory)
+	_delete_test_directory(portable_absolute)
+	_delete_test_directory(legacy_absolute)
 
 
 func _test_corrupt_copy_uniqueness() -> void:

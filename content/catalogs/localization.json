@@ -218,7 +218,22 @@
     "honor.reward": "奖励",
     "status.player_name": "玩家",
     "status.name_hint": "输入名字…",
-    "result.crystals": "水晶"
+    "result.crystals": "水晶",
+    "menu.saves": "存档管理",
+    "saves.slot": "存档",
+    "saves.current": "当前使用",
+    "saves.in_use": "当前存档",
+    "saves.empty": "空存档",
+    "saves.load": "载入此存档",
+    "saves.new_game": "开始新存档",
+    "saves.broken": "此存档文件损坏，已保留在存档目录中。",
+    "saves.stages_cleared": "通关",
+    "saves.playtime": "游戏时长",
+    "saves.last_saved": "最后保存",
+    "saves.path_hint": "存档目录（整目录拷贝即可携带到其他电脑）：%s",
+    "saves.open_folder": "打开存档目录",
+    "playtime.hours_minutes": "%d小时%02d分",
+    "playtime.minutes": "%d分钟"
   },
   "en_US": {
     "app.title": "Aegis of Ember",
@@ -439,6 +454,21 @@
     "honor.reward": "Reward",
     "status.player_name": "Player",
     "status.name_hint": "Enter a name…",
-    "result.crystals": "Crystals"
+    "result.crystals": "Crystals",
+    "menu.saves": "Save Data",
+    "saves.slot": "Save",
+    "saves.current": "In use",
+    "saves.in_use": "Current save",
+    "saves.empty": "Empty",
+    "saves.load": "Load this save",
+    "saves.new_game": "Start new save",
+    "saves.broken": "This save file is corrupted and has been kept in the save folder.",
+    "saves.stages_cleared": "Cleared",
+    "saves.playtime": "Playtime",
+    "saves.last_saved": "Last saved",
+    "saves.path_hint": "Save folder (copy the whole folder to move your saves): %s",
+    "saves.open_folder": "Open save folder",
+    "playtime.hours_minutes": "%dh %02dm",
+    "playtime.minutes": "%d min"
   }
 }

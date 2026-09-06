@@ -218,7 +218,22 @@
     "honor.reward": "奖励",
     "status.player_name": "玩家",
     "status.name_hint": "输入名字…",
-    "result.crystals": "水晶"
+    "result.crystals": "水晶",
+    "menu.saves": "menu.saves",
+    "saves.slot": "saves.slot",
+    "saves.current": "saves.current",
+    "saves.in_use": "saves.in_use",
+    "saves.empty": "saves.empty",
+    "saves.load": "saves.load",
+    "saves.new_game": "saves.new_game",
+    "saves.broken": "saves.broken",
+    "saves.stages_cleared": "saves.stages_cleared",
+    "saves.playtime": "saves.playtime",
+    "saves.last_saved": "saves.last_saved",
+    "saves.path_hint": "saves.path_hint",
+    "saves.open_folder": "saves.open_folder",
+    "playtime.hours_minutes": "playtime.hours_minutes",
+    "playtime.minutes": "playtime.minutes"
   },
   "en_US": {
     "app.title": "app.title",
@@ -439,6 +454,21 @@
     "honor.reward": "Reward",
     "status.player_name": "Player",
     "status.name_hint": "Enter a name…",
-    "result.crystals": "Crystals"
+    "result.crystals": "Crystals",
+    "menu.saves": "menu.saves",
+    "saves.slot": "saves.slot",
+    "saves.current": "saves.current",
+    "saves.in_use": "saves.in_use",
+    "saves.empty": "saves.empty",
+    "saves.load": "saves.load",
+    "saves.new_game": "saves.new_game",
+    "saves.broken": "saves.broken",
+    "saves.stages_cleared": "saves.stages_cleared",
+    "saves.playtime": "saves.playtime",
+    "saves.last_saved": "saves.last_saved",
+    "saves.path_hint": "saves.path_hint",
+    "saves.open_folder": "saves.open_folder",
+    "playtime.hours_minutes": "playtime.hours_minutes",
+    "playtime.minutes": "playtime.minutes"
   }
 }

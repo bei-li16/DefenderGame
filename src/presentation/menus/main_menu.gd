@@ -134,6 +134,7 @@ func _show_main_navigation() -> void:
 		["menu.upgrades", Callable(self, "_show_upgrades")],
 		["menu.weapons", Callable(self, "_show_weapons")],
 		["menu.honors", Callable(self, "_show_honors")],
+		["menu.saves", Callable(self, "_show_save_data")],
 		["menu.settings", Callable(self, "_show_settings")],
 		["menu.tutorial", Callable(self, "_show_tutorial")]
 	]:
@@ -434,6 +435,12 @@ func _show_honors() -> void:
 	]
 	progress.add_theme_font_size_override("font_size", 21)
 	stack.add_child(progress)
+	# Career playtime accumulated by GameApp into the active save's stats.
+	var playtime := Label.new()
+	playtime.text = "%s: %s" % [GameApp.text("saves.playtime"), _format_playtime(int(stats.get("playtime_seconds", 0)))]
+	playtime.add_theme_font_size_override("font_size", 21)
+	playtime.add_theme_color_override("font_color", Color("9bc5e6"))
+	stack.add_child(playtime)
 	# Battle record line (参考 Status screen: Win / Lose / Win%).
 	var won := int(stats.get("battles_won", 0))
 	var lost := int(stats.get("battles_lost", 0))
@@ -502,6 +509,110 @@ static func _honor_progress(definition: Dictionary, stats: Dictionary) -> int:
 	if condition == "weapons_used_count":
 		return stats.get("weapons_used", []).size()
 	return int(stats.get(condition, 0))
+
+
+# Save-management page: one card per portable slot file with a career summary,
+# load/switch actions, and the folder location for hand-carrying saves.
+func _show_save_data() -> void:
+	var stack := _new_content_stack(GameApp.text("menu.saves"))
+	var operation_error := Label.new()
+	operation_error.add_theme_color_override("font_color", Color("ff8d7a"))
+	var path_hint := Label.new()
+	path_hint.text = GameApp.text("saves.path_hint") % GameApp.save_directory_display()
+	path_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	path_hint.add_theme_font_size_override("font_size", 16)
+	path_hint.add_theme_color_override("font_color", Color("9fb2c8"))
+	stack.add_child(path_hint)
+	var open_folder := _button(GameApp.text("saves.open_folder"), 46)
+	open_folder.pressed.connect(func() -> void:
+		if not bool(GameApp.open_save_directory().get("ok", false)):
+			operation_error.text = GameApp.text("feedback.save_failed")
+	)
+	stack.add_child(open_folder)
+	stack.add_child(operation_error)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 12)
+	scroll.add_child(list)
+	for summary in GameApp.save_slot_summaries():
+		var slot_id := int(summary.get("slot_id", 0))
+		var card := PanelContainer.new()
+		list.add_child(card)
+		var card_stack := VBoxContainer.new()
+		card_stack.add_theme_constant_override("separation", 6)
+		card.add_child(card_stack)
+		var is_active := slot_id == int(GameApp.active_save_slot)
+		var is_empty := not bool(summary.get("exists", false))
+		var heading := "%s %d" % [GameApp.text("saves.slot"), slot_id]
+		if is_active:
+			heading += "  ·  " + GameApp.text("saves.current")
+		elif is_empty:
+			heading += "  ·  " + GameApp.text("saves.empty")
+		elif bool(summary.get("ok", true)) and not str(summary.get("player_name", "")).is_empty():
+			heading += "  ·  " + str(summary.get("player_name", ""))
+		var title := Label.new()
+		title.text = heading
+		title.add_theme_font_size_override("font_size", 24)
+		title.add_theme_color_override("font_color", Color("ffd166") if is_active else Color("e9eef5"))
+		card_stack.add_child(title)
+		if not is_empty:
+			if bool(summary.get("ok", true)):
+				var stats: Dictionary = summary.get("stats", {})
+				var info := Label.new()
+				info.text = "%s %d  ·  %s %d  ·  ◆ %d  ·  %s %d  ·  %s %s" % [
+					GameApp.text("saves.stages_cleared"), int(stats.get("stages_completed", 0)),
+					GameApp.text("result.kills"), int(stats.get("total_kills", 0)),
+					int(summary.get("coins", 0)),
+					GameApp.text("result.crystals"), int(summary.get("crystals", 0)),
+					GameApp.text("saves.playtime"), _format_playtime(int(stats.get("playtime_seconds", 0)))
+				]
+				info.add_theme_font_size_override("font_size", 18)
+				card_stack.add_child(info)
+				var saved_label := Label.new()
+				saved_label.text = "%s: %s  ·  %s %02d" % [
+					GameApp.text("saves.last_saved"), _format_saved_at(str(summary.get("saved_at_utc", ""))),
+					GameApp.text("common.stage"), int(summary.get("highest_unlocked_stage", 1))
+				]
+				saved_label.add_theme_font_size_override("font_size", 15)
+				saved_label.add_theme_color_override("font_color", Color("9fb2c8"))
+				card_stack.add_child(saved_label)
+			else:
+				var broken := Label.new()
+				broken.text = GameApp.text("saves.broken")
+				broken.add_theme_color_override("font_color", Color("ff8d7a"))
+				card_stack.add_child(broken)
+		var action := _button(
+			GameApp.text("saves.in_use") if is_active else (GameApp.text("saves.new_game") if is_empty else GameApp.text("saves.load")),
+			56
+		)
+		action.disabled = is_active or (not is_empty and not bool(summary.get("ok", true)))
+		action.pressed.connect(func() -> void:
+			var result := GameApp.switch_save_slot(slot_id)
+			if bool(result.get("ok", false)):
+				_refresh_header()
+				_show_save_data()
+			else:
+				operation_error.text = GameApp.text("feedback.save_failed")
+		)
+		card_stack.add_child(action)
+	_add_back_button(stack)
+
+
+func _format_playtime(seconds: int) -> String:
+	var total_minutes := maxi(0, seconds) / 60
+	var hours := total_minutes / 60
+	if hours <= 0:
+		return GameApp.text("playtime.minutes") % total_minutes
+	return GameApp.text("playtime.hours_minutes") % [hours, total_minutes % 60]
+
+
+func _format_saved_at(saved_at_utc: String) -> String:
+	if saved_at_utc.is_empty():
+		return "-"
+	return saved_at_utc.replace("T", " ")
 
 
 func _show_settings() -> void:

@@ -3,6 +3,10 @@ extends RefCounted
 
 const CURRENT_SCHEMA_VERSION := 5
 const APP_VERSION := "1.0.6-windows"
+# Fixed slot layout: each save is one portable file inside the save directory
+# (savedata/ next to the EXE), so the whole folder can be copied between machines.
+const SAVE_SLOT_COUNT := 3
+const LEGACY_PROFILE_FILE := "profile.json"
 
 var base_directory: String
 
@@ -11,6 +15,69 @@ func _init(directory: String = "user://") -> void:
 	base_directory = directory
 	while base_directory.ends_with("//") and not base_directory.ends_with("://"):
 		base_directory = base_directory.trim_suffix("/")
+
+
+static func slot_file_name(slot_id: int) -> String:
+	return "slot_%d.json" % clampi(slot_id, 1, SAVE_SLOT_COUNT)
+
+
+# Slot-aware profile persistence.  The legacy profile.json pair stays intact for
+# the one-time migration of pre-slot installs (read from load_profile_slot).
+func save_profile_slot(slot_id: int, payload: Dictionary, config_version: int) -> Dictionary:
+	return _save_envelope(slot_file_name(slot_id), payload, config_version)
+
+
+func load_profile_slot(slot_id: int, default_payload: Dictionary) -> Dictionary:
+	var slot := clampi(slot_id, 1, SAVE_SLOT_COUNT)
+	var result := _load_envelope(slot_file_name(slot), default_payload)
+	# First launch after the save-slot feature ships: slot 1 adopts the legacy
+	# single profile so returning players keep their progress.
+	if slot == 1 and str(result.get("source", "")) == "default" and FileAccess.file_exists(_path(LEGACY_PROFILE_FILE)):
+		var legacy := _load_envelope(LEGACY_PROFILE_FILE, default_payload)
+		if bool(legacy.get("ok", false)):
+			legacy["source"] = "legacy"
+			legacy["needs_save"] = true
+			return legacy
+	return result
+
+
+# Read-only slot listing for the save-management UI: summary fields only, so a
+# huge payload is never duplicated per row.
+func read_slot_summary(slot_id: int) -> Dictionary:
+	var slot := clampi(slot_id, 1, SAVE_SLOT_COUNT)
+	var main_path := _path(slot_file_name(slot))
+	if not FileAccess.file_exists(main_path):
+		return {"slot_id": slot, "exists": false}
+	var result := _read_and_validate(main_path)
+	if not bool(result.get("ok", false)):
+		return {"slot_id": slot, "exists": true, "ok": false, "error_code": str(result.get("error_code", "unknown"))}
+	var envelope: Dictionary = result["envelope"]
+	var payload: Dictionary = envelope.get("payload", {})
+	var stats: Dictionary = payload.get("stats", {})
+	return {
+		"slot_id": slot,
+		"exists": true,
+		"ok": true,
+		"saved_at_utc": str(envelope.get("saved_at_utc", "")),
+		"app_version": str(envelope.get("app_version", "")),
+		"player_name": str(payload.get("player_name", "")),
+		"highest_unlocked_stage": int(payload.get("highest_unlocked_stage", 1)),
+		"coins": int(payload.get("coins", 0)),
+		"crystals": int(payload.get("crystals", 0)),
+		"stats": {
+			"stages_completed": int(stats.get("stages_completed", 0)),
+			"total_kills": int(stats.get("total_kills", 0)),
+			"total_coins_earned": int(stats.get("total_coins_earned", 0)),
+			"playtime_seconds": int(stats.get("playtime_seconds", 0))
+		}
+	}
+
+
+func list_slot_summaries() -> Array:
+	var summaries: Array = []
+	for slot_id in range(1, SAVE_SLOT_COUNT + 1):
+		summaries.append(read_slot_summary(slot_id))
+	return summaries
 
 
 func save_profile(payload: Dictionary, config_version: int) -> Dictionary:

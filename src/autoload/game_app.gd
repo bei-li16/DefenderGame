@@ -20,6 +20,8 @@ var replay_service := ReplayService.new()
 var diagnostics := DiagnosticService.new()
 var profile: Dictionary = {}
 var settings: Dictionary = {}
+var active_save_slot: int = 1
+var _playtime_buffer: float = 0.0
 var current_stage_id: String = "stage_001"
 var current_seed: int = 1
 var current_run_id: String = ""
@@ -34,6 +36,8 @@ func _ready() -> void:
 	# start it fresh. The shipped game never runs with --script.
 	if OS.get_cmdline_args().has("--script"):
 		_reset_isolated_save_directory()
+	else:
+		save_service = SaveService.new(_default_save_directory())
 	diagnostics.start_session(
 		str(ProjectSettings.get_setting("application/config/version", "unknown")),
 		str(Engine.get_version_info().get("string", "unknown"))
@@ -42,6 +46,49 @@ func _ready() -> void:
 	audio.name = "ProceduralAudio"
 	add_child(audio)
 	initialize()
+
+
+func _notification(what: int) -> void:
+	# Playtime accrued since the last flush must reach the active slot file even
+	# when the game is closed straight from the window chrome.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_flush_playtime()
+
+
+# Portable saves live next to the EXE (savedata/slot_N.json) so the folder can
+# be copied between machines.  Editor runs keep them inside the project.
+func _default_save_directory() -> String:
+	if OS.has_feature("editor"):
+		return ProjectSettings.globalize_path("res://savedata")
+	return OS.get_executable_path().get_base_dir().path_join("savedata")
+
+
+func _process(delta: float) -> void:
+	if not initialized_ok:
+		return
+	_playtime_buffer += delta
+	if _playtime_buffer >= 30.0:
+		_flush_playtime()
+
+
+# Merge buffered playtime into the active slot.  No profile_changed emission:
+# the UI never needs a full rebuild for a silently ticking counter.
+func _flush_playtime() -> Dictionary:
+	var whole_seconds := int(_playtime_buffer)
+	if whole_seconds <= 0:
+		return {"ok": true, "skipped": true}
+	_playtime_buffer -= float(whole_seconds)
+	var updated := profile.duplicate(true)
+	var stats: Dictionary = updated.get("stats", {})
+	stats["playtime_seconds"] = int(stats.get("playtime_seconds", 0)) + whole_seconds
+	updated["stats"] = stats
+	var save_result := save_service.save_profile_slot(active_save_slot, updated, int(content.rules["config_version"]))
+	if not bool(save_result.get("ok", false)):
+		_record_failure("playtime_save", save_result, "MainMenu")
+		_playtime_buffer += float(whole_seconds)
+		return save_result
+	profile = updated
+	return save_result
 
 
 func _reset_isolated_save_directory() -> void:
@@ -84,7 +131,21 @@ func initialize() -> void:
 		initialization_finished.emit(false, initialization_error)
 		return
 	diagnostics.update_config_version(content.rules.get("config_version", "unknown"))
-	var profile_result := save_service.load_profile(_default_profile())
+	# Settings load first: the active save slot lives there and decides which
+	# slot file the profile is read from.
+	var settings_result := save_service.load_settings(_default_settings())
+	if bool(settings_result.get("ok", false)):
+		settings = settings_result["payload"]
+	else:
+		settings = _default_settings()
+		var recovered_settings_save := save_service.save_settings(settings, int(content.rules["config_version"]))
+		if not bool(recovered_settings_save.get("ok", false)):
+			initialization_error = recovered_settings_save
+			_record_failure("settings_recovery", recovered_settings_save, "Bootstrap")
+			initialization_finished.emit(false, initialization_error)
+			return
+	active_save_slot = clampi(int(settings.get("active_save_slot", 1)), 1, SaveService.SAVE_SLOT_COUNT)
+	var profile_result := save_service.load_profile_slot(active_save_slot, _default_profile())
 	if not bool(profile_result.get("ok", false)):
 		profile = profile_result.get("default_payload", _default_profile())
 		initialization_error = profile_result
@@ -94,28 +155,17 @@ func initialize() -> void:
 	var loaded_profile: Dictionary = profile_result["payload"]
 	profile = _normalize_profile(loaded_profile)
 	if bool(profile_result.get("needs_save", false)) or bool(profile_result.get("migrated", false)) or profile != loaded_profile:
-		var profile_save := save_service.save_profile(profile, int(content.rules["config_version"]))
+		var profile_save := save_service.save_profile_slot(active_save_slot, profile, int(content.rules["config_version"]))
 		if not bool(profile_save.get("ok", false)):
 			initialization_error = profile_save
 			_record_failure("profile_save", profile_save, "Bootstrap")
 			initialization_finished.emit(false, initialization_error)
 			return
-	var settings_result := save_service.load_settings(_default_settings())
-	if bool(settings_result.get("ok", false)):
-		settings = settings_result["payload"]
-		if bool(settings_result.get("needs_save", false)):
-			var default_settings_save := save_service.save_settings(settings, int(content.rules["config_version"]))
-			if not bool(default_settings_save.get("ok", false)):
-				initialization_error = default_settings_save
-				_record_failure("settings_save", default_settings_save, "Bootstrap")
-				initialization_finished.emit(false, initialization_error)
-				return
-	else:
-		settings = _default_settings()
-		var recovered_settings_save := save_service.save_settings(settings, int(content.rules["config_version"]))
-		if not bool(recovered_settings_save.get("ok", false)):
-			initialization_error = recovered_settings_save
-			_record_failure("settings_recovery", recovered_settings_save, "Bootstrap")
+	if bool(settings_result.get("needs_save", false)):
+		var default_settings_save := save_service.save_settings(settings, int(content.rules["config_version"]))
+		if not bool(default_settings_save.get("ok", false)):
+			initialization_error = default_settings_save
+			_record_failure("settings_save", default_settings_save, "Bootstrap")
 			initialization_finished.emit(false, initialization_error)
 			return
 	initialized_ok = true
@@ -131,7 +181,7 @@ func start_new_profile() -> Dictionary:
 	# in-memory profile untouched; the recovery UI can then safely offer retry or
 	# exit without silently discarding the player's current session.
 	var candidate := _default_profile()
-	var result := save_service.save_profile(candidate, int(content.rules.get("config_version", 0)))
+	var result := save_service.save_profile_slot(active_save_slot, candidate, int(content.rules.get("config_version", 0)))
 	if not bool(result.get("ok", false)):
 		initialization_error = result
 		_record_failure("new_profile", result, "Bootstrap")
@@ -186,11 +236,63 @@ func start_stage(stage_id: String, run_seed: int = 0) -> Dictionary:
 
 
 func return_to_menu() -> void:
+	_flush_playtime()
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
+func save_slot_summaries() -> Array:
+	return save_service.list_slot_summaries()
+
+
+func save_directory_display() -> String:
+	return ProjectSettings.globalize_path(save_service.base_directory)
+
+
+func open_save_directory() -> Dictionary:
+	var directory := save_directory_display()
+	var error := DirAccess.make_dir_recursive_absolute(directory)
+	if error != OK and error != ERR_ALREADY_EXISTS:
+		return {"ok": false, "error_code": "directory_create_failed", "field_path": directory}
+	OS.shell_show_in_file_manager(directory, true)
+	return {"ok": true, "path": directory}
+
+
+# Switch the active save: the current slot's pending playtime is flushed first,
+# the target profile is loaded from its own file (a fresh slot immediately
+# materializes as a new save), and only then does the selection commit.  A
+# failed settings write leaves the old slot active.
+func switch_save_slot(slot_id: int) -> Dictionary:
+	if not initialized_ok or content.rules.is_empty():
+		var unavailable := {"ok": false, "error_code": "content_unavailable", "field_path": "content/config"}
+		_record_failure("switch_save_slot", unavailable, "MainMenu")
+		return unavailable
+	var slot := clampi(int(slot_id), 1, SaveService.SAVE_SLOT_COUNT)
+	if slot == active_save_slot:
+		return {"ok": true, "already_active": true, "profile": profile.duplicate(true)}
+	_flush_playtime()
+	var load_result := save_service.load_profile_slot(slot, _default_profile())
+	if not bool(load_result.get("ok", false)):
+		_record_failure("slot_load", load_result, "MainMenu")
+		return load_result
+	var new_profile := _normalize_profile(load_result["payload"])
+	var slot_save := save_service.save_profile_slot(slot, new_profile, int(content.rules["config_version"]))
+	if not bool(slot_save.get("ok", false)):
+		_record_failure("slot_save", slot_save, "MainMenu")
+		return slot_save
+	var settings_save := update_setting("active_save_slot", slot)
+	if not bool(settings_save.get("ok", false)):
+		_record_failure("slot_select_save", settings_save, "MainMenu")
+		return settings_save
+	active_save_slot = slot
+	profile = new_profile
+	profile_changed.emit(profile.duplicate(true))
+	diagnostics.record("save_slot_switched", "", "MainMenu", {"slot": slot})
+	return {"ok": true, "slot": slot, "profile": profile.duplicate(true)}
+
+
 func settle_run(result: Dictionary) -> Dictionary:
+	_flush_playtime()
 	var reward_result := upgrade_service.apply_run_reward(profile, result)
 	if not bool(reward_result.get("ok", false)):
 		_record_failure("settle_reward", reward_result, "Gameplay")
@@ -220,7 +322,7 @@ func settle_run(result: Dictionary) -> Dictionary:
 			"weapon_id": result.get("weapon_id", "basic_bow")
 		}
 	updated["best_results"] = best_results
-	var save_result := save_service.save_profile(updated, int(content.rules["config_version"]))
+	var save_result := save_service.save_profile_slot(active_save_slot, updated, int(content.rules["config_version"]))
 	if not bool(save_result.get("ok", false)):
 		_record_failure("settle_save", save_result, "Gameplay")
 		var failure := save_result.duplicate(true)
@@ -243,7 +345,7 @@ func purchase_upgrade(upgrade_id: String) -> Dictionary:
 	var result := upgrade_service.purchase(profile, content.rules, upgrade_id)
 	if bool(result.get("ok", false)):
 		var updated: Dictionary = result["profile"]
-		var save_result := save_service.save_profile(updated, int(content.rules["config_version"]))
+		var save_result := save_service.save_profile_slot(active_save_slot, updated, int(content.rules["config_version"]))
 		if not bool(save_result.get("ok", false)):
 			_record_failure("upgrade_save", save_result, "MainMenu")
 			var failure := save_result.duplicate(true)
@@ -266,7 +368,7 @@ func select_weapon(weapon_id: String) -> Dictionary:
 		return {"ok": false, "error_code": "weapon_locked", "profile": profile.duplicate(true)}
 	var updated := profile.duplicate(true)
 	updated["current_weapon_id"] = weapon_id
-	var save_result := save_service.save_profile(updated, int(content.rules["config_version"]))
+	var save_result := save_service.save_profile_slot(active_save_slot, updated, int(content.rules["config_version"]))
 	if not bool(save_result.get("ok", false)):
 		_record_failure("weapon_save", save_result, "MainMenu")
 		var failure := save_result.duplicate(true)
@@ -281,7 +383,7 @@ func select_weapon(weapon_id: String) -> Dictionary:
 func complete_tutorial() -> Dictionary:
 	var updated := profile.duplicate(true)
 	updated["tutorial_complete"] = true
-	var result := save_service.save_profile(updated, int(content.rules.get("config_version", 0)))
+	var result := save_service.save_profile_slot(active_save_slot, updated, int(content.rules.get("config_version", 0)))
 	if bool(result.get("ok", false)):
 		profile = updated
 		profile_changed.emit(profile.duplicate(true))
@@ -312,7 +414,7 @@ func update_profile_field(key: String, value: Variant) -> Dictionary:
 	var previous := profile.duplicate(true)
 	var updated := profile.duplicate(true)
 	updated[key] = value
-	var save_result := save_service.save_profile(updated, int(content.rules["config_version"]))
+	var save_result := save_service.save_profile_slot(active_save_slot, updated, int(content.rules["config_version"]))
 	if not bool(save_result.get("ok", false)):
 		_record_failure("profile_field_save", save_result, "MainMenu")
 		profile = previous
@@ -432,5 +534,7 @@ func _default_settings() -> Dictionary:
 		"aim_assist": true,
 		"auto_fire": true,
 		"screen_shake": true,
-		"ui_scale": 1.0
+		"ui_scale": 1.0,
+		# Machine-level preference: which portable slot file the game loads.
+		"active_save_slot": 1
 	}

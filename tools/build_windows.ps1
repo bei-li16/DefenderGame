@@ -24,7 +24,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Content validation failed; Windows export was not attempted.'
 }
 
-foreach ($testScript in @('res://tests/run_all.gd', 'res://tests/stage_autoplay.gd')) {
+foreach ($testScript in @('res://tests/run_all.gd', 'res://tests/stage_autoplay.gd', 'res://tests/save_slot_acceptance.gd')) {
     & $GodotConsole --headless --path $repository --script $testScript
     if ($LASTEXITCODE -ne 0) {
         throw "Required headless test failed: $testScript"

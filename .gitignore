@@ -25,3 +25,6 @@ Thumbs.db
 Desktop.ini
 *.tmp
 *.log
+
+# Portable save slots created next to the EXE / inside the project during editor runs
+/savedata/

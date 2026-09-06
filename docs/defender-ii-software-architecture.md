@@ -32,7 +32,7 @@
 | UI | Control、Container、Theme | 设计分辨率 1920×1080，使用 stretch 和锚点适配 |
 | 输入 | InputMap | `ui_*` 与 `combat_*` action 分离，鼠标/键盘首发 |
 | 内容 | JSON 规则 + `.tres` 资源目录 + PackedScene | JSON 是规则真源，Resource 只映射表现资产 |
-| 存档 | FileAccess/DirAccess + JSON + hash/备份 | 保存于 `user://`，不使用数据库 |
+| 存档 | FileAccess/DirAccess + JSON + hash/备份 | 槽位文件保存于 EXE 同级 `savedata/`（可携带），偏好与日志在 `user://`，不使用数据库 |
 | 测试 | 自有轻量 headless runner | 不依赖测试 addon；失败返回非零退出码 |
 | 构建 | Windows Desktop export preset | Windows x86_64，EXE/PCK 打 ZIP |
 | 版本管理 | Git | 提交 `project.godot`、场景、资源、`.uid` 和 export preset |
@@ -60,7 +60,7 @@ Godot 官方给出的推荐存储约为 1.5GB（编辑器、模板和缓存）�
 - Compatibility Renderer。
 - 窗口、无边框窗口、全屏。
 - 1920×1080 设计分辨率；验证 1366×768、1920×1080、2560×1440。
-- 普通用户权限运行，存档写入 `user://`。
+- 普通用户权限运行，存档写入 EXE 同级 `savedata/`；目录不可写时保存事务按失败路径处理，不静默降级。
 
 ## 4. 工程结构
 
@@ -343,13 +343,24 @@ skill_id -> icon / effect_scene / sound_id
 
 ## 11. 持久化与迁移
 
+存档为可携带的多槽位文件，存放于 EXE 同级的 `savedata/` 目录（编辑器内运行时为项目 `savedata/`），整目录拷贝即可迁移到其他电脑：
+
 ```text
-user://profile.json
-user://profile.json.bak
-user://settings.json
-user://replays/             # 调试或用户主动导出
-user://logs/                # 限量轮转
+<exe_dir>/savedata/slot_1.json        # 活动存档槽位（共 3 个：slot_1..slot_3）
+<exe_dir>/savedata/slot_N.json.bak    # 每槽位独立备份
+<exe_dir>/savedata/settings.json      # 机器级偏好（音量/语言/分辨率/active_save_slot）
+<exe_dir>/savedata/profile.json       # 旧版单档文件；仅在迁移时读取，保留作备份
+user://replays/                       # 调试或用户主动导出
+user://logs/                          # 限量轮转
 ```
+
+槽位规则：
+
+- `SaveService.save_profile_slot/load_profile_slot` 按槽位读写；`GameApp` 将所有 Profile 事务路由到 `active_save_slot`（默认 1，保存在 settings 中）。
+- 首次启动迁移：slot 1 缺失而旧 `profile.json` 存在时，旧档被槽位 1 采纳并落盘为 `slot_1.json`（旧文件保留不删）。
+- 切换存档：先冲刷当前槽位的游戏时长，再加载目标槽位（空槽位立即生成新档），设置写入成功后才切换内存 Profile；任何一步失败都保持原槽位。
+- 游戏时长（`stats.playtime_seconds`）由 `GameApp` 缓冲，满 30 秒、结算、返回主菜单或窗口关闭时落盘。
+- 存档管理页读取 `read_slot_summary`（只读摘要：通关数/杀敌数/金币/水晶/时长/最后保存时间），荣誉堂展示同一份统计。
 
 存档信封：
 
