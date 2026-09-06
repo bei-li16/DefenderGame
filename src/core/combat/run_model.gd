@@ -274,6 +274,13 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 	var strength_level := _upgrade_level("strength")
 	var agility_level := _upgrade_level("agility")
 	var base_damage := _percent_boosted(int(weapon.get("damage", 1)) + strength_level * _upgrade_effect_per_level("strength"), "weapon_damage_pct")
+	# Weapons research forge chain: +effect_per_level permille per level.
+	var forge_id := str(weapon.get("forge_upgrade_id", ""))
+	if not forge_id.is_empty():
+		var forge_level := _upgrade_level(forge_id)
+		if forge_level > 0:
+			# effect_per_level is expressed in percent, so scale to permille.
+			base_damage = base_damage * (1000 + forge_level * _upgrade_effect_per_level(forge_id) * 10) / 1000
 	var power_chance := clampi(int(weapon.get("power_shot_chance_per_10000", 0)) + _upgrade_level("power_mastery") * _upgrade_effect_per_level("power_mastery"), 0, 10000)
 	var projectile_count := maxi(1, int(weapon.get("projectile_count", 1)) + _upgrade_level("hurricane_mastery") * _upgrade_effect_per_level("hurricane_mastery"))
 	var pierce := maxi(0, int(weapon.get("pierce", 0)) + _upgrade_level("phantom_mastery") * _upgrade_effect_per_level("phantom_mastery"))

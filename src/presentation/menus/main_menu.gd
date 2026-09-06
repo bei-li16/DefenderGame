@@ -223,6 +223,10 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	page_tabs.add_theme_constant_override("separation", 8)
 	for page in GameApp.content.rules.get("research_pages", []):
 		var page_button := _button(GameApp.text(str(page.get("name_key", page.get("id", "")))), 48)
+		# Five tabs must share the panel width: clip long labels instead of
+		# pushing the minimum width past the canvas (layout gate AT-013).
+		page_button.clip_text = true
+		page_button.tooltip_text = GameApp.text(str(page.get("name_key", page.get("id", ""))))
 		page_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var selected_page := str(page.get("id", ""))
 		page_button.disabled = selected_page == page_id
@@ -287,11 +291,24 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	var detail_button := _button("", 64)
 	detail_button.custom_minimum_size = Vector2(180, 64)
 	detail_right.add_child(detail_button)
+	# Weapons page extra: equip the bow referenced by the selected node.
+	var detail_equip := _button(GameApp.text("research.equip"), 64)
+	detail_equip.custom_minimum_size = Vector2(150, 64)
+	detail_equip.visible = false
+	detail_row.add_child(detail_equip)
 
 	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
 	var definitions_by_id := {}
 	for definition in page_definitions:
 		definitions_by_id[str(definition.get("id", ""))] = definition
+	# Bows unlocked before the weapons research page existed (stage-based
+	# legacy saves) count as their unlock node already purchased.
+	if page_id == "weapons":
+		upgrades = upgrades.duplicate(true)
+		for weapon_id in GameApp.profile.get("unlocked_weapons", []):
+			var unlock_key := "unlock_" + str(weapon_id)
+			if definitions_by_id.has(unlock_key):
+				upgrades[unlock_key] = 1
 
 	var refresh_detail := func() -> void:
 		var upgrade_id := tree.selected()
@@ -322,11 +339,32 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			prerequisite_text
 		]
 		var price := GameApp.upgrade_service.price_for_level(definition, level)
-		detail_price.text = GameApp.text("common.max") if level >= max_level else "◆ %d" % price
-		detail_button.text = GameApp.text("common.upgrade") if level < max_level else GameApp.text("common.max")
-		detail_button.disabled = level >= max_level or int(GameApp.profile.get("coins", 0)) < price or not prerequisites_met
+		var weapon_ref := str(definition.get("weapon_ref", ""))
+		var already_unlocked: bool = not weapon_ref.is_empty() and GameApp.profile.get("unlocked_weapons", []).has(weapon_ref)
+		detail_price.text = GameApp.text("common.max") if level >= max_level else ("✦" if already_unlocked else "◆ %d" % price)
+		detail_button.text = GameApp.text("research.unlocked") if already_unlocked else (GameApp.text("common.upgrade") if level < max_level else GameApp.text("common.max"))
+		detail_button.disabled = level >= max_level or already_unlocked or int(GameApp.profile.get("coins", 0)) < price or not prerequisites_met
+		# Weapons page: show the referenced bow's stats and offer equipping it.
+		if not weapon_ref.is_empty():
+			var weapon_definition: Dictionary = GameApp.content.find_by_id("weapons", weapon_ref)
+			if not weapon_definition.is_empty():
+				detail_body.text += "
+%s" % _weapon_summary(weapon_definition)
+			var unlocked_weapons: Array = GameApp.profile.get("unlocked_weapons", [])
+			detail_equip.visible = unlocked_weapons.has(weapon_ref) and str(GameApp.profile.get("current_weapon_id", "basic_bow")) != weapon_ref
+			detail_equip.disabled = not unlocked_weapons.has(weapon_ref)
+		else:
+			detail_equip.visible = false
 
 	tree.node_selected.connect(func(_upgrade_id: String) -> void: refresh_detail.call())
+	detail_equip.pressed.connect(func() -> void:
+		var upgrade_id := tree.selected()
+		var definition: Dictionary = definitions_by_id.get(upgrade_id, {})
+		var weapon_ref := str(definition.get("weapon_ref", ""))
+		if not weapon_ref.is_empty() and bool(GameApp.select_weapon(weapon_ref).get("ok", false)):
+			_refresh_header()
+			_show_research_page(page_id, upgrade_id, scroll.scroll_vertical)
+	)
 	detail_button.pressed.connect(func() -> void:
 		var upgrade_id := tree.selected()
 		var purchase_result := GameApp.purchase_upgrade(upgrade_id)
@@ -820,7 +858,9 @@ func _rebuild_loadout() -> void:
 				)
 		else:
 			icon.modulate = Color(0.55, 0.6, 0.68, 1)
-			icon.tooltip_text = "%s\n🔒 %s %02d" % [weapon_name, GameApp.text("common.stage"), int(definition.get("unlock_stage", 1))]
+			icon.tooltip_text = "%s\n🔒 %s" % [weapon_name, GameApp.text("research.visit_hint")]
+			icon.disabled = false
+			icon.pressed.connect(func() -> void: _show_research_page("weapons", "unlock_" + weapon_id))
 		if weapon_id == current_id:
 			for state in ["normal", "hover", "pressed", "disabled"]:
 				icon.add_theme_stylebox_override(state, _loadout_frame(true))

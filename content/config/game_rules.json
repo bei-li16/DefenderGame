@@ -60,6 +60,7 @@
       "name_key": "weapon.power_bow",
       "description_key": "weapon.power_bow.desc",
       "unlock_stage": 5,
+      "forge_upgrade_id": "forge_power_bow",
       "damage": 52,
       "interval_ticks": 12,
       "min_interval_ticks": 5,
@@ -78,6 +79,7 @@
       "name_key": "weapon.hurricane_bow",
       "description_key": "weapon.hurricane_bow.desc",
       "unlock_stage": 10,
+      "forge_upgrade_id": "forge_hurricane_bow",
       "damage": 24,
       "interval_ticks": 12,
       "min_interval_ticks": 5,
@@ -96,6 +98,7 @@
       "name_key": "weapon.phantom_bow",
       "description_key": "weapon.phantom_bow.desc",
       "unlock_stage": 15,
+      "forge_upgrade_id": "forge_phantom_bow",
       "damage": 40,
       "interval_ticks": 9,
       "min_interval_ticks": 4,
@@ -527,6 +530,7 @@
     {"id":"attack","name_key":"research.attack","description_key":"research.attack.desc","upgrade_ids":["strength","agility","power_mastery","hurricane_mastery","phantom_mastery"]},
     {"id":"magic","name_key":"research.magic","description_key":"research.magic.desc","upgrade_ids":["fire_mastery","ice_mastery","lightning_mastery","mana_capacity","mana_regen","spell_radius","cooldown_mastery"]},
     {"id":"defense","name_key":"research.defense","description_key":"research.defense.desc","upgrade_ids":["wall_armor","wall_repair","lava_moat","magic_tower"]},
+      {"id":"weapons","name_key":"research.weapons","description_key":"research.weapons.desc","upgrade_ids":["unlock_power_bow","forge_power_bow","unlock_hurricane_bow","forge_hurricane_bow","unlock_phantom_bow","forge_phantom_bow"]},
     {"id":"utility","name_key":"research.utility","description_key":"research.utility.desc","upgrade_ids":["coin_bounty","xp_bounty"]}
   ],
   "upgrades": [
@@ -548,6 +552,13 @@
     {"id":"magic_tower","name_key":"upgrade.magic_tower","description_key":"upgrade.magic_tower.desc","page":"defense","max_level":5,"base_cost":240,"cost_growth_permille":1650,"effect_per_level":1,"prerequisites":["wall_repair"]},
     {"id":"coin_bounty","name_key":"upgrade.coin_bounty","description_key":"upgrade.coin_bounty.desc","page":"utility","max_level":10,"base_cost":180,"cost_growth_permille":1500,"effect_per_level":1,"prerequisites":[]},
     {"id":"xp_bounty","name_key":"upgrade.xp_bounty","description_key":"upgrade.xp_bounty.desc","page":"utility","max_level":10,"base_cost":180,"cost_growth_permille":1500,"effect_per_level":1,"prerequisites":[]}
+  ,
+      {"id":"unlock_power_bow","page":"weapons","name_key":"upgrade.unlock_power_bow","description_key":"upgrade.unlock_power_bow.desc","max_level":1,"base_cost":600,"cost_growth_permille":1000,"effect_per_level":1,"prerequisites":[],"weapon_ref":"power_bow"},
+      {"id":"forge_power_bow","page":"weapons","name_key":"upgrade.forge_power_bow","description_key":"upgrade.forge_power_bow.desc","max_level":5,"base_cost":400,"cost_growth_permille":1500,"effect_per_level":8,"prerequisites":["unlock_power_bow"],"weapon_ref":"power_bow"},
+      {"id":"unlock_hurricane_bow","page":"weapons","name_key":"upgrade.unlock_hurricane_bow","description_key":"upgrade.unlock_hurricane_bow.desc","max_level":1,"base_cost":1200,"cost_growth_permille":1000,"effect_per_level":1,"prerequisites":[],"weapon_ref":"hurricane_bow"},
+      {"id":"forge_hurricane_bow","page":"weapons","name_key":"upgrade.forge_hurricane_bow","description_key":"upgrade.forge_hurricane_bow.desc","max_level":5,"base_cost":500,"cost_growth_permille":1500,"effect_per_level":8,"prerequisites":["unlock_hurricane_bow"],"weapon_ref":"hurricane_bow"},
+      {"id":"unlock_phantom_bow","page":"weapons","name_key":"upgrade.unlock_phantom_bow","description_key":"upgrade.unlock_phantom_bow.desc","max_level":1,"base_cost":2000,"cost_growth_permille":1000,"effect_per_level":1,"prerequisites":[],"weapon_ref":"phantom_bow"},
+      {"id":"forge_phantom_bow","page":"weapons","name_key":"upgrade.forge_phantom_bow","description_key":"upgrade.forge_phantom_bow.desc","max_level":5,"base_cost":600,"cost_growth_permille":1500,"effect_per_level":8,"prerequisites":["unlock_phantom_bow"],"weapon_ref":"phantom_bow"}
   ],
   "stages": [
     {"id":"stage_001","number":1,"name_key":"stage.001","boss":false,"groups":[{"enemy_id":"melee_basic","count":10,"interval_ticks":36}],"clear_reward":{"coins":80,"xp":25}},

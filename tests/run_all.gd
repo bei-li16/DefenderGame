@@ -54,6 +54,7 @@ func _run() -> void:
 		_test_progression_and_battle_record(content.rules)
 		_test_honor_chains(content.rules)
 		_test_honor_bonuses(content.rules)
+		_test_weapon_research(content.rules)
 		_test_event_position_anchor_contract(content.rules)
 		_test_migration()
 		_test_hashless_legacy_load()
@@ -894,6 +895,53 @@ func _test_honor_bonuses(source_config: Dictionary) -> void:
 				else:
 					boosted_fire_damage = int(event.get("amount", 0))
 	_expect(fire_damage > 0 and boosted_fire_damage == fire_damage * 1030 / 1000, "Fire Master honor boosts fire damage by 3% per level")
+
+
+func _test_weapon_research(source_config: Dictionary) -> void:
+	# Forge chain: each level of forge_power_bow adds +8% to power_bow damage.
+	var bow := _find_by_id_public(source_config, "weapons", "power_bow")
+	_expect(not bow.is_empty() and str(bow.get("forge_upgrade_id", "")) == "forge_power_bow", "power_bow references its forge upgrade")
+	var base_damage := int(bow.get("damage", 0))
+	var baseline := -1
+	var forged := -1
+	for forge_level in [0, 2]:
+		var upgrades := {"forge_power_bow": forge_level, "unlock_power_bow": 1}
+		var model := RunModel.new()
+		model.setup(source_config, "stage_001", 31337, {"current_weapon_id": "power_bow", "unlocked_weapons": ["basic_bow", "power_bow"], "upgrades": upgrades})
+		var seen := 0
+		for step_index in range(90):
+			var commands: Array = []
+			var visible: Array = model.snapshot().get("enemies", [])
+			if not visible.is_empty():
+				commands.append({"type": "aim", "x_milli": int(visible[0]["x_milli"]), "y_milli": int(visible[0]["y_milli"])})
+			commands.append({"type": "fire_started"})
+			var events: Array[Dictionary] = model.step(commands)
+			for event in events:
+				if str(event.get("type", "")) == "shot":
+					var projectiles: Array = model.snapshot().get("projectiles", [])
+					if not projectiles.is_empty():
+						seen = int(projectiles[0].get("damage", 0))
+						break
+			if seen > 0:
+				break
+		if forge_level == 0:
+			baseline = seen
+		else:
+			forged = seen
+	_expect(baseline > 0 and forged == baseline * 1160 / 1000, "forge level 2 raises power_bow damage by 16% over its base")
+	# The unlock node and forge chain are wired into the weapons research page.
+	var page_ids: Array[String] = []
+	for page in source_config.get("research_pages", []):
+		page_ids.append(str(page.get("id", "")))
+	_expect(page_ids.has("weapons"), "research pages include the weapons page")
+	_expect(_find_by_id_public(source_config, "upgrades", "forge_hurricane_bow").get("prerequisites", []).has("unlock_hurricane_bow"), "forge chains require their unlock node")
+
+
+func _find_by_id_public(source_config: Dictionary, collection: String, item_id: String) -> Dictionary:
+	for value in source_config.get(collection, []):
+		if value is Dictionary and str(value.get("id", "")) == item_id:
+			return value
+	return {}
 
 
 func _find_honor(source_config: Dictionary, honor_id: String) -> Dictionary:

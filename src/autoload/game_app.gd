@@ -313,7 +313,7 @@ func settle_run(result: Dictionary) -> Dictionary:
 	if str(result.get("status", "")) == "victory":
 		var stage_count := maxi(1, content.rules.get("stages", []).size())
 		updated["highest_unlocked_stage"] = mini(stage_count, maxi(int(updated.get("highest_unlocked_stage", 1)), stage_number + 1))
-	updated = _unlock_weapons_for_stage(updated, int(updated.get("highest_unlocked_stage", 1)))
+	updated = _ensure_equipped_weapon_unlocked(updated)
 	var best_results: Dictionary = updated.get("best_results", {}).duplicate(true)
 	var stage_id := str(result.get("stage_id", ""))
 	var previous: Dictionary = best_results.get(stage_id, {})
@@ -353,6 +353,13 @@ func purchase_upgrade(upgrade_id: String) -> Dictionary:
 		var updated_stats: Dictionary = updated.get("stats", {}).duplicate(true)
 		updated_stats["coins_spent"] = int(updated_stats.get("coins_spent", 0)) + int(result.get("price", 0))
 		updated["stats"] = updated_stats
+		# Weapon research: buying an "unlock_<weapon>" node grants the bow.
+		if upgrade_id.begins_with("unlock_"):
+			var weapon_id := upgrade_id.trim_prefix("unlock_")
+			var unlocked: Array = updated.get("unlocked_weapons", []).duplicate()
+			if not unlocked.has(weapon_id):
+				unlocked.append(weapon_id)
+			updated["unlocked_weapons"] = unlocked
 		var save_result := save_service.save_profile_slot(active_save_slot, updated, int(content.rules["config_version"]))
 		if not bool(save_result.get("ok", false)):
 			_record_failure("upgrade_save", save_result, "MainMenu")
@@ -506,7 +513,7 @@ func _normalize_profile(source: Dictionary) -> Dictionary:
 	normalized["upgrades"] = upgrades
 	var stage_count := maxi(1, content.rules.get("stages", []).size())
 	normalized["highest_unlocked_stage"] = clampi(int(normalized.get("highest_unlocked_stage", 1)), 1, stage_count)
-	normalized = _unlock_weapons_for_stage(normalized, int(normalized["highest_unlocked_stage"]))
+	normalized = _ensure_equipped_weapon_unlocked(normalized)
 	var stats: Dictionary = normalized.get("stats", {}).duplicate(true)
 	for stat_key in defaults["stats"].keys():
 		if not stats.has(stat_key):
@@ -515,14 +522,14 @@ func _normalize_profile(source: Dictionary) -> Dictionary:
 	return normalized
 
 
-func _unlock_weapons_for_stage(source: Dictionary, stage_number: int) -> Dictionary:
+# Weapons are unlocked through the weapons research page now; stage progress
+# no longer grants them.  Only keep the equipped bow valid (a legacy profile
+# may still list a bow its slot no longer considers unlocked).
+func _ensure_equipped_weapon_unlocked(source: Dictionary) -> Dictionary:
 	var updated := source.duplicate(true)
 	var unlocked: Array = updated.get("unlocked_weapons", []).duplicate()
-	for weapon in content.rules.get("weapons", []):
-		if weapon is Dictionary and int(weapon.get("unlock_stage", 1)) <= stage_number:
-			var weapon_id := str(weapon.get("id", ""))
-			if not unlocked.has(weapon_id):
-				unlocked.append(weapon_id)
+	if not unlocked.has("basic_bow"):
+		unlocked.append("basic_bow")
 	updated["unlocked_weapons"] = unlocked
 	if not unlocked.has(str(updated.get("current_weapon_id", "basic_bow"))):
 		updated["current_weapon_id"] = "basic_bow"

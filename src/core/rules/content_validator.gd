@@ -12,6 +12,8 @@ const REQUIRED_UI_KEYS: Array[String] = [
 	"result.victory", "result.defeat", "result.kills", "result.wave", "result.coins", "result.xp", "result.wall", "result.next", "result.retry_save", "result.honors", "result.weapon", "result.stage_unlocked",
 	"result.wins", "result.losses", "result.win_rate", "result.level_up", "status.level_short", "honor.reward",
 	"result.crystals", "status.player_name", "status.name_hint",
+	"research.weapons", "research.visit_hint", "research.unlocked", "research.equip", "upgrade.unlock_power_bow", "upgrade.forge_power_bow",
+	"upgrade.unlock_hurricane_bow", "upgrade.forge_hurricane_bow", "upgrade.unlock_phantom_bow", "upgrade.forge_phantom_bow",
 	"feedback.no_mana", "feedback.cooldown", "feedback.invalid_target", "feedback.fatal", "feedback.power", "feedback.boss", "feedback.defense", "feedback.wall_damage", "feedback.save_failed",
 	"tutorial.title", "tutorial.body", "dialog.abandon_run",
 	"settings.title", "settings.language", "settings.master", "settings.music", "settings.sfx",
