@@ -829,9 +829,10 @@ func _refresh_header() -> void:
 	_rebuild_loadout()
 
 
-# Original-style loadout strip in the top bar: every bow is an icon (click to
-# equip; the gold frame marks the equipped one) followed by the three battle
-# spell icons, replacing the old weapons list page.
+# Original-style loadout strip in the top bar: a single slot for the equipped
+# bow (click it for the bow dropdown) followed by the three battle spells.
+# The dropdown lists every bow: unlocked ones equip on click, locked ones
+# route into the weapons research page.
 func _rebuild_loadout() -> void:
 	if _loadout_row == null:
 		return
@@ -840,31 +841,53 @@ func _rebuild_loadout() -> void:
 		child.queue_free()
 	var current_id := str(GameApp.profile.get("current_weapon_id", "basic_bow"))
 	var unlocked: Array = GameApp.profile.get("unlocked_weapons", [])
+	var current_definition: Dictionary = GameApp.content.find_by_id("weapons", current_id)
+	var slot := Button.new()
+	slot.text = "%s %s" % [str(WEAPON_GLYPHS.get(current_id, "🏹")), GameApp.text("loadout.dropdown_hint")]
+	slot.custom_minimum_size = Vector2(120, 56)
+	slot.add_theme_font_size_override("font_size", 27)
+	slot.clip_text = true
+	slot.tooltip_text = "%s
+%s" % [GameApp.text(str(current_definition.get("name_key", current_id))), _weapon_summary(current_definition)]
+	var bow_menu := PopupMenu.new()
+	slot.add_child(bow_menu)
+	var index_by_item := {}
+	var item_index := 0
 	for definition in GameApp.content.rules.get("weapons", []):
 		var weapon_id := str(definition.get("id", ""))
 		var weapon_name := GameApp.text(str(definition.get("name_key", weapon_id)))
-		var is_unlocked := unlocked.has(weapon_id)
-		var icon := Button.new()
-		icon.text = str(WEAPON_GLYPHS.get(weapon_id, "🏹"))
-		icon.custom_minimum_size = Vector2(56, 56)
-		icon.add_theme_font_size_override("font_size", 27)
-		icon.disabled = not is_unlocked
-		if is_unlocked:
-			icon.tooltip_text = "%s\n%s" % [weapon_name, _weapon_summary(definition)]
-			if weapon_id != current_id:
-				icon.pressed.connect(func() -> void:
-					if bool(GameApp.select_weapon(weapon_id).get("ok", false)):
-						_refresh_header()
-				)
-		else:
-			icon.modulate = Color(0.55, 0.6, 0.68, 1)
-			icon.tooltip_text = "%s\n🔒 %s" % [weapon_name, GameApp.text("research.visit_hint")]
-			icon.disabled = false
-			icon.pressed.connect(func() -> void: _show_research_page("weapons", "unlock_" + weapon_id))
 		if weapon_id == current_id:
-			for state in ["normal", "hover", "pressed", "disabled"]:
-				icon.add_theme_stylebox_override(state, _loadout_frame(true))
-		_loadout_row.add_child(icon)
+			bow_menu.add_item("✓  " + weapon_name, item_index)
+			bow_menu.set_item_disabled(item_index, true)
+		elif unlocked.has(weapon_id):
+			bow_menu.add_item("      " + weapon_name, item_index)
+			index_by_item[item_index] = weapon_id
+		else:
+			# Locked bows route into the weapons research page; show the price
+			# from that page's unlock node (single source of truth).
+			var unlock_node: Dictionary = GameApp.content.find_by_id("upgrades", "unlock_" + weapon_id)
+			var price := int(unlock_node.get("base_cost", 0))
+			if price > 0:
+				bow_menu.add_item("🔒  %s  ·  ◆ %d" % [weapon_name, price], item_index)
+			else:
+				bow_menu.add_item("🔒  %s" % weapon_name, item_index)
+			index_by_item[item_index] = "unlock_" + weapon_id
+		bow_menu.set_item_tooltip(item_index, weapon_name + "  ·  " + _weapon_summary(definition))
+		item_index += 1
+	bow_menu.index_pressed.connect(func(item_index: int) -> void:
+		var target: String = index_by_item.get(item_index, "")
+		if target.is_empty():
+			return
+		if target.begins_with("unlock_"):
+			_show_research_page("weapons", target)
+		elif bool(GameApp.select_weapon(target).get("ok", false)):
+			_refresh_header()
+	)
+	slot.pressed.connect(func() -> void:
+		var corner := slot.get_global_rect().position + Vector2(0.0, slot.size.y)
+		bow_menu.popup(Rect2(corner, Vector2(300, 10)))
+	)
+	_loadout_row.add_child(slot)
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(16, 0)
 	_loadout_row.add_child(gap)
@@ -874,7 +897,6 @@ func _rebuild_loadout() -> void:
 		spell.custom_minimum_size = Vector2(56, 56)
 		spell.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		spell.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		spell.add_theme_font_size_override("font_size", 27)
 		spell.add_theme_stylebox_override("normal", _loadout_frame(false))
 		spell.tooltip_text = GameApp.text(str(spell_definition[1]))
 		_loadout_row.add_child(spell)

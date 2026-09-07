@@ -260,7 +260,8 @@
     "upgrade.forge_phantom_bow": "锻造：幻影长弓",
     "upgrade.forge_phantom_bow.desc": "每级使幻影长弓伤害 +8%。",
     "research.unlocked": "已解锁",
-    "research.equip": "装备"
+    "research.equip": "装备",
+    "loadout.dropdown_hint": "▾"
   },
   "en_US": {
     "app.title": "Aegis of Ember",
@@ -523,6 +524,7 @@
     "upgrade.forge_phantom_bow": "Forge: Phantom Bow",
     "upgrade.forge_phantom_bow.desc": "Each level adds +8% Phantom Bow damage.",
     "research.unlocked": "Unlocked",
-    "research.equip": "Equip"
+    "research.equip": "Equip",
+    "loadout.dropdown_hint": "▾"
   }
 }
