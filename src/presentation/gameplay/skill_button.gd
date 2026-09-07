@@ -14,6 +14,8 @@ var cooldown_ratio: float = 0.0
 var mana_ok: bool = true
 var selected: bool = false
 var low_mana_text: String = "Low Mana"
+var tier: int = 1
+var mana_cost: int = 0
 
 
 func _init() -> void:
@@ -60,7 +62,7 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	var glyph_size := int(radius * 0.72)
 	var glyph_color := Color.WHITE if mana_ok else Color("ff8d7a")
-	draw_string(font, center + Vector2(-radius, glyph_size * 0.35), glyph, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, glyph_size, glyph_color)
+	draw_string(font, center + Vector2(-radius, glyph_size * 0.15), glyph, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, glyph_size, glyph_color)
 	if not hotkey.is_empty():
 		# Numbered keybind badge (参考 skill buttons show the hotkey); top-right
 		# chip so keyboard players can match the 1/2/3 keys without guessing.
@@ -72,7 +74,9 @@ func _draw() -> void:
 		draw_string(font, badge_center + Vector2(-badge_radius, badge_size * 0.34), hotkey, HORIZONTAL_ALIGNMENT_CENTER, badge_radius * 2.0, badge_size, Color("101d2d"))
 	if not mana_ok:
 		var text_size := 15
-		draw_string(font, center + Vector2(-radius, radius * 0.62), low_mana_text, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, text_size, Color("ff6b5e"))
+		draw_string(font, center + Vector2(-radius, radius * 0.4), low_mana_text, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, text_size, Color("ff6b5e"))
+	draw_string(font, center + Vector2(-radius, radius * 0.78), "◈ %d" % mana_cost, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, 18, Color("91d9ff"))
+	draw_string(font, center + Vector2(-radius * 0.75, -radius * 0.45), ["Ⅰ", "Ⅱ", "Ⅲ"][clampi(tier, 1, 3) - 1], HORIZONTAL_ALIGNMENT_LEFT, 30, 20, Color("ffd166"))
 
 
 func _gui_input(event: InputEvent) -> void:

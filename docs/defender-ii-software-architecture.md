@@ -142,6 +142,8 @@ docs/
 - `CombatSystem`：命中、护甲、伤害、Fatal Blow、击退和死亡。
 - `ProjectileSystem`：弹道、连续碰撞和销毁。
 - `SkillSystem`：Mana、冷却、范围效果、状态和打断。
+- `SkillCatalog`：三系技能可用性、装备归一化与有效属性的纯规则查询；研究预览、HUD、指示器和战斗共用，避免升级后显示与实际效果不一致。
+- `AttackCatalog`：攻击研究的共享有效属性、战斗经验倍率和旧研究退款纯函数。RunModel 在关卡开始计算 `attack_stats`；菜单详情与武器摘要使用同一查询，不重复维护公式。
 - `DefenseSystem`：城墙，以及版本 1 的 Lava Moat/Magic Tower。
 - `ProgressionSystem`：金币、XP、升级和装备快照。
 - `DeterministicRng`：自有整数 RNG，按 stream 隔离生成、暴击和掉落。
@@ -179,6 +181,10 @@ func snapshot() -> RunSnapshot:
 - `TutorialController`：根据事件推进教学。
 
 表现层可以使用 Godot signal，但规则顺序不能由 signal 连接顺序决定。Application 每 tick 收集 core 返回的有序事件，再分发给视图。
+
+三级技能链中，`skill_cast` 表示一次扣费/施法，`skill_pulse` 表示实际一轮命中。多轮火雨与雷暴保存在 `RunModel.active_spells`，由固定 tick 调度并在 Run 结束时清空；表现层仅根据事件中的元素、阶位、半径与命中位置绘制。Profile 的 `equipped_skills` 经 Application 原子保存，每系固定一槽，随后进入的关卡使用不可变装备快照。配置和规则细节见 [`skill-chains-reimplementation.md`](skill-chains-reimplementation.md)。
+
+攻击研究中，Projectile 快照包含实际箭伤、暴击、击退距离和毒伤/时长/间隔。命中系统只使用该快照；敌人保存独立毒计时，固定 tick 跳伤，刷新不重置倒计时。高级猎人的击杀、通关经验经同一纯函数写入事件与结算，沿用永久奖励幂等账本。来源、等级表与边界约定见 [`attack-research-reimplementation.md`](attack-research-reimplementation.md)。
 
 ### 6.4 Infrastructure
 
@@ -384,6 +390,8 @@ saved_at_utc
 结算生成 `run_id + reward_version` 幂等键，与 Profile 一起保存。重复键只返回已有结果，不再次增加金币或 XP。
 
 迁移器按 `v1 -> v2 -> v3` 顺序执行。迁移在内存副本上完成，通过校验后才写新主档；失败不能覆盖旧档。
+
+攻击树使用附加迁移标记 `attack_research_revision`（当前 1），不改变 schema v6。历史三项精通的退款、归档等级与标记由 `AttackCatalog.normalize_profile()` 在副本上一次计算，并随 Application 存档事务一并保存。该标记不进入通用默认补齐，防止旧档提前获得标记而漏迁移；详见攻击研究专项验收。
 
 ## 12. Headless 测试
 

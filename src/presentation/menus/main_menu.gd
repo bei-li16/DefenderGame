@@ -4,8 +4,13 @@ const UiTheme = preload("res://src/presentation/ui_theme.gd")
 const MenuBackdrop = preload("res://src/presentation/menus/menu_backdrop.gd")
 const ResearchTree = preload("res://src/presentation/menus/research_tree.gd")
 const Progression = preload("res://src/core/rules/progression.gd")
+const SkillCatalog = preload("res://src/core/rules/skill_catalog.gd")
+const SkillText = preload("res://src/presentation/skill_text.gd")
+const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
+const AttackText = preload("res://src/presentation/attack_text.gd")
 
 var _content_panel: PanelContainer
+var _identity_panel: PanelContainer
 var _content_margin: MarginContainer
 var _coins_label: Label
 var _crystals_label: Label
@@ -13,6 +18,8 @@ var _xp_label: Label
 var _xp_bar: ProgressBar
 var _stage_label: Label
 var _loadout_row: HBoxContainer
+var _loadout_error: Label
+var _research_detail_refresh: Callable
 var _settings_note: Label
 
 const WEAPON_GLYPHS := {
@@ -31,6 +38,7 @@ func _ready() -> void:
 
 
 func _build_layout() -> void:
+	_research_detail_refresh = Callable()
 	var backdrop := MenuBackdrop.new()
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(backdrop)
@@ -87,6 +95,12 @@ func _build_layout() -> void:
 	_xp_bar.show_percentage = false
 	level_stack.add_child(_xp_bar)
 	_refresh_header()
+	_loadout_error = Label.new()
+	_loadout_error.name = "LoadoutError"
+	_loadout_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_loadout_error.add_theme_color_override("font_color", Color("ff8d7a"))
+	_loadout_error.visible = false
+	vertical.add_child(_loadout_error)
 
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -94,6 +108,7 @@ func _build_layout() -> void:
 	vertical.add_child(body)
 
 	var identity := PanelContainer.new()
+	_identity_panel = identity
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	identity.custom_minimum_size.x = 620
 	body.add_child(identity)
@@ -219,6 +234,11 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			page_title = GameApp.text(str(page.get("name_key", page_id)))
 			break
 	var stack := _new_content_stack(page_title)
+	# Research graphs use the full canvas, as in the reference screenshots.
+	var full_tree := page_id in ["magic", "attack"]
+	_identity_panel.visible = not full_tree
+	if full_tree:
+		stack.add_theme_constant_override("separation", 10)
 	var page_tabs := HBoxContainer.new()
 	page_tabs.add_theme_constant_override("separation", 8)
 	for page in GameApp.content.rules.get("research_pages", []):
@@ -235,8 +255,18 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	stack.add_child(page_tabs)
 	# Asset purses (参考 top bar): coin and crystal pills.
 	var wallet_row := HBoxContainer.new()
+	wallet_row.visible = not full_tree
 	wallet_row.add_theme_constant_override("separation", 14)
 	stack.add_child(wallet_row)
+	if page_id == "attack":
+		var research_note := Label.new()
+		research_note.add_theme_font_size_override("font_size", 16)
+		research_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		research_note.text = GameApp.text("attack.rules") % str(GameApp.content.rules["ruleset_version"])
+		var refund := int(GameApp.profile.get("attack_research_migration", {}).get("refunded_coins", 0))
+		if refund > 0:
+			research_note.text += "  " + GameApp.text("attack.refunded") % refund
+		stack.add_child(research_note)
 	var wallet_coins := Label.new()
 	wallet_coins.text = str(int(GameApp.profile.get("coins", 0)))
 	wallet_row.add_child(_make_asset_pill("◆", Color("ffd166"), wallet_coins))
@@ -244,6 +274,7 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	wallet_crystals.text = str(int(GameApp.profile.get("crystals", 0)))
 	wallet_row.add_child(_make_asset_pill("✦", Color("8fd3ff"), wallet_crystals))
 	var operation_error := Label.new()
+	operation_error.visible = false
 	operation_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	operation_error.add_theme_color_override("font_color", Color("ff8d7a"))
 	stack.add_child(operation_error)
@@ -251,6 +282,7 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(scroll)
 	# Tree layout (classic research pages): prerequisite chains linked by arrows.
+	scroll.name = "ResearchScroll"
 	var tree := ResearchTree.new()
 	tree.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(tree)
@@ -275,6 +307,7 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	detail_name.add_theme_font_size_override("font_size", 26)
 	detail_info.add_child(detail_name)
 	var detail_body := Label.new()
+	detail_body.name = "ResearchDetailBody"
 	detail_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail_body.add_theme_font_size_override("font_size", 18)
 	detail_info.add_child(detail_body)
@@ -289,10 +322,12 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	detail_price.add_theme_color_override("font_color", Color("ffd166"))
 	detail_right.add_child(detail_price)
 	var detail_button := _button("", 64)
+	detail_button.name = "ResearchPurchaseButton"
 	detail_button.custom_minimum_size = Vector2(180, 64)
 	detail_right.add_child(detail_button)
 	# Weapons page extra: equip the bow referenced by the selected node.
 	var detail_equip := _button(GameApp.text("research.equip"), 64)
+	detail_equip.name = "ResearchEquipButton"
 	detail_equip.custom_minimum_size = Vector2(150, 64)
 	detail_equip.visible = false
 	detail_row.add_child(detail_equip)
@@ -326,8 +361,9 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 		var prerequisites_met := true
 		for prerequisite in definition.get("prerequisites", []):
 			var prerequisite_id := str(prerequisite)
-			prerequisite_names.append(_upgrade_display_name(prerequisite_id))
-			if int(upgrades.get(prerequisite_id, 0)) <= 0:
+			var required := int(definition.get("prerequisite_levels", {}).get(prerequisite_id, 1))
+			prerequisite_names.append("%s Lv.%d" % [_upgrade_display_name(prerequisite_id), required])
+			if int(upgrades.get(prerequisite_id, 0)) < required:
 				prerequisites_met = false
 		var prerequisite_text := GameApp.text("upgrade.none") if prerequisite_names.is_empty() else ", ".join(prerequisite_names)
 		detail_name.text = "%s   %s%d / %d" % [GameApp.text(str(definition.get("name_key", upgrade_id))), GameApp.text("common.level"), level, max_level]
@@ -351,25 +387,57 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 				detail_body.text += "
 %s" % _weapon_summary(weapon_definition)
 			var unlocked_weapons: Array = GameApp.profile.get("unlocked_weapons", [])
-			detail_equip.visible = unlocked_weapons.has(weapon_ref) and str(GameApp.profile.get("current_weapon_id", "basic_bow")) != weapon_ref
-			detail_equip.disabled = not unlocked_weapons.has(weapon_ref)
+			var equipped := str(GameApp.profile.get("current_weapon_id", "basic_bow")) == weapon_ref
+			detail_equip.visible = unlocked_weapons.has(weapon_ref)
+			detail_equip.text = GameApp.text("menu.selected" if equipped else "research.equip")
+			detail_equip.disabled = equipped or not unlocked_weapons.has(weapon_ref)
 		else:
 			detail_equip.visible = false
+		if page_id == "attack":
+			var equipped_weapon := GameApp.content.find_by_id("weapons", str(GameApp.profile.get("current_weapon_id", "basic_bow")))
+			detail_body.text = GameApp.text(str(definition["description_key"])) + "\n"
+			detail_body.text += AttackText.detail(GameApp.content.rules, GameApp.profile, equipped_weapon, upgrade_id, GameApp.text)
+			detail_body.text += "\n" + GameApp.text("upgrade.prerequisites") + ": " + prerequisite_text
+		var skill_ref := str(definition.get("skill_ref", ""))
+		if not skill_ref.is_empty():
+			var current := SkillCatalog.effective(GameApp.content.rules, GameApp.profile, skill_ref)
+			var next_profile: Dictionary = GameApp.profile.duplicate(true)
+			next_profile["upgrades"][upgrade_id] = mini(max_level, level + 1)
+			var next := SkillCatalog.effective(GameApp.content.rules, next_profile, skill_ref)
+			var rate := int(GameApp.content.rules.get("simulation_tick_rate", 30))
+			detail_body.text = GameApp.text(str(definition["description_key"])) + "\n" + GameApp.text("skill.current") + SkillText.summary(current, GameApp.text, rate)
+			if level < max_level:
+				detail_body.text += "\n" + GameApp.text("skill.next") + SkillText.summary(next, GameApp.text, rate)
+			detail_body.text += "\n" + GameApp.text("upgrade.prerequisites") + ": " + prerequisite_text
+			var available := SkillCatalog.available(GameApp.content.rules, GameApp.profile, skill_ref)
+			var equipped := SkillCatalog.loadout(GameApp.content.rules, GameApp.profile).values().has(skill_ref)
+			detail_equip.visible = available
+			detail_equip.disabled = equipped
+			detail_equip.text = GameApp.text("menu.selected" if equipped else "research.equip")
 
 	tree.node_selected.connect(func(_upgrade_id: String) -> void: refresh_detail.call())
+	_research_detail_refresh = refresh_detail
 	detail_equip.pressed.connect(func() -> void:
 		var upgrade_id := tree.selected()
 		var definition: Dictionary = definitions_by_id.get(upgrade_id, {})
 		var weapon_ref := str(definition.get("weapon_ref", ""))
-		if not weapon_ref.is_empty() and bool(GameApp.select_weapon(weapon_ref).get("ok", false)):
-			_refresh_header()
-			_show_research_page(page_id, upgrade_id, scroll.scroll_vertical)
+		if not weapon_ref.is_empty():
+			_equip_weapon(weapon_ref)
+		var skill_ref := str(definition.get("skill_ref", ""))
+		if not skill_ref.is_empty():
+			var result := GameApp.select_skill(skill_ref)
+			operation_error.text = "" if bool(result.get("ok", false)) else GameApp.text("feedback.save_failed")
+			operation_error.visible = not bool(result.get("ok", false))
+			if bool(result.get("ok", false)):
+				_refresh_header()
+				refresh_detail.call()
 	)
 	detail_button.pressed.connect(func() -> void:
 		var upgrade_id := tree.selected()
 		var purchase_result := GameApp.purchase_upgrade(upgrade_id)
 		if not bool(purchase_result.get("ok", false)):
 			operation_error.text = GameApp.text("feedback.save_failed")
+			operation_error.visible = true
 			return
 		_refresh_header()
 		_show_research_page(page_id, upgrade_id, scroll.scroll_vertical)
@@ -386,40 +454,24 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 
 # One-line effective stats for the loadout icon tooltips.
 func _weapon_summary(definition: Dictionary) -> String:
+	var stats := AttackCatalog.effective(GameApp.content.rules, GameApp.profile, definition)
 	return "%s: %d  ·  %s: %.1f/s  ·  %s: %d  ·  %s: %d" % [
-		GameApp.text("weapon.damage"), _weapon_effective_damage(definition),
+		GameApp.text("weapon.damage"), int(stats["damage"]),
 		GameApp.text("weapon.fire_rate"), _weapon_effective_fire_rate(definition),
-		GameApp.text("weapon.projectiles"), _weapon_effective_stat(definition, "projectile_count", "hurricane_mastery"),
-		GameApp.text("weapon.pierce"), _weapon_effective_stat(definition, "pierce", "phantom_mastery")
+		GameApp.text("weapon.projectiles"), int(stats["projectile_count"]),
+		GameApp.text("weapon.pierce"), int(stats["pierce"])
 	]
 
 
 func _weapon_effective_damage(definition: Dictionary) -> int:
-	return _weapon_effective_stat(definition, "damage", "strength")
+	return int(AttackCatalog.effective(GameApp.content.rules, GameApp.profile, definition)["damage"])
 
 
-# Shots per second at the 30 tick/s simulation rate, matching run_model's
-# fire_cooldown = max(min_interval_ticks, interval_ticks - agility * effect).
+# Shared with battle, including the configured minimum fire interval.
 func _weapon_effective_fire_rate(definition: Dictionary) -> float:
-	var agility_bonus := _weapon_mastery_bonus("agility")
-	var interval := maxi(int(definition.get("min_interval_ticks", 4)), int(definition.get("interval_ticks", 10)) - agility_bonus)
+	var interval := int(AttackCatalog.effective(GameApp.content.rules, GameApp.profile, definition)["interval_ticks"])
 	var tick_rate := float(maxi(1, int(GameApp.content.rules.get("simulation_tick_rate", 30))))
 	return tick_rate / float(maxi(1, interval))
-
-
-func _weapon_mastery_bonus(mastery_id: String) -> int:
-	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
-	var level := int(upgrades.get(mastery_id, 0))
-	for upgrade in GameApp.content.rules.get("upgrades", []):
-		if upgrade is Dictionary and str(upgrade.get("id", "")) == mastery_id:
-			return level * int(upgrade.get("effect_per_level", 0))
-	return 0
-
-
-# Mirrors the run_model formulas so the card shows what research actually
-# delivers in battle; raw base stats made upgraded research look lost.
-func _weapon_effective_stat(definition: Dictionary, field: String, mastery_id: String) -> int:
-	return int(definition.get(field, 1)) + _weapon_mastery_bonus(mastery_id)
 
 
 func _show_honors() -> void:
@@ -746,6 +798,8 @@ func _show_tutorial() -> void:
 
 
 func _new_content_stack(title_text: String) -> VBoxContainer:
+	_research_detail_refresh = Callable()
+	_identity_panel.visible = true
 	_clear_content()
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 16)
@@ -842,15 +896,23 @@ func _rebuild_loadout() -> void:
 	var current_id := str(GameApp.profile.get("current_weapon_id", "basic_bow"))
 	var unlocked: Array = GameApp.profile.get("unlocked_weapons", [])
 	var current_definition: Dictionary = GameApp.content.find_by_id("weapons", current_id)
-	var slot := Button.new()
+	# MenuButton applies the viewport scale and window offset to its popup.
+	# A plain Button + get_global_rect() uses logical canvas coordinates and
+	# leaves the dropdown detached from the slot in resized/moved windows.
+	var slot := MenuButton.new()
+	slot.name = "BowSelector"
+	slot.flat = false
 	slot.text = "%s %s" % [str(WEAPON_GLYPHS.get(current_id, "🏹")), GameApp.text("loadout.dropdown_hint")]
 	slot.custom_minimum_size = Vector2(120, 56)
 	slot.add_theme_font_size_override("font_size", 27)
 	slot.clip_text = true
 	slot.tooltip_text = "%s
 %s" % [GameApp.text(str(current_definition.get("name_key", current_id))), _weapon_summary(current_definition)]
-	var bow_menu := PopupMenu.new()
-	slot.add_child(bow_menu)
+	var bow_menu := slot.get_popup()
+	bow_menu.add_theme_stylebox_override("panel", UiTheme.panel_box())
+	bow_menu.add_theme_font_size_override("font_size", 24)
+	bow_menu.add_theme_color_override("font_disabled_color", Color("ffd166"))
+	bow_menu.add_theme_constant_override("v_separation", 12)
 	var index_by_item := {}
 	var item_index := 0
 	for definition in GameApp.content.rules.get("weapons", []):
@@ -875,31 +937,44 @@ func _rebuild_loadout() -> void:
 		bow_menu.set_item_tooltip(item_index, weapon_name + "  ·  " + _weapon_summary(definition))
 		item_index += 1
 	bow_menu.index_pressed.connect(func(item_index: int) -> void:
+		bow_menu.hide()
 		var target: String = index_by_item.get(item_index, "")
 		if target.is_empty():
 			return
 		if target.begins_with("unlock_"):
 			_show_research_page("weapons", target)
-		elif bool(GameApp.select_weapon(target).get("ok", false)):
-			_refresh_header()
-	)
-	slot.pressed.connect(func() -> void:
-		var corner := slot.get_global_rect().position + Vector2(0.0, slot.size.y)
-		bow_menu.popup(Rect2(corner, Vector2(300, 10)))
+		else:
+			_equip_weapon(target)
 	)
 	_loadout_row.add_child(slot)
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(16, 0)
 	_loadout_row.add_child(gap)
-	for spell_definition in [["🔥", "skill.fire"], ["❄", "skill.ice"], ["⚡", "skill.lightning"]]:
+	var loadout := SkillCatalog.loadout(GameApp.content.rules, GameApp.profile)
+	for spell_definition in [["🔥", "fire"], ["❄", "ice"], ["⚡", "lightning"]]:
+		var skill := SkillCatalog.effective(GameApp.content.rules, GameApp.profile, str(loadout.get(spell_definition[1], "")))
 		var spell := Label.new()
-		spell.text = str(spell_definition[0])
+		spell.text = "%s%s" % [str(spell_definition[0]), ["Ⅰ", "Ⅱ", "Ⅲ"][int(skill.get("tier", 1)) - 1]]
 		spell.custom_minimum_size = Vector2(56, 56)
 		spell.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		spell.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		spell.add_theme_stylebox_override("normal", _loadout_frame(false))
-		spell.tooltip_text = GameApp.text(str(spell_definition[1]))
+		spell.tooltip_text = GameApp.text(str(skill.get("name_key", ""))) + "\n" + SkillText.summary(skill, GameApp.text, int(GameApp.content.rules.get("simulation_tick_rate", 30)))
 		_loadout_row.add_child(spell)
+
+
+# Both entry points persist the same profile field. Refresh the open research
+# detail without rebuilding its tree, so selection and scroll stay in place.
+func _equip_weapon(weapon_id: String) -> void:
+	var result := GameApp.select_weapon(weapon_id)
+	var saved := bool(result.get("ok", false))
+	_loadout_error.text = "" if saved else GameApp.text("feedback.save_failed")
+	_loadout_error.visible = not saved
+	if not saved:
+		return
+	_refresh_header()
+	if _research_detail_refresh.is_valid():
+		_research_detail_refresh.call()
 
 
 func _loadout_frame(highlighted: bool) -> StyleBoxFlat:
@@ -981,6 +1056,12 @@ func _upgrade_display_name(upgrade_id: String) -> String:
 
 
 static func _upgrade_color(upgrade_id: String) -> Color:
+	var upgrade := GameApp.content.find_by_id("upgrades", upgrade_id)
+	var skill := GameApp.content.find_by_id("skills", str(upgrade.get("skill_ref", "")))
+	match str(skill.get("element", "")):
+		"fire": return Color("ff9b54")
+		"ice": return Color("78dce8")
+		"lightning": return Color("d7aefb")
 	if upgrade_id.contains("fire") or upgrade_id == "strength":
 		return Color("ff9b54")
 	if upgrade_id.contains("ice") or upgrade_id == "agility":

@@ -166,9 +166,23 @@ MVP 包含基础弓；Windows 1.0 增加 Power、Hurricane、Phantom。武器数
 
 按配置概率让本次最终箭矢伤害变为 2 倍，并显示 `Fatal!`；不得默认实现一击必杀。
 
+**FR-035 Poisoned Arrow**
+
+命中附加独立周期毒伤，重复命中刷新持续时间并取较强伤害，不叠层、不重置跳伤计时；与火/冰/雷状态共存。持续时间、跳伤间隔、每级倍率和抗性配置化。原版玩家资料有 DoT/攻速削弱冲突，当前采用归档需求的 DoT 契约，详见 [`attack-research-reimplementation.md`](attack-research-reimplementation.md)。
+
+**FR-036 Multiple Arrows**
+
+使用逐级箭数与单箭倍率表，一次齐射最多五枚独立箭。箭数增长时每箭伤害可以降低，但所有武器的实际总齐射伤害 MUST 逐级增长。偶数散射对称，弹速不随角度变化；暴击、击退、毒伤和穿透使用每箭生成时快照。
+
+**FR-037 Senior Hunter**
+
+按配置百分比增加战斗击杀与通关经验，与荣誉经验加成乘算；不增加金币或荣誉奖励经验。战败保留击杀经验，不发通关奖励；事件、结算快照与幂等账本金额一致。
+
 **FR-040 元素技能**
 
-MVP 提供 Fire Ball、Glacial Spike、Lightning Strike。火系偏范围持续伤害，冰系偏减速/冻结，雷系偏打断；数值和抗性由配置提供。
+当前实现提供三条完整三级链：Fire Ball → Meteor → Armageddon、Glacial Spike → Frost Nova → Ice Age、Lightning Strike → Thunder Storm → Ragnarok。每系进阶技能的 Mana 消耗、伤害与范围递增；火系增加持续轰击轮次，冰系增强冻结/减速，雷系增强多目标打断。基础技能仍初始可用，进阶技能必须研究解锁；所有数值与抗性由配置提供。证据、平衡值和已知偏差见 [`skill-chains-reimplementation.md`](skill-chains-reimplementation.md)。
+
+每系固定一个战斗槽位，研究页可装备该系任意已学会技能，包括消耗较低的旧阶位。装备保存成功后生效；快捷键 1/2/3 与拖拽施法使用该槽的实际技能。HUD MUST 显示阶位、Mana 成本、冷却与不可用原因。
 
 **FR-041 Mana**
 
@@ -216,7 +230,9 @@ MVP 使用 `coins` 和 `xp`；`crystals` 可以保留为非付费玩法字段。
 
 **FR-072 MVP 研究**
 
-MVP 至少实现 Strength、Agility 和三个基础元素技能等级。完整四页研究树、更多武器和 Honors 进入 Windows 1.0。
+攻击研究 MUST 展示力量、敏捷、强力射击、毒箭、致命一击、多重箭、高级猎人七节点。力量→强力射击；力量且敏捷→毒箭；敏捷→致命一击；强力射击且致命一击→多重箭→高级猎人。精确门槛与价格来自配置；毒箭不作为多重箭前置。研究详情与战斗共用属性查询，换弓后立即刷新。旧三项武器精通投入一次性退还、保留审计等级，不丢失其他研究和装备。
+
+魔法研究 MUST 显示 Mana Research 根节点和三条三级技能链，明确前置研究等级；每个技能节点可独立研究、预览有效属性和装备。旧版三个基础元素研究等级必须保留，新增技能不能绕过解锁前置。
 
 **FR-073 奖励幂等**
 

@@ -49,12 +49,31 @@ func _check_scene(scene: PackedScene, scene_name: String, viewport_size: Vector2
 		for view in [
 			["_show_stage_select", "stage-select"],
 			["_show_upgrades", "upgrades"],
+			["_show_research_page", "magic-research", "magic"],
 			["_show_settings", "settings"],
 			["_show_tutorial", "tutorial"]
 		]:
-			instance.call(view[0])
+			if view.size() == 3:
+				instance.call(view[0], view[2])
+			else:
+				instance.call(view[0])
 			await process_frame
 			_check_current_view(instance, scene_name + "-" + view[1], viewport_size)
+			if view[1] == "magic-research":
+				for skill in root.get_node("GameApp").get("content").rules.get("skills", []):
+					var research_button := instance.find_child("Research_" + str(skill["upgrade_id"]), true, false) as Button
+					if research_button != null:
+						research_button.pressed.emit()
+						await process_frame
+						_check_current_view(instance, scene_name + "-magic-" + str(skill["id"]), viewport_size)
+			if view[1] == "upgrades":
+				for definition in root.get_node("GameApp").get("content").rules.get("upgrades", []):
+					if str(definition.get("page", "")) == "attack":
+						var research_button := instance.find_child("Research_" + str(definition["id"]), true, false) as Button
+						if research_button != null:
+							research_button.pressed.emit()
+							await process_frame
+							_check_current_view(instance, scene_name + "-attack-" + str(definition["id"]), viewport_size)
 	else:
 		instance.call("_show_pause")
 		await process_frame

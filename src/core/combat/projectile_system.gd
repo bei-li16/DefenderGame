@@ -36,9 +36,10 @@ static func update(model, events: Array[Dictionary]) -> void:
 			projectile["hit_entity_ids"] = hit_entity_ids
 			model._emit(events, "hit", {"projectile_id": projectile["entity_id"], "entity_id": hit_enemy["entity_id"], "fatal": projectile["fatal"], "power": projectile["power"]})
 			model._apply_enemy_damage(hit_enemy, int(projectile["damage"]), "arrow", events)
+			apply_poison(model, hit_enemy, projectile, events)
 			if bool(projectile["power"]):
 				var resistance := clampi(int(hit_enemy.get("knockback_resistance_permille", 0)), 0, 1000)
-				var knockback := int(model.weapon.get("knockback_milli", 0)) * (1000 - resistance) / 1000
+				var knockback := int(projectile.get("knockback_milli", 0)) * (1000 - resistance) / 1000
 				hit_enemy["x_milli"] = clampi(
 					int(hit_enemy["x_milli"]) + knockback,
 					int(hit_enemy["attack_x_milli"]),
@@ -51,6 +52,24 @@ static func update(model, events: Array[Dictionary]) -> void:
 				model.projectiles.remove_at(projectile_index)
 		elif int(projectile["age_ticks"]) > 90 or int(projectile["x_milli"]) > int(model.config["world"]["width_milli"]) + 100000 or int(projectile["y_milli"]) < -100000 or int(projectile["y_milli"]) > int(model.config["world"]["height_milli"]) + 100000:
 			model.projectiles.remove_at(projectile_index)
+
+
+static func apply_poison(model, enemy: Dictionary, projectile: Dictionary, events: Array[Dictionary]) -> void:
+	var damage := int(projectile.get("poison_damage", 0))
+	if damage <= 0 or int(enemy["hp"]) <= 0:
+		return
+	var duration: int = model._resisted_ticks(enemy, int(projectile.get("poison_duration_ticks", 0)))
+	if duration <= 0:
+		return
+	var active := int(enemy.get("poison_ticks", 0)) > 0
+	# One poison per target. Refresh duration and keep the strongest active
+	# damage without resetting its tick timer (rapid fire cannot starve DoT).
+	enemy["poison_ticks"] = maxi(int(enemy.get("poison_ticks", 0)), duration)
+	enemy["poison_damage"] = maxi(int(enemy.get("poison_damage", 0)), damage) if active else damage
+	if not active:
+		enemy["poison_interval_ticks"] = maxi(1, int(projectile.get("poison_interval_ticks", 1)))
+		enemy["poison_counter"] = enemy["poison_interval_ticks"]
+		model._emit(events, "status", {"status": "poison", "entity_id": enemy["entity_id"], "duration_ticks": duration})
 
 
 static func build_enemy_bands(model) -> Dictionary:

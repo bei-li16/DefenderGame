@@ -1,5 +1,8 @@
 extends Node
 
+const SkillCatalog = preload("res://src/core/rules/skill_catalog.gd")
+const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
+
 signal initialization_finished(ok: bool, error: Dictionary)
 signal profile_changed(profile: Dictionary)
 signal settings_changed(settings: Dictionary)
@@ -353,6 +356,14 @@ func purchase_upgrade(upgrade_id: String) -> Dictionary:
 		var updated_stats: Dictionary = updated.get("stats", {}).duplicate(true)
 		updated_stats["coins_spent"] = int(updated_stats.get("coins_spent", 0)) + int(result.get("price", 0))
 		updated["stats"] = updated_stats
+		var upgrade := content.find_by_id("upgrades", upgrade_id)
+		var skill_id := str(upgrade.get("skill_ref", ""))
+		# Learning an advanced spell equips it in its elemental slot. Subsequent
+		# upgrades preserve the player's choice of a cheaper spell in that slot.
+		if not skill_id.is_empty() and int(result.get("new_level", 0)) == 1:
+			var equipped := SkillCatalog.loadout(content.rules, updated)
+			equipped[str(SkillCatalog.find(content.rules, skill_id).get("element", ""))] = skill_id
+			updated["equipped_skills"] = equipped
 		# Weapon research: buying an "unlock_<weapon>" node grants the bow.
 		if upgrade_id.begins_with("unlock_"):
 			var weapon_id := upgrade_id.trim_prefix("unlock_")
@@ -393,6 +404,22 @@ func select_weapon(weapon_id: String) -> Dictionary:
 	profile = updated
 	profile_changed.emit(profile.duplicate(true))
 	return {"ok": true, "weapon_id": weapon_id, "profile": profile.duplicate(true), "save": save_result}
+
+
+func select_skill(skill_id: String) -> Dictionary:
+	if not SkillCatalog.available(content.rules, profile, skill_id):
+		return {"ok": false, "error_code": "skill_locked"}
+	var updated := profile.duplicate(true)
+	var equipped := SkillCatalog.loadout(content.rules, updated)
+	equipped[str(SkillCatalog.find(content.rules, skill_id).get("element", ""))] = skill_id
+	updated["equipped_skills"] = equipped
+	var saved := save_service.save_profile_slot(active_save_slot, updated, int(content.rules["config_version"]))
+	if not bool(saved.get("ok", false)):
+		_record_failure("skill_save", saved, "MainMenu")
+		return saved
+	profile = updated
+	profile_changed.emit(profile.duplicate(true))
+	return {"ok": true, "profile": profile.duplicate(true)}
 
 
 func complete_tutorial() -> Dictionary:
@@ -487,6 +514,7 @@ func _default_profile() -> Dictionary:
 		"highest_unlocked_stage": 1,
 		"current_weapon_id": "basic_bow",
 		"unlocked_weapons": ["basic_bow"],
+		"equipped_skills": SkillCatalog.loadout(content.rules, {}),
 		"upgrades": upgrades,
 		"best_results": {},
 		"reward_ledger": [],
@@ -499,7 +527,7 @@ func _default_profile() -> Dictionary:
 
 
 func _normalize_profile(source: Dictionary) -> Dictionary:
-	var normalized := source.duplicate(true)
+	var normalized := AttackCatalog.normalize_profile(source)
 	var defaults := _default_profile()
 	for key in defaults.keys():
 		if not normalized.has(key):
@@ -511,6 +539,7 @@ func _normalize_profile(source: Dictionary) -> Dictionary:
 			if not upgrades.has(upgrade_id):
 				upgrades[upgrade_id] = 0
 	normalized["upgrades"] = upgrades
+	normalized["equipped_skills"] = SkillCatalog.loadout(content.rules, normalized)
 	var stage_count := maxi(1, content.rules.get("stages", []).size())
 	normalized["highest_unlocked_stage"] = clampi(int(normalized.get("highest_unlocked_stage", 1)), 1, stage_count)
 	normalized = _ensure_equipped_weapon_unlocked(normalized)

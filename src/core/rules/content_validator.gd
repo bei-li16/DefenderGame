@@ -1,7 +1,11 @@
 class_name DefenderContentValidator
 extends RefCounted
 
+const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
+
 const REQUIRED_UI_KEYS: Array[String] = [
+	"attack.damage", "attack.rate", "attack.power", "attack.poison", "attack.fatal", "attack.volley", "attack.xp", "attack.rules", "attack.refunded",
+	"skill.stats", "skill.burn_stats", "skill.freeze_stats", "skill.stun_stats", "skill.current", "skill.next", "feedback.skill_locked",
 	"app.title", "app.subtitle", "controls.hint", "common.stage", "common.xp",
 	"common.level", "common.boss", "common.max", "common.upgrade", "common.seconds_short",
 	"upgrade.effect_next", "upgrade.effect_current", "upgrade.prerequisites", "upgrade.none",
@@ -24,6 +28,72 @@ const REQUIRED_UI_KEYS: Array[String] = [
 	"quality.low", "quality.medium", "quality.high",
 	"recovery.title", "recovery.retry", "recovery.new_profile", "recovery.exit", "recovery.retrying", "recovery.body"
 ]
+
+
+static func _validate_attack_tree(config: Dictionary, errors: Array[Dictionary]) -> void:
+	var parents := {"strength": [], "agility": [], "power_shot": ["strength"], "poisoned_arrow": ["strength", "agility"], "fatal_blow": ["agility"], "multiple_arrows": ["power_shot", "fatal_blow"], "senior_hunter": ["multiple_arrows"]}
+	var found: Array = []
+	for definition in config.get("upgrades", []):
+		if str(definition.get("page", "")) == "attack":
+			found.append(str(definition.get("id", "")))
+	if found.size() != AttackCatalog.IDS.size():
+		_add_error(errors, "upgrades.attack", "requires_seven_attack_nodes")
+	for id in AttackCatalog.IDS:
+		var definition := AttackCatalog.find(config, id)
+		var path: String = "upgrades." + id + "."
+		if definition.is_empty() or not found.has(id):
+			_add_error(errors, path, "missing_attack_node")
+			continue
+		var actual: Array = _as_array(definition.get("prerequisites", []))
+		if actual.size() != parents[id].size() or not parents[id].all(func(value) -> bool: return actual.has(str(value))):
+			_add_error(errors, path + "prerequisites", "invalid_attack_dependencies")
+		var thresholds: Variant = definition.get("prerequisite_levels", {})
+		if not thresholds is Dictionary:
+			_add_error(errors, path + "prerequisite_levels", "expected_object")
+		else:
+			for parent in actual:
+				var required := int(thresholds.get(str(parent), 0))
+				if required < 1 or required > int(AttackCatalog.find(config, str(parent)).get("max_level", 0)):
+					_add_error(errors, path + "prerequisite_levels." + str(parent), "out_of_range")
+	var poison := AttackCatalog.find(config, "poisoned_arrow")
+	for field in ["duration_ticks", "interval_ticks"]:
+		_require_positive_int(poison, field, errors, "upgrades.poisoned_arrow.")
+	if int(poison.get("duration_ticks", 0)) < int(poison.get("interval_ticks", 1)):
+		_add_error(errors, "upgrades.poisoned_arrow.duration_ticks", "shorter_than_one_pulse")
+	var power := AttackCatalog.find(config, "power_shot")
+	_require_non_negative_int(power, "chance_per_level", errors, "upgrades.power_shot.")
+	if int(power.get("chance_per_level", 0)) > 10000:
+		_add_error(errors, "upgrades.power_shot.chance_per_level", "out_of_range")
+	for id in ["fatal_blow", "poisoned_arrow", "senior_hunter"]:
+		var definition := AttackCatalog.find(config, id)
+		var maximum := int(definition.get("max_level", 0)) * int(definition.get("effect_per_level", 0))
+		if maximum > (10000 if id == "fatal_blow" else 1000):
+			_add_error(errors, "upgrades." + id + ".effect_per_level", "out_of_range")
+	var multi := AttackCatalog.find(config, "multiple_arrows")
+	_require_positive_int(multi, "spread_milli", errors, "upgrades.multiple_arrows.")
+	var table := _as_array(multi.get("level_effects", []))
+	if table.size() != int(multi.get("max_level", 0)) + 1:
+		_add_error(errors, "upgrades.multiple_arrows.level_effects", "requires_every_level_including_zero")
+	var previous_count := 0
+	var previous_total := 0
+	for index in range(table.size()):
+		var row := _as_dictionary(table[index])
+		var count := int(row.get("projectile_count", 0))
+		var ratio := int(row.get("damage_permille", 0))
+		if count < 1 or count > 5 or count < previous_count or ratio <= 0 or count * ratio <= previous_total:
+			_add_error(errors, "upgrades.multiple_arrows.level_effects[%d]" % index, "invalid_volley_progression")
+		if index == 0 and (count != 1 or ratio != 1000):
+			_add_error(errors, "upgrades.multiple_arrows.level_effects[0]", "must_preserve_base_volley")
+		previous_count = count
+		previous_total = count * ratio
+	var has_attack_page := false
+	for page in config.get("research_pages", []):
+		if str(page.get("id", "")) == "attack":
+			has_attack_page = true
+			if page.get("upgrade_ids", []) != found:
+				_add_error(errors, "research_pages.attack.upgrade_ids", "must_match_attack_nodes")
+	if not has_attack_page:
+		_add_error(errors, "research_pages.attack", "missing_attack_page")
 
 
 static func validate(config: Dictionary) -> Array[Dictionary]:
@@ -160,6 +230,8 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 				_add_error(errors, "upgrades[%d].prerequisites" % index, "unknown_reference")
 	if _has_dependency_cycle(upgrade_dependencies):
 		_add_error(errors, "upgrades", "dependency_cycle")
+	_validate_skill_chains(skills, upgrades, errors)
+	_validate_attack_tree(config, errors)
 	var upgrade_id_set: Array[String] = upgrade_ids.duplicate()
 	var research_pages_value: Variant = config.get("research_pages", [])
 	var research_pages: Array = research_pages_value if research_pages_value is Array else []
@@ -298,6 +370,61 @@ static func validate_localization(localization: Dictionary, config: Dictionary) 
 			if not catalog.has(key) or str(catalog.get(key, "")).is_empty():
 				_add_error(errors, "localization.%s.%s" % [locale, key], "missing_translation")
 	return errors
+
+
+static func _validate_skill_chains(skills: Array, upgrades: Array, errors: Array[Dictionary]) -> void:
+	var nodes := {}
+	for value in upgrades:
+		var node := _as_dictionary(value)
+		nodes[str(node.get("id", ""))] = node
+	for node_id in nodes:
+		var node: Dictionary = nodes[node_id]
+		var requirements := _as_dictionary(node.get("prerequisite_levels", {}))
+		for required_id in requirements:
+			if not _as_array(node.get("prerequisites", [])).has(required_id) or not nodes.has(required_id) or int(requirements[required_id]) < 1 or int(requirements[required_id]) > int(nodes.get(required_id, {}).get("max_level", 0)):
+				_add_error(errors, "upgrades.%s.prerequisite_levels" % node_id, "invalid_required_level")
+	var chains := {"fire": {}, "ice": {}, "lightning": {}}
+	for index in range(skills.size()):
+		var skill := _as_dictionary(skills[index])
+		var path := "skills[%d]." % index
+		var element := str(skill.get("element", ""))
+		var tier := int(skill.get("tier", 0))
+		if not chains.has(element) or tier < 1 or tier > 3:
+			_add_error(errors, path + "tier", "invalid_element_or_tier")
+			continue
+		if chains[element].has(tier):
+			_add_error(errors, path + "tier", "duplicate_element_tier")
+		chains[element][tier] = skill
+		for field in ["pulse_count", "pulse_interval_ticks", "mana_cost", "radius_milli"]:
+			_require_positive_int(skill, field, errors, path)
+		if int(skill.get("pulse_count", 0)) > 16:
+			_add_error(errors, path + "pulse_count", "excessive_pulses")
+		var node: Dictionary = nodes.get(str(skill.get("upgrade_id", "")), {})
+		if str(node.get("skill_ref", "")) != str(skill.get("id", "")) or str(node.get("page", "")) != "magic":
+			_add_error(errors, path + "upgrade_id", "invalid_skill_research_reference")
+		var fields: Array = ["burn_damage", "burn_interval_ticks", "burn_duration_ticks"] if element == "fire" else (["freeze_ticks", "slow_duration_ticks", "slow_permille"] if element == "ice" else ["stun_ticks", "max_targets"])
+		for field in fields:
+			_require_positive_int(skill, str(field), errors, path)
+		for field in ["burn_duration_ticks_per_level", "freeze_ticks_per_level", "stun_ticks_per_level"]:
+			if skill.has(field):
+				_require_non_negative_int(skill, field, errors, path)
+		if element == "ice" and int(skill.get("slow_permille", 0)) > 1000:
+			_add_error(errors, path + "slow_permille", "out_of_range")
+	for element in chains:
+		var chain: Dictionary = chains[element]
+		if chain.size() != 3:
+			_add_error(errors, "skills." + element, "requires_three_tiers")
+		for tier in [2, 3]:
+			if not chain.has(tier) or not chain.has(tier - 1):
+				continue
+			var previous: Dictionary = chain[tier - 1]
+			var current: Dictionary = chain[tier]
+			for field in ["mana_cost", "damage", "radius_milli"]:
+				if int(current.get(field, 0)) <= int(previous.get(field, 0)):
+					_add_error(errors, "skills.%s.%s" % [current.get("id", ""), field], "tiers_must_increase")
+			var node: Dictionary = nodes.get(str(current.get("upgrade_id", "")), {})
+			if not _as_array(node.get("prerequisites", [])).has(str(previous.get("upgrade_id", ""))):
+				_add_error(errors, "skills.%s.upgrade_id" % current.get("id", ""), "missing_previous_tier")
 
 
 static func _validate_id_list(items: Variant, path: String, errors: Array[Dictionary]) -> Array[String]:

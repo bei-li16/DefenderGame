@@ -21,7 +21,7 @@ func _run() -> void:
 		"current_weapon_id": "phantom_bow",
 		"unlocked_weapons": ["basic_bow", "power_bow", "hurricane_bow", "phantom_bow"],
 		"upgrades": {
-			"strength": 12, "agility": 6, "power_mastery": 8, "hurricane_mastery": 4, "phantom_mastery": 4,
+			"strength": 12, "agility": 6, "power_shot": 9, "poisoned_arrow": 9, "fatal_blow": 9, "multiple_arrows": 9, "senior_hunter": 9,
 			"fire_mastery": 8, "ice_mastery": 8, "lightning_mastery": 8, "mana_capacity": 8, "mana_regen": 6, "spell_radius": 5, "cooldown_mastery": 6,
 			"wall_armor": 10, "wall_repair": 8, "lava_moat": 5, "magic_tower": 5, "coin_bounty": 10, "xp_bounty": 10
 		}

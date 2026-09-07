@@ -10,7 +10,7 @@ func purchase(profile: Dictionary, config: Dictionary, upgrade_id: String) -> Di
 	if current_level >= int(definition.get("max_level", 0)):
 		return {"ok": false, "error_code": "max_level", "profile": profile}
 	for prerequisite in definition.get("prerequisites", []):
-		if int(current_upgrades.get(str(prerequisite), 0)) <= 0:
+		if int(current_upgrades.get(str(prerequisite), 0)) < int(definition.get("prerequisite_levels", {}).get(str(prerequisite), 1)):
 			return {"ok": false, "error_code": "missing_prerequisite", "profile": profile}
 	var price := price_for_level(definition, current_level)
 	if int(profile.get("coins", 0)) < price:

@@ -2,7 +2,7 @@ class_name DefenderSaveService
 extends RefCounted
 
 const CURRENT_SCHEMA_VERSION := 6
-const APP_VERSION := "1.0.9-windows"
+const APP_VERSION := "1.1.0-windows"
 # Fixed slot layout: each save is one portable file inside the save directory
 # (savedata/ next to the EXE), so the whole folder can be copied between machines.
 const SAVE_SLOT_COUNT := 3

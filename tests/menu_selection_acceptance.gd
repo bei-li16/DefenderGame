@@ -61,7 +61,7 @@ func _run() -> void:
 	menu.call("_show_research_page", "magic")
 	await process_frame
 	var magic_tree := _research_tree(menu)
-	_expect(magic_tree != null and str(magic_tree.call("selected")) == "fire_mastery", "switching pages restarts selection at that page's first node")
+	_expect(magic_tree != null and str(magic_tree.call("selected")) == "mana_capacity", "switching pages restarts selection at the Mana Research root")
 
 	root.remove_child(menu)
 	menu.free()

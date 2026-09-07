@@ -5,6 +5,8 @@ const DeterministicRng = preload("res://src/core/rules/deterministic_rng.gd")
 const SpawnSystem = preload("res://src/core/combat/spawn_system.gd")
 const ProjectileSystem = preload("res://src/core/combat/projectile_system.gd")
 const SkillSystem = preload("res://src/core/combat/skill_system.gd")
+const SkillCatalog = preload("res://src/core/rules/skill_catalog.gd")
+const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
 const DefenseSystem = preload("res://src/core/combat/defense_system.gd")
 
 const STATUS_RUNNING := "running"
@@ -17,6 +19,7 @@ const EVENT_ORDER := {
 	"shot": 21,
 	"skill_cast": 22,
 	"skill_rejected": 23,
+	"skill_pulse": 25,
 	"defense_attack": 24,
 	"hit": 30,
 	"damage": 40,
@@ -32,6 +35,7 @@ var config: Dictionary = {}
 var stage: Dictionary = {}
 var profile_snapshot: Dictionary = {}
 var weapon: Dictionary = {}
+var attack_stats: Dictionary = {}
 var weapon_id: String = "basic_bow"
 var tick: int = 0
 var status: String = STATUS_RUNNING
@@ -55,6 +59,9 @@ var aim_y_milli: int = 540000
 var fire_down: bool = false
 var fire_cooldown: int = 0
 var skill_cooldowns: Dictionary = {}
+var skill_loadout: Dictionary = {}
+var active_spells: Array[Dictionary] = []
+var _equipped_skill_definitions: Dictionary = {}
 var defense_levels: Dictionary = {}
 var defense_cooldowns: Dictionary = {}
 var spawn_queue: Array[Dictionary] = []
@@ -76,6 +83,9 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	if stage.is_empty():
 		return {"ok": false, "error_code": "unknown_stage", "field_path": "stage_id"}
 	profile_snapshot = player_profile.duplicate(true)
+	skill_loadout = SkillCatalog.loadout(config, profile_snapshot)
+	_equipped_skill_definitions = _skill_definitions()
+	active_spells.clear()
 	weapon_id = str(profile_snapshot.get("current_weapon_id", "basic_bow"))
 	var unlocked_value: Variant = profile_snapshot.get("unlocked_weapons", [])
 	var unlocked_weapons: Array = unlocked_value if unlocked_value is Array else []
@@ -90,6 +100,7 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 		weapon = _find_by_id(config.get("weapons", []), weapon_id)
 	if weapon.is_empty():
 		return {"ok": false, "error_code": "missing_weapon", "field_path": "weapons.basic_bow"}
+	attack_stats = AttackCatalog.effective(config, profile_snapshot, weapon)
 	seed = run_seed if run_seed != 0 else 1
 	run_id = run_instance_id if not run_instance_id.is_empty() else "%s-%d-%d" % [stage_id, seed, int(config.get("config_version", 0))]
 	_spawn_rng = DeterministicRng.new(seed ^ 0x4f1bbcdc)
@@ -139,6 +150,7 @@ func step(commands: Array) -> Array[Dictionary]:
 	_tick_cooldowns()
 	_spawn_due_enemies(events)
 	_process_commands(commands, events)
+	SkillSystem.update(self, events)
 	_regenerate_mana(events)
 	_update_enemies(events)
 	_update_defenses(events)
@@ -166,6 +178,7 @@ func snapshot() -> Dictionary:
 		"stage_number": int(stage.get("number", 0)),
 	"run_id": run_id,
 	"weapon_id": weapon_id,
+	"attack_stats": attack_stats.duplicate(true),
 	"weapon_name_key": str(weapon.get("name_key", "weapon.basic_bow")),
 		"wall_hp": wall_hp,
 		"wall_max_hp": wall_max_hp,
@@ -184,6 +197,8 @@ func snapshot() -> Dictionary:
 		"spawn_total": spawn_queue.size(),
 		"selected_skill": selected_skill,
 	"skill_cooldowns": skill_cooldowns.duplicate(true),
+	"skill_loadout": skill_loadout.duplicate(true),
+	"skill_definitions": _equipped_skill_definitions.duplicate(true),
 	"defenses": {
 		"lava_moat_level": _upgrade_level("lava_moat"),
 		"magic_tower_level": _upgrade_level("magic_tower")
@@ -197,7 +212,7 @@ func result() -> Dictionary:
 	var clear_reward: Dictionary = stage.get("clear_reward", {}) if status == STATUS_VICTORY else {}
 	var reward_version := str(config.get("ruleset_version", "unknown"))
 	var clear_coins := int(clear_reward.get("coins", 0)) + _reward_bonus("coin_bounty")
-	var clear_xp := _percent_boosted(int(clear_reward.get("xp", 0)) + _reward_bonus("xp_bounty"), "xp_pct")
+	var clear_xp := AttackCatalog.reward_xp(config, profile_snapshot, int(clear_reward.get("xp", 0)) + _reward_bonus("xp_bounty")) if status == STATUS_VICTORY else 0
 	return {
 		"run_id": run_id,
 		"weapon_id": weapon_id,
@@ -252,7 +267,7 @@ func _process_commands(commands: Array, events: Array[Dictionary]) -> void:
 				_emit(events, "command", {"command": "fire_stopped"})
 			"select_skill":
 				var skill_id := str(command.get("skill_id", ""))
-				if not _find_by_id(config.get("skills", []), skill_id).is_empty():
+				if SkillCatalog.available(config, profile_snapshot, skill_id) and skill_loadout.values().has(skill_id):
 					selected_skill = skill_id
 					_emit(events, "command", {"command": "select_skill", "skill_id": selected_skill})
 			"cancel_skill":
@@ -271,23 +286,15 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 	var origin_y := int(player.get("bow_origin_y_milli", 555000))
 	var delta_x := aim_x_milli - origin_x
 	var speed := int(weapon.get("projectile_speed_milli_per_tick", 56000))
-	var strength_level := _upgrade_level("strength")
-	var agility_level := _upgrade_level("agility")
-	var base_damage := _percent_boosted(int(weapon.get("damage", 1)) + strength_level * _upgrade_effect_per_level("strength"), "weapon_damage_pct")
-	# Weapons research forge chain: +effect_per_level permille per level.
-	var forge_id := str(weapon.get("forge_upgrade_id", ""))
-	if not forge_id.is_empty():
-		var forge_level := _upgrade_level(forge_id)
-		if forge_level > 0:
-			# effect_per_level is expressed in percent, so scale to permille.
-			base_damage = base_damage * (1000 + forge_level * _upgrade_effect_per_level(forge_id) * 10) / 1000
-	var power_chance := clampi(int(weapon.get("power_shot_chance_per_10000", 0)) + _upgrade_level("power_mastery") * _upgrade_effect_per_level("power_mastery"), 0, 10000)
-	var projectile_count := maxi(1, int(weapon.get("projectile_count", 1)) + _upgrade_level("hurricane_mastery") * _upgrade_effect_per_level("hurricane_mastery"))
-	var pierce := maxi(0, int(weapon.get("pierce", 0)) + _upgrade_level("phantom_mastery") * _upgrade_effect_per_level("phantom_mastery"))
-	var spread := int(weapon.get("spread_milli", 0))
+	var base_damage := int(attack_stats["damage"])
+	var power_chance := int(attack_stats["power_shot_chance_per_10000"])
+	var projectile_count := int(attack_stats["projectile_count"])
+	var pierce := int(attack_stats["pierce"])
+	var spread := int(attack_stats["spread_milli"])
 	for projectile_index in range(projectile_count):
-		var centered_index := projectile_index - int((projectile_count - 1) / 2)
-		var adjusted_target_y := clampi(aim_y_milli + centered_index * spread, 0, int(config["world"]["height_milli"]))
+		# Half-step centering keeps two/four-arrow volleys symmetric as well.
+		var spread_offset := (2 * projectile_index - (projectile_count - 1)) * spread / 2
+		var adjusted_target_y := aim_y_milli + spread_offset
 		var adjusted_delta_y := adjusted_target_y - origin_y
 		# Euclidean normalization per arrow: max-norm (Chebyshev) would make
 		# diagonal and outer volley arrows up to 41% faster than the configured
@@ -296,11 +303,11 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 		var arrow_length := sqrt(float(delta_x) * float(delta_x) + float(adjusted_delta_y) * float(adjusted_delta_y))
 		if arrow_length < 1.0:
 			arrow_length = 1.0
-		var fatal := _combat_rng.chance_per_10000(int(weapon.get("fatal_chance_per_10000", 0)))
+		var fatal := _combat_rng.chance_per_10000(int(attack_stats["fatal_chance_per_10000"]))
 		var power := _combat_rng.chance_per_10000(power_chance)
 		var damage := base_damage
 		if fatal:
-			damage *= int(weapon.get("fatal_multiplier", 2))
+			damage *= 2
 		var projectile := {
 			"entity_id": next_entity_id,
 			"x_milli": origin_x,
@@ -310,6 +317,10 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 			"damage": damage,
 			"fatal": fatal,
 			"power": power,
+			"knockback_milli": int(attack_stats["knockback_milli"]),
+			"poison_damage": int(attack_stats["poison_damage"]),
+			"poison_duration_ticks": int(attack_stats["poison_duration_ticks"]),
+			"poison_interval_ticks": int(attack_stats["poison_interval_ticks"]),
 			"pierce_remaining": pierce,
 			"hit_entity_ids": [],
 			"collision_radius_milli": int(weapon.get("collision_radius_milli", 18000)),
@@ -318,9 +329,7 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 		next_entity_id += 1
 		projectiles.append(projectile)
 		_emit(events, "shot", {"entity_id": projectile["entity_id"], "fatal": fatal, "power": power, "weapon_id": weapon_id, "volley_index": projectile_index, "volley_size": projectile_count})
-	var base_interval := int(weapon.get("interval_ticks", 10))
-	var minimum_interval := int(weapon.get("min_interval_ticks", 4))
-	fire_cooldown = maxi(minimum_interval, base_interval - agility_level * _upgrade_effect_per_level("agility"))
+	fire_cooldown = int(attack_stats["interval_ticks"])
 
 
 func _cast_skill(skill_id: String, target_x: int, target_y: int, events: Array[Dictionary]) -> void:
@@ -337,6 +346,13 @@ func _update_enemies(events: Array[Dictionary]) -> void:
 			break
 		if int(enemy["hp"]) <= 0:
 			continue
+		enemy["freeze_ticks"] = maxi(0, int(enemy.get("freeze_ticks", 0)) - 1)
+		if int(enemy.get("poison_ticks", 0)) > 0:
+			enemy["poison_ticks"] = int(enemy["poison_ticks"]) - 1
+			enemy["poison_counter"] = int(enemy["poison_counter"]) - 1
+			if int(enemy["poison_counter"]) <= 0:
+				enemy["poison_counter"] = enemy["poison_interval_ticks"]
+				_apply_enemy_damage(enemy, int(enemy["poison_damage"]), "poison", events)
 		if int(enemy["burn_ticks"]) > 0:
 			enemy["burn_ticks"] = int(enemy["burn_ticks"]) - 1
 			enemy["burn_counter"] = int(enemy["burn_counter"]) - 1
@@ -397,7 +413,7 @@ func _resolve_deaths(events: Array[Dictionary]) -> void:
 			continue
 		kills += 1
 		var coins := int(enemy.get("reward_coins", 0)) + _reward_bonus("coin_bounty") + _honor_level("big_spender")
-		var xp := _percent_boosted(int(enemy.get("reward_xp", 0)) + _reward_bonus("xp_bounty"), "xp_pct")
+		var xp := AttackCatalog.reward_xp(config, profile_snapshot, int(enemy.get("reward_xp", 0)) + _reward_bonus("xp_bounty"))
 		coins_earned += coins
 		xp_earned += xp
 		_emit(events, "death", {"entity_id": enemy["entity_id"], "enemy_id": enemy["enemy_id"], "boss": enemy["tags"].has("boss")})
@@ -421,15 +437,17 @@ func _resolve_run_end(events: Array[Dictionary]) -> void:
 		return
 	if wall_hp <= 0:
 		status = STATUS_DEFEAT
+		active_spells.clear()
 		fire_down = false
 		_emit(events, "run_end", result())
 		return
 	if spawn_cursor >= spawn_queue.size() and enemies.is_empty():
 		status = STATUS_VICTORY
+		active_spells.clear()
 		fire_down = false
 		var result_data := result()
 		var clear_coins := int(stage["clear_reward"]["coins"]) + _reward_bonus("coin_bounty")
-		var clear_xp := int(stage["clear_reward"]["xp"]) + _reward_bonus("xp_bounty")
+		var clear_xp := AttackCatalog.reward_xp(config, profile_snapshot, int(stage["clear_reward"]["xp"]) + _reward_bonus("xp_bounty"))
 		_emit(events, "reward", {
 			"source": "stage_clear",
 			"coins": clear_coins,
@@ -443,7 +461,7 @@ func _resolve_run_end(events: Array[Dictionary]) -> void:
 func _apply_enemy_damage(enemy: Dictionary, raw_damage: int, source: String, events: Array[Dictionary]) -> void:
 	if int(enemy["hp"]) <= 0:
 		return
-	var resistance_type := "fire" if source in ["fire", "burn", "lava_moat"] else (source if source in ["ice", "lightning"] else "")
+	var resistance_type := "fire" if source in ["fire", "burn", "lava_moat"] else (source if source in ["ice", "lightning", "poison"] else "")
 	var resistance := int(enemy.get("resistances", {}).get(resistance_type, 0)) if not resistance_type.is_empty() else 0
 	resistance = clampi(resistance, 0, 1000)
 	var elemental_damage := maxi(1, raw_damage * (1000 - resistance) / 1000)
@@ -517,6 +535,13 @@ func _skill_radius(skill: Dictionary) -> int:
 
 func _effective_skill_cooldown(skill: Dictionary) -> int:
 	return maxi(1, int(skill.get("cooldown_ticks", 1)) - _upgrade_level("cooldown_mastery") * _upgrade_effect_per_level("cooldown_mastery"))
+
+
+func _skill_definitions() -> Dictionary:
+	var definitions := {}
+	for id in skill_loadout.values():
+		definitions[str(id)] = SkillCatalog.effective(config, profile_snapshot, str(id))
+	return definitions
 
 
 func _damage_wall(raw_damage: int, source: String, entity_id: int, events: Array[Dictionary]) -> void:

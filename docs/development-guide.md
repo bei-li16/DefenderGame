@@ -56,7 +56,14 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 & $GodotConsole --headless --path . --script res://tests/application_transaction_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/inputmap_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/diagnostic_acceptance.gd
+& $GodotConsole --headless --path . --script res://tests/weapon_selection_acceptance.gd
+& $GodotConsole --headless --path . --script res://tests/skill_chains_acceptance.gd
+& $GodotConsole --headless --path . --script res://tests/attack_research_acceptance.gd
 ```
+
+弓箭选择验收覆盖顶部单一入口、四把弓的切换、锁定弓跳转研究、解锁后装备、研究页同步、存档失败与重试，以及实际战斗使用所选弓箭。测试使用隔离存档，不修改玩家存档。移除 `--headless` 还会验证原生/嵌入式下拉框在三档 UI 缩放下的位置；追加 `-- --capture` 可将界面截图保存到被 Git 忽略的 `Builds/weapon-selection-review/`。
+
+攻击研究验收覆盖七节点前置、四弓全部齐射档位、毒伤/击退/暴击快照、经验结算、一次性退款及中英文购买/装备同步。移除 `--headless` 并追加 `-- --capture` 可截图到 `Builds/attack-research-review/`；测试仅使用隔离存档。完整规则见 [攻击研究说明](attack-research-reimplementation.md)。
 
 压力、布局和逻辑 60 分钟稳定性：
 
@@ -88,13 +95,13 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 
 ## 4. 内容编辑
 
-规则真源是 `content/config/game_rules.json`，当前为 config version 2 / ruleset `aegis-mvp-v2`，包括：
+规则真源是 `content/config/game_rules.json`，当前为 config version 5 / ruleset `aegis-windows-attack-tree-v1`，包括：
 
 - 世界、城墙、Mana 和基础弓参数。
-- 火、冰、雷技能。
-- 3 类普通敌人和 Boss，包括击退抗性与 Boss 特殊行为。
-- Strength、Agility 与 3 项元素精通，包括价格、效果、前置和上限。
-- 10 个 Stage 的生成组、奖励和有上限的难度倍率。
+- 火、冰、雷三系九技能及装备、升级链。
+- 6 类普通敌人和 3 个 Boss，包括状态/元素/击退抗性与 Boss 特殊行为。
+- 七项攻击科技、多重箭逐级属性、研究价格/门槛/上限；防御、武器与后勤研究。
+- 30 个 Stage 的生成组、奖励和有上限的难度倍率。
 
 可见文本位于 `content/catalogs/localization.json`。修改后先运行内容校验和 `run_all.gd`，再运行 Stage 自动通关，避免引入无解关卡、坏引用、缺失翻译或越界数值。
 

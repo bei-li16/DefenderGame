@@ -93,11 +93,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if session == null or _result_overlay != null:
 		return
 	if event.is_action_pressed("combat_select_fire"):
-		_select_skill("fire_ball")
+		_select_element("fire")
 	elif event.is_action_pressed("combat_select_ice"):
-		_select_skill("glacial_spike")
+		_select_element("ice")
 	elif event.is_action_pressed("combat_select_lightning"):
-		_select_skill("lightning_strike")
+		_select_element("lightning")
 	elif event.is_action_pressed("game_pause"):
 		if _cast_dragging or not str(snapshot.get("selected_skill", "")).is_empty():
 			_cancel_cast_drag()
@@ -208,9 +208,10 @@ func _on_events(events_value: Array) -> void:
 		GameApp.audio.play_event(event, sfx_volume)
 		match str(event.get("type", "")):
 			"skill_cast":
-				var position := Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0)
-				_append_effect({"kind": str(event.get("skill_id", "")), "position": position, "age": 0.0, "duration": 0.72})
 				_shake_strength = _quality_shake(10.0)
+			"skill_pulse":
+				var position := Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0)
+				_append_effect({"kind": "spell", "element": event.get("element", ""), "tier": event.get("tier", 1), "radius": float(event.get("radius_milli", 0)) / 1000.0, "hits": event.get("hits", []), "position": position, "age": 0.0, "duration": 0.72})
 			"hit":
 				var hit_position := _entity_position(int(event.get("entity_id", 0)))
 				_append_effect({"kind": "hit", "position": hit_position, "age": 0.0, "duration": 0.22})
@@ -228,6 +229,8 @@ func _on_events(events_value: Array) -> void:
 			"skill_rejected":
 				var reason := str(event.get("reason", ""))
 				var key := "feedback.no_mana" if reason == "no_mana" else ("feedback.cooldown" if reason == "cooldown" else "feedback.invalid_target")
+				if reason in ["locked", "not_equipped"]:
+					key = "feedback.skill_locked"
 				_feedback("✕  " + GameApp.text(key), Color("ff9b7b"))
 			"boss_warning":
 				_feedback("⚠  " + GameApp.text("feedback.boss") + "  ⚠", Color("ff587d"), 3.5)
@@ -596,6 +599,10 @@ func _overlay_button(value: String) -> Button:
 	return button
 
 
+func _select_element(element: String) -> void:
+	_select_skill(str(snapshot.get("skill_loadout", {}).get(element, "")))
+
+
 func _select_skill(skill_id: String) -> void:
 	if get_tree().paused or session == null:
 		return
@@ -765,8 +772,14 @@ func _draw_enemy(enemy: Dictionary) -> void:
 			draw_colored_polygon(PackedVector2Array([position + Vector2(radius * 0.8, -radius * 0.5), position + Vector2(radius * 0.25, -radius * 1.0), position + Vector2(radius * 0.1, -radius * 0.45)]), Color("efb261"))
 	if int(enemy.get("stun_ticks", 0)) > 0:
 		draw_arc(position, radius + 9, 0, TAU, 16, Color("e5d5ff"), 4)
+	if int(enemy.get("freeze_ticks", 0)) > 0:
+		_draw_ice_prison(position, radius + 14.0, 0.65)
 	if int(enemy.get("burn_ticks", 0)) > 0:
 		draw_colored_polygon(PackedVector2Array([position + Vector2(-10, -radius), position + Vector2(0, -radius - 28), position + Vector2(12, -radius)]), Color("ff8b3d"))
+	if int(enemy.get("poison_ticks", 0)) > 0:
+		# Bubbles + a distinct damage colour keep poison readable beside burn/ice.
+		for bubble in range(3):
+			draw_circle(position + Vector2(radius + 8 + bubble * 6, -12 - bubble * 14), 5 - bubble, Color("91e76d"))
 	var bar_width := radius * 2.0
 	var hp_ratio := float(enemy["hp"]) / maxf(1.0, float(enemy["max_hp"]))
 	draw_rect(Rect2(position.x - radius, position.y - radius - 18, bar_width, 8), Color("301824"))
@@ -777,6 +790,8 @@ func _draw_projectile(projectile: Dictionary) -> void:
 	var position := Vector2(float(projectile["x_milli"]) / 1000.0, float(projectile["y_milli"]) / 1000.0)
 	var velocity := Vector2(float(projectile["vx_milli"]), float(projectile["vy_milli"])).normalized()
 	var color := Color("fff0a8") if not bool(projectile.get("fatal", false)) else Color("ffcb47")
+	if int(projectile.get("poison_damage", 0)) > 0:
+		draw_line(position - velocity * 42.0, position - velocity * 22.0, Color("91e76d"), 7.0)
 	draw_line(position - velocity * 30.0, position + velocity * 8.0, color, 5.0)
 	draw_colored_polygon(PackedVector2Array([position + velocity * 15.0, position - velocity.rotated(0.7) * 8.0, position - velocity.rotated(-0.7) * 8.0]), color)
 
@@ -786,30 +801,10 @@ func _draw_effect(effect: Dictionary) -> void:
 	var position: Vector2 = effect.get("position", Vector2.ZERO)
 	var progress := clampf(float(effect.get("age", 0.0)) / maxf(0.01, float(effect.get("duration", 1.0))), 0.0, 1.0)
 	var detail := float(_quality_profile()["effect_detail"])
+	if kind == "spell":
+		_draw_spell_effect(effect, progress, detail)
+		return
 	match kind:
-		"fire_ball":
-			draw_circle(position, 40.0 + progress * 165.0, Color(1.0, 0.25, 0.04, (1.0 - progress) * 0.34))
-			var fire_rays := maxi(4, int(round(10.0 * detail)))
-			draw_arc(position, 55.0 + progress * 135.0, 0, TAU, maxi(16, int(round(48.0 * detail))), Color(1.0, 0.78, 0.18, 1.0 - progress), 12)
-			for ray in range(fire_rays):
-				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / float(fire_rays))
-				draw_line(position + direction * 28.0, position + direction * (70.0 + progress * 130.0), Color(1.0, 0.48, 0.08, 1.0 - progress), 8)
-		"glacial_spike":
-			var ice_rays := maxi(5, int(round(12.0 * detail)))
-			for ray in range(ice_rays):
-				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / float(ice_rays))
-				var side := direction.rotated(0.32)
-				draw_colored_polygon(PackedVector2Array([position + side * 15.0, position + direction * (70.0 + 150.0 * (1.0 - progress)), position - side * 15.0]), Color(0.42, 0.88, 1.0, 0.85 * (1.0 - progress)))
-		"lightning_strike":
-			var lightning_bolts := maxi(2, int(round(5.0 * detail)))
-			var lightning_segments := maxi(5, int(round(8.0 * detail)))
-			for bolt in range(lightning_bolts):
-				var points := PackedVector2Array()
-				for segment in range(lightning_segments):
-					var y := position.y - 460.0 + float(segment) * (462.0 / float(lightning_segments - 1))
-					var x := position.x + sin(float(segment * 13 + bolt * 7)) * (34.0 + bolt * 5.0)
-					points.append(Vector2(x, y))
-				draw_polyline(points, Color(0.84, 0.72, 1.0, 1.0 - progress), 7.0 - float(bolt))
 		"hit":
 			var hit_rays := maxi(3, int(round(6.0 * detail)))
 			for ray in range(hit_rays):
@@ -821,18 +816,76 @@ func _draw_effect(effect: Dictionary) -> void:
 			draw_arc(position, 80.0 + progress * 620.0, -1.2, 1.2, maxi(16, int(round(48.0 * detail))), Color(0.9, 0.16, 0.36, 1.0 - progress), 14)
 
 
+func _draw_spell_effect(effect: Dictionary, progress: float, detail: float) -> void:
+	var center: Vector2 = effect.get("position", Vector2.ZERO)
+	var radius := float(effect.get("radius", 180.0))
+	var tier := int(effect.get("tier", 1))
+	var fade := 1.0 - progress
+	var element := str(effect.get("element", ""))
+	var tint := Color("ff9a36") if element == "fire" else (Color("8ee7ff") if element == "ice" else Color("d9a4ff"))
+	draw_circle(center, radius, Color(tint, fade * 0.07))
+	draw_arc(center, radius * (0.55 + progress * 0.45), 0, TAU, 48, Color(tint, fade * 0.6), 3.0 + tier)
+	if element == "fire":
+		var impacts := 1 if tier == 1 else 2 * tier + 1
+		for index in range(impacts):
+			var angle := float(index) * TAU / impacts + 0.4
+			var impact := center if index == 0 else center + Vector2(cos(angle), sin(angle)) * radius * 0.56
+			var blast := radius * (0.2 if tier > 1 else 0.65) * (0.6 + progress)
+			if tier > 1:
+				var trail := Vector2(-120, -230) * (1.0 - progress)
+				draw_line(impact + trail, impact, Color(1.0, 0.3, 0.04, fade * 0.8), 20.0 * detail + 5.0)
+				draw_line(impact + trail * 0.7, impact, Color(1.0, 0.87, 0.45, fade), 7.0)
+			draw_circle(impact, blast, Color(1.0, 0.25, 0.025, fade * 0.5))
+			draw_circle(impact + Vector2(0, -blast * 0.15), blast * 0.56, Color(1.0, 0.76, 0.17, fade * 0.85))
+			draw_arc(impact, blast, 0, TAU, 24, Color(1.0, 0.87, 0.38, fade), 5)
+	elif element == "ice":
+		for hit in effect.get("hits", []):
+			var position := Vector2(float(hit["x_milli"]) / 1000.0, float(hit["y_milli"]) / 1000.0)
+			_draw_ice_prison(position, 28.0 + tier * 12.0, fade * 0.85)
+		var rays := maxi(8, int((8 + tier * 6) * detail))
+		for index in range(rays):
+			var direction := Vector2.RIGHT.rotated(TAU * index / rays)
+			var reach := radius * (0.45 + 0.55 * progress)
+			draw_line(center + direction * reach * 0.76, center + direction * reach, Color(0.65, 0.95, 1.0, fade), 3.0)
+			if tier == 3:
+				var snow := center + direction * radius * 0.75 + Vector2(0, progress * 70)
+				draw_line(snow, snow + Vector2(-5, 14), Color(0.86, 0.97, 1, fade * 0.8), 2)
+	elif element == "lightning":
+		var targets: Array = effect.get("hits", []).duplicate()
+		if targets.is_empty():
+			targets.append({"x_milli": center.x * 1000, "y_milli": center.y * 1000})
+		for index in range(targets.size()):
+			var target := Vector2(float(targets[index]["x_milli"]) / 1000.0, float(targets[index]["y_milli"]) / 1000.0)
+			var points := PackedVector2Array()
+			for segment in range(8):
+				var amount := float(segment) / 7.0
+				var jitter := sin(float(segment * 13 + index * 7)) * 26.0 if segment < 7 else 0.0
+				points.append(Vector2(target.x + jitter, lerpf(maxf(150.0, target.y - 400.0), target.y, amount)))
+			draw_polyline(points, Color(0.68, 0.3, 1.0, fade * 0.45), 10 + tier * 2, true)
+			draw_polyline(points, Color(0.95, 0.87, 1.0, fade), 2 + tier, true)
+			draw_arc(target, 24.0 + 25.0 * progress, 0, TAU, 24, Color(tint, fade), 4)
+
+
+func _draw_ice_prison(position: Vector2, radius: float, opacity: float) -> void:
+	var points := PackedVector2Array([position + Vector2(-radius, radius * 0.6), position + Vector2(-radius * 0.65, -radius * 0.65), position + Vector2(0, -radius * 1.6), position + Vector2(radius * 0.7, -radius * 0.6), position + Vector2(radius, radius * 0.6)])
+	draw_colored_polygon(points, Color(0.46, 0.82, 1.0, opacity))
+	draw_polyline(PackedVector2Array([points[0], points[2], points[4], points[0]]), Color(0.85, 0.97, 1.0, opacity), 3, true)
+	draw_line(points[2], position + Vector2(0, radius * 0.6), Color(0.9, 1, 1, opacity), 2)
+
+
 func _draw_crosshair() -> void:
 	var mouse := get_global_mouse_position()
 	var selected := str(snapshot.get("selected_skill", ""))
 	var color := Color("f4ead5")
 	var radius := 22.0
-	if selected == "fire_ball":
+	var element := str(snapshot.get("skill_definitions", {}).get(selected, {}).get("element", ""))
+	if element == "fire":
 		color = Color("ff7b3d")
 		radius = 48.0
-	elif selected == "glacial_spike":
+	elif element == "ice":
 		color = Color("69d6ff")
 		radius = 52.0
-	elif selected == "lightning_strike":
+	elif element == "lightning":
 		color = Color("d9b8ff")
 		radius = 58.0
 	draw_arc(mouse, radius, 0, TAU, 28, color, 3)
@@ -850,7 +903,7 @@ func _draw_cast_drag_indicator() -> void:
 	if not _cast_dragging:
 		return
 	var skill_id := str(snapshot.get("selected_skill", ""))
-	var skill := GameApp.content.find_by_id("skills", skill_id)
+	var skill: Dictionary = snapshot.get("skill_definitions", {}).get(skill_id, {})
 	if skill.is_empty():
 		return
 	var mouse := get_global_mouse_position()
@@ -896,4 +949,5 @@ static func _damage_color(source: String) -> Color:
 		"fire", "burn": return Color("ff8a4c")
 		"ice": return Color("6edcff")
 		"lightning": return Color("d7b2ff")
+		"poison": return Color("91e76d")
 		_: return Color("fff0a8")

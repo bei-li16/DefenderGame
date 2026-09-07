@@ -16,7 +16,9 @@ const ICON_SIZE := 64.0
 
 const NODE_GLYPHS := {
 	"strength": "💪", "agility": "🎯", "power_mastery": "💥", "hurricane_mastery": "🌪",
+	"power_shot": "💥", "poisoned_arrow": "☠", "fatal_blow": "ϟ", "multiple_arrows": "➶", "senior_hunter": "★",
 	"phantom_mastery": "👻", "fire_mastery": "🔥", "ice_mastery": "❄", "lightning_mastery": "⚡",
+	"meteor": "☄", "armageddon": "☄", "frost_nova": "❄", "ice_age": "❄", "thunder_storm": "ϟ", "ragnarok": "ϟ",
 	"mana_capacity": "🔮", "mana_regen": "✨", "spell_radius": "🔆", "cooldown_mastery": "⏱",
 	"wall_armor": "🛡", "wall_repair": "🔨", "lava_moat": "🌋", "magic_tower": "🗼",
 	"coin_bounty": "🪙", "xp_bounty": "⭐"
@@ -51,10 +53,10 @@ func build(definitions: Array, levels: Dictionary, coins: int, selected_id: Stri
 	var max_depth := 0
 	for definition in _definitions:
 		var upgrade_id := str(definition.get("id", ""))
-		var depth: int = depths[upgrade_id]
+		var depth: int = int(definition.get("tree_column", depths[upgrade_id]))
 		max_depth = maxi(max_depth, depth)
-		var row := int(column_rows.get(depth, 0))
-		column_rows[depth] = row + 1
+		var row := int(definition.get("tree_row", column_rows.get(depth, 0)))
+		column_rows[depth] = maxi(int(column_rows.get(depth, 0)), row + 1)
 		_node_rects[upgrade_id] = Rect2(ORIGIN + Vector2(depth * COLUMN_GAP, row * ROW_GAP), NODE_SIZE)
 		for prerequisite in definition.get("prerequisites", []):
 			if by_id.has(str(prerequisite)):
@@ -62,6 +64,7 @@ func build(definitions: Array, levels: Dictionary, coins: int, selected_id: Stri
 	for definition in _definitions:
 		var upgrade_id := str(definition.get("id", ""))
 		var button := Button.new()
+		button.name = "Research_" + upgrade_id
 		button.position = _node_rects[upgrade_id].position
 		button.size = NODE_SIZE
 		button.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -103,6 +106,9 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 	icon.add_child(glyph)
 	var level_badge := Label.new()
 	level_badge.text = "Lv %d" % level
+	if definition.has("skill_ref"):
+		var skill := GameApp.content.find_by_id("skills", str(definition["skill_ref"]))
+		level_badge.text = "%s · %d" % [["Ⅰ", "Ⅱ", "Ⅲ"][clampi(int(skill.get("tier", 1)), 1, 3) - 1], level]
 	level_badge.position = icon_origin + Vector2(ICON_SIZE - 44.0, -6.0)
 	level_badge.size = Vector2(50, 18)
 	level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -136,6 +142,7 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 25)
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(name_label)
 
@@ -171,7 +178,7 @@ func _depth_of(upgrade_id: String, by_id: Dictionary, depths: Dictionary) -> int
 
 func _prerequisites_met(definition: Dictionary) -> bool:
 	for prerequisite in definition.get("prerequisites", []):
-		if int(_levels.get(str(prerequisite), 0)) <= 0:
+		if int(_levels.get(str(prerequisite), 0)) < int(definition.get("prerequisite_levels", {}).get(str(prerequisite), 1)):
 			return false
 	return true
 
@@ -210,12 +217,26 @@ func _node_box(highlighted: bool) -> StyleBoxFlat:
 
 
 func _icon_color(upgrade_id: String) -> Color:
+	var upgrade := GameApp.content.find_by_id("upgrades", upgrade_id)
+	var skill := GameApp.content.find_by_id("skills", str(upgrade.get("skill_ref", "")))
+	match str(skill.get("element", "")):
+		"fire": return Color("a8543a")
+		"ice": return Color("3a7d8c")
+		"lightning": return Color("7a5aa8")
 	if upgrade_id.contains("fire") or upgrade_id == "strength":
 		return Color("a8543a")
 	if upgrade_id.contains("ice") or upgrade_id == "agility":
 		return Color("3a7d8c")
 	if upgrade_id.contains("lightning"):
 		return Color("7a5aa8")
+	if upgrade_id == "poisoned_arrow":
+		return Color("477d39")
+	if upgrade_id == "fatal_blow":
+		return Color("a64355")
+	if upgrade_id == "multiple_arrows":
+		return Color("7150a2")
+	if upgrade_id == "senior_hunter":
+		return Color("947a3a")
 	if upgrade_id.contains("mana") or upgrade_id.contains("spell") or upgrade_id.contains("cooldown"):
 		return Color("44549c")
 	if upgrade_id.contains("wall") or upgrade_id.contains("moat") or upgrade_id.contains("tower"):

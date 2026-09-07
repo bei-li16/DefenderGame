@@ -3,6 +3,8 @@ extends Control
 
 const UiTheme = preload("res://src/presentation/ui_theme.gd")
 const SkillButton = preload("res://src/presentation/gameplay/skill_button.gd")
+const SkillCatalog = preload("res://src/core/rules/skill_catalog.gd")
+const SkillText = preload("res://src/presentation/skill_text.gd")
 
 # Battle HUD (architecture §6.3 HudView): top stage bar with spawn progress,
 # bottom-left wall/mana cluster, boss banner, and the circular skill buttons.
@@ -183,18 +185,19 @@ func _build_skill_buttons() -> void:
 	skills.alignment = BoxContainer.ALIGNMENT_END
 	skills.add_theme_constant_override("separation", 18)
 	skills_margin.add_child(skills)
-	var hotkeys := {"fire_ball": "1", "glacial_spike": "2", "lightning_strike": "3"}
+	var hotkeys := {"fire": "1", "ice": "2", "lightning": "3"}
+	var loadout := SkillCatalog.loadout(GameApp.content.rules, GameApp.profile)
 	for definition in [
-		["fire_ball", "🔥"],
-		["glacial_spike", "❄"],
-		["lightning_strike", "⚡"]
+		["fire", "🔥"],
+		["ice", "❄"],
+		["lightning", "⚡"]
 	]:
 		var button := SkillButton.new()
-		button.skill_id = str(definition[0])
+		button.skill_id = str(loadout.get(definition[0], ""))
 		button.glyph = str(definition[1])
 		button.hotkey = str(hotkeys.get(str(definition[0]), ""))
 		button.low_mana_text = GameApp.text("feedback.no_mana")
-		button.tooltip_text = GameApp.text("skill.fire" if definition[0] == "fire_ball" else ("skill.ice" if definition[0] == "glacial_spike" else "skill.lightning"))
+		button.name = "Spell_" + button.skill_id
 		button.pressed.connect(func() -> void: skill_selected.emit(button.skill_id))
 		skills.add_child(button)
 		skill_buttons[button.skill_id] = button
@@ -232,9 +235,12 @@ func _update_skill_buttons(snapshot: Dictionary) -> void:
 	for skill_id in skill_buttons.keys():
 		var button: SkillButton = skill_buttons[skill_id]
 		var cooldown := int(cooldowns.get(skill_id, 0))
-		var definition := _skill_definition(skill_id)
+		var definition: Dictionary = snapshot.get("skill_definitions", {}).get(skill_id, _skill_definition(skill_id))
 		var max_cooldown := maxi(1, int(definition.get("cooldown_ticks", 1)))
 		var mana_cost := int(definition.get("mana_cost", 0))
+		button.tier = int(definition.get("tier", 1))
+		button.mana_cost = mana_cost
+		button.tooltip_text = GameApp.text(str(definition.get("name_key", ""))) + "\n" + SkillText.summary(definition, GameApp.text, int(GameApp.content.rules.get("simulation_tick_rate", 30)))
 		button.set_state(float(cooldown) / float(max_cooldown), mana >= mana_cost, selected == skill_id)
 
 

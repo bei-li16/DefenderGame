@@ -455,7 +455,7 @@ func _test_power_shot_resistance_and_boundary(source_config: Dictionary) -> void
 	model.enemies = [enemy]
 	model.projectiles = [{
 		"entity_id": 2, "x_milli": 1000000, "y_milli": 500000, "vx_milli": 0, "vy_milli": 0,
-		"damage": 1, "fatal": false, "power": true, "collision_radius_milli": 1000, "age_ticks": 0
+		"damage": 1, "fatal": false, "power": true, "knockback_milli": int(model.attack_stats["knockback_milli"]), "collision_radius_milli": 1000, "age_ticks": 0
 	}]
 	var first_events: Array[Dictionary] = []
 	model.call("_update_projectiles", first_events)
@@ -464,7 +464,7 @@ func _test_power_shot_resistance_and_boundary(source_config: Dictionary) -> void
 	model.enemies[0]["knockback_resistance_permille"] = 0
 	model.projectiles = [{
 		"entity_id": 3, "x_milli": model.enemies[0]["x_milli"], "y_milli": 500000, "vx_milli": 0, "vy_milli": 0,
-		"damage": 1, "fatal": false, "power": true, "collision_radius_milli": 1000, "age_ticks": 0
+		"damage": 1, "fatal": false, "power": true, "knockback_milli": int(model.attack_stats["knockback_milli"]), "collision_radius_milli": 1000, "age_ticks": 0
 	}]
 	var second_events: Array[Dictionary] = []
 	model.call("_update_projectiles", second_events)

@@ -1,8 +1,8 @@
 # Windows / Godot 实施状态
 
-版本：1.0.9-windows（以 `project.godot` 的 `application/config/version` 为准）
+版本：1.1.0-windows（以 `project.godot` 的 `application/config/version` 为准）
 
-文档日期：2026-09-05
+文档日期：2026-09-07
 
 分支：`windows-godot`
 
@@ -177,19 +177,26 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 清洁工作树且当前回归全部通过后，下一步是进行外部兼容性抽检：在另一台未安装 Godot、接近最低目标配置的 Windows 10/11 x64 电脑上直接解压 ZIP，复核冷启动、输入、Compatibility 渲染、存档权限和 60 分钟稳定性。若准备公开发布，还应补充图标、签名与发行渠道元数据；这些不影响源码功能闭环，但会影响公开发行门禁。
 
-## 7. 当前工作树复核（2026-09-05，第二轮）
+## 7. 当前工作树复核（2026-09-07，第三轮）
 
 第一轮复核发现的 Hurricane 齐射箭速断言失败已修复：`_fire_arrow` 由逐箭 max 范数归一化改为逐箭欧几里得归一化，三支箭实测速度偏差 ≤ 0.24（断言容差 2.0）。本轮修复同时合入工作树中另一会话遗留的加固集：旧档无 hash 迁移与损坏副本唯一命名、城墙归零后同 tick 不再产生后续伤害事件、未解锁武器回退基础弓（空列表不再视为全解锁）、`start_stage` 应用层关卡锁校验、悬停射击限定可见视口、skill_rejected 新增 invalid_target 反馈、校验器类型防护与显示键检查、ProgressBar 全局可读轨道主题。
 
+第三轮（2026-09-07）新增三系九技能链（火：炽焰火球→陨石术→末日审判；冰：冰川尖刺→冰霜新星→冰河时代；雷：雷霆打击→雷暴→诸神黄昏）与攻击研究树（力量/敏捷→击退/毒箭→暴击→多重箭）。`SkillCatalog`（Core，RefCounted）统一可用性判定、三槽归一化与有效属性公式；`SkillSystem` 改为先扣蓝、首轮即时结算、后续轮次入 `RunModel.active_spells` 队列按 tick 推进。Profile 新增 `equipped_skills: {fire,ice,lightning}`，向后兼容补全（schema v6 无破坏性迁移）。配置升至 config v5 / `aegis-windows-attack-tree-v1`。
+
 | 项目 | 当前结果 | 依据 |
 |---|---|---|
-| 应用/规则版本 | `1.0.9-windows` / config v3 / `aegis-windows-v1` | `project.godot`、`content/config/game_rules.json` |
-| 内容规模 | 30 Stage（3 Boss）、6 类普通敌人、4 武器、3 技能、18 升级、8 Honors、4 研究页 | `content/config/game_rules.json` 解析 |
+| 应用/规则版本 | `1.1.0-windows` / config v5 / `aegis-windows-attack-tree-v1` | `project.godot`、`content/config/game_rules.json` |
+| 内容规模 | 30 Stage（3 Boss）、6 类普通敌人、4 武器、9 技能（3 系×3 阶）、攻击/魔法/防御/后勤 4 研究页、8 Honors | `content/config/game_rules.json` 解析 |
 | 内容校验 | 通过 | `tools/validate_content.gd`（本轮运行） |
-| 核心回归 | **94 passed / 0 failed** | `tests/run_all.gd`（本轮运行，含 Hurricane 箭速与城墙归零断言） |
+| 核心回归 | **137 passed / 0 failed** | `tests/run_all.gd`（本轮运行） |
+| 技能链专项 | **177 passed / 0 failed** | `tests/skill_chains_acceptance.gd`（本轮运行） |
+| 攻击研究专项 | **194 passed / 0 failed** | `tests/attack_research_acceptance.gd`（本轮运行） |
+| 弓箭选择专项 | **30 passed / 0 failed** | `tests/weapon_selection_acceptance.gd`（本轮运行） |
+| 菜单选择 | **7 passed / 0 failed** | `tests/menu_selection_acceptance.gd`（本轮运行） |
 | Stage 自动通关 | 30/30 victory；Boss 10/20/30 各 1 次 | `tests/stage_autoplay.gd`（本轮运行） |
-| 其余套件 | tutorial 8/8、settings 8/8、transaction 4/4、inputmap 9/9、diagnostic 10/10、resolution_layout 0 失败、window_mode 7/7 | 本轮运行 |
-| 压力/浸泡 | p95 1.390 ms；60 逻辑分钟内存平稳（26.84→30.00 MiB），节点 3→3 | `tests/performance_stress.gd`、`tests/long_soak.gd`（本轮运行） |
+| 存档槽位 | **18 passed / 0 failed** | `tests/save_slot_acceptance.gd`（本轮运行） |
+| 分辨率布局 | 2 语言×3 分辨率 0 失败 | `tests/resolution_layout.gd`（本轮运行） |
+| 压力/浸泡 | p95 1.376 ms；60 逻辑分钟内存平稳 | `tests/performance_stress.gd`、`tests/long_soak.gd`（本轮运行） |
 | 发布清单 | 重建后 manifest 指向当前 HEAD | `content/build/build-manifest.json`（构建时刷新） |
 
-当前发布候选为 `Aegis-of-Ember-1.0.6-Windows-x64.zip`；已发布的 v1.0.3～v1.0.5 不包含本轮改进，不应继续分发。
+当前发布候选为 `Aegis-of-Ember-1.1.0-Windows-x64.zip`；已发布的 v1.0.3～v1.0.9 不包含本轮技能链与攻击研究树改进，不应继续分发。

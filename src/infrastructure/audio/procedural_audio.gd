@@ -89,6 +89,7 @@ func play_event(event: Dictionary, volume_linear: float = 1.0) -> void:
 		"hit", "damage":
 			sound_id = "hit" if str(event.get("source", "")) == "arrow" or event["type"] == "hit" else ""
 		"skill_cast":
+			sound_id = str(event.get("element", ""))
 			match str(event.get("skill_id", "")):
 				"fire_ball": sound_id = "fire"
 				"glacial_spike": sound_id = "ice"

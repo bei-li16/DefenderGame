@@ -1,6 +1,6 @@
 {
-  "config_version": 3,
-  "ruleset_version": "aegis-windows-v1",
+  "config_version": 5,
+  "ruleset_version": "aegis-windows-attack-tree-v1",
   "source": "Windows offline 1.0 tuning derived from the Defender II requirements",
   "simulation_tick_rate": 30,
   "rules": {
@@ -126,7 +126,13 @@
       "radius_milli": 190000,
       "burn_damage": 9,
       "burn_interval_ticks": 15,
-      "burn_duration_ticks": 75
+      "burn_duration_ticks": 75,
+      "element": "fire",
+      "tier": 1,
+      "upgrade_id": "fire_mastery",
+      "pulse_count": 1,
+      "pulse_interval_ticks": 1,
+      "burn_duration_ticks_per_level": 3
     },
     {
       "id": "glacial_spike",
@@ -138,7 +144,13 @@
       "radius_milli": 210000,
       "slow_permille": 450,
       "slow_duration_ticks": 120,
-      "freeze_ticks": 24
+      "freeze_ticks": 24,
+      "element": "ice",
+      "tier": 1,
+      "upgrade_id": "ice_mastery",
+      "pulse_count": 1,
+      "pulse_interval_ticks": 1,
+      "freeze_ticks_per_level": 3
     },
     {
       "id": "lightning_strike",
@@ -149,7 +161,119 @@
       "damage": 118,
       "radius_milli": 280000,
       "max_targets": 4,
-      "stun_ticks": 36
+      "stun_ticks": 36,
+      "element": "lightning",
+      "tier": 1,
+      "upgrade_id": "lightning_mastery",
+      "pulse_count": 1,
+      "pulse_interval_ticks": 1,
+      "stun_ticks_per_level": 2
+    },
+    {
+      "id": "meteor",
+      "element": "fire",
+      "tier": 2,
+      "mana_cost": 60,
+      "cooldown_ticks": 210,
+      "damage": 110,
+      "radius_milli": 310000,
+      "pulse_count": 3,
+      "pulse_interval_ticks": 18,
+      "burn_damage": 12,
+      "burn_interval_ticks": 15,
+      "burn_duration_ticks": 90,
+      "burn_duration_ticks_per_level": 3,
+      "name_key": "skill.meteor",
+      "description_key": "skill.meteor.desc",
+      "upgrade_id": "meteor"
+    },
+    {
+      "id": "armageddon",
+      "element": "fire",
+      "tier": 3,
+      "mana_cost": 100,
+      "cooldown_ticks": 300,
+      "damage": 160,
+      "radius_milli": 500000,
+      "pulse_count": 5,
+      "pulse_interval_ticks": 18,
+      "burn_damage": 16,
+      "burn_interval_ticks": 15,
+      "burn_duration_ticks": 120,
+      "burn_duration_ticks_per_level": 3,
+      "name_key": "skill.armageddon",
+      "description_key": "skill.armageddon.desc",
+      "upgrade_id": "armageddon"
+    },
+    {
+      "id": "frost_nova",
+      "element": "ice",
+      "tier": 2,
+      "mana_cost": 45,
+      "cooldown_ticks": 195,
+      "damage": 80,
+      "radius_milli": 350000,
+      "pulse_count": 1,
+      "pulse_interval_ticks": 1,
+      "slow_permille": 350,
+      "slow_duration_ticks": 180,
+      "freeze_ticks": 60,
+      "freeze_ticks_per_level": 3,
+      "name_key": "skill.frost_nova",
+      "description_key": "skill.frost_nova.desc",
+      "upgrade_id": "frost_nova"
+    },
+    {
+      "id": "ice_age",
+      "element": "ice",
+      "tier": 3,
+      "mana_cost": 75,
+      "cooldown_ticks": 270,
+      "damage": 130,
+      "radius_milli": 530000,
+      "pulse_count": 1,
+      "pulse_interval_ticks": 1,
+      "slow_permille": 250,
+      "slow_duration_ticks": 240,
+      "freeze_ticks": 105,
+      "freeze_ticks_per_level": 3,
+      "name_key": "skill.ice_age",
+      "description_key": "skill.ice_age.desc",
+      "upgrade_id": "ice_age"
+    },
+    {
+      "id": "thunder_storm",
+      "element": "lightning",
+      "tier": 2,
+      "mana_cost": 65,
+      "cooldown_ticks": 240,
+      "damage": 155,
+      "radius_milli": 400000,
+      "pulse_count": 2,
+      "pulse_interval_ticks": 15,
+      "max_targets": 7,
+      "stun_ticks": 54,
+      "stun_ticks_per_level": 2,
+      "name_key": "skill.thunder_storm",
+      "description_key": "skill.thunder_storm.desc",
+      "upgrade_id": "thunder_storm"
+    },
+    {
+      "id": "ragnarok",
+      "element": "lightning",
+      "tier": 3,
+      "mana_cost": 90,
+      "cooldown_ticks": 315,
+      "damage": 205,
+      "radius_milli": 550000,
+      "pulse_count": 3,
+      "pulse_interval_ticks": 15,
+      "max_targets": 12,
+      "stun_ticks": 78,
+      "stun_ticks_per_level": 2,
+      "name_key": "skill.ragnarok",
+      "description_key": "skill.ragnarok.desc",
+      "upgrade_id": "ragnarok"
     }
   ],
   "enemies": [
@@ -529,38 +653,618 @@
     }
   ],
   "research_pages": [
-    {"id":"attack","name_key":"research.attack","description_key":"research.attack.desc","upgrade_ids":["strength","agility","power_mastery","hurricane_mastery","phantom_mastery"]},
-    {"id":"magic","name_key":"research.magic","description_key":"research.magic.desc","upgrade_ids":["fire_mastery","ice_mastery","lightning_mastery","mana_capacity","mana_regen","spell_radius","cooldown_mastery"]},
-    {"id":"defense","name_key":"research.defense","description_key":"research.defense.desc","upgrade_ids":["wall_armor","wall_repair","lava_moat","magic_tower"]},
-      {"id":"weapons","name_key":"research.weapons","description_key":"research.weapons.desc","upgrade_ids":["unlock_power_bow","forge_power_bow","unlock_hurricane_bow","forge_hurricane_bow","unlock_phantom_bow","forge_phantom_bow"]},
-    {"id":"utility","name_key":"research.utility","description_key":"research.utility.desc","upgrade_ids":["coin_bounty","xp_bounty"]}
+    {
+      "id": "attack",
+      "name_key": "research.attack",
+      "description_key": "research.attack.desc",
+      "upgrade_ids": [
+        "strength",
+        "agility",
+        "power_shot",
+        "poisoned_arrow",
+        "fatal_blow",
+        "multiple_arrows",
+        "senior_hunter"
+      ]
+    },
+    {
+      "id": "magic",
+      "name_key": "research.magic",
+      "description_key": "research.magic.desc",
+      "upgrade_ids": [
+        "mana_capacity",
+        "fire_mastery",
+        "meteor",
+        "armageddon",
+        "ice_mastery",
+        "frost_nova",
+        "ice_age",
+        "lightning_mastery",
+        "thunder_storm",
+        "ragnarok",
+        "mana_regen",
+        "spell_radius",
+        "cooldown_mastery"
+      ]
+    },
+    {
+      "id": "defense",
+      "name_key": "research.defense",
+      "description_key": "research.defense.desc",
+      "upgrade_ids": [
+        "wall_armor",
+        "wall_repair",
+        "lava_moat",
+        "magic_tower"
+      ]
+    },
+    {
+      "id": "weapons",
+      "name_key": "research.weapons",
+      "description_key": "research.weapons.desc",
+      "upgrade_ids": [
+        "unlock_power_bow",
+        "forge_power_bow",
+        "unlock_hurricane_bow",
+        "forge_hurricane_bow",
+        "unlock_phantom_bow",
+        "forge_phantom_bow"
+      ]
+    },
+    {
+      "id": "utility",
+      "name_key": "research.utility",
+      "description_key": "research.utility.desc",
+      "upgrade_ids": [
+        "coin_bounty",
+        "xp_bounty"
+      ]
+    }
   ],
   "upgrades": [
-    {"id":"strength","name_key":"upgrade.strength","description_key":"upgrade.strength.desc","page":"attack","max_level":12,"base_cost":90,"cost_growth_permille":1450,"effect_per_level":4,"prerequisites":[]},
-    {"id":"agility","name_key":"upgrade.agility","description_key":"upgrade.agility.desc","page":"attack","max_level":6,"base_cost":120,"cost_growth_permille":1600,"effect_per_level":1,"prerequisites":[]},
-    {"id":"power_mastery","name_key":"upgrade.power","description_key":"upgrade.power.desc","page":"attack","max_level":8,"base_cost":180,"cost_growth_permille":1500,"effect_per_level":180,"prerequisites":["strength"]},
-    {"id":"hurricane_mastery","name_key":"upgrade.hurricane","description_key":"upgrade.hurricane.desc","page":"attack","max_level":4,"base_cost":240,"cost_growth_permille":1700,"effect_per_level":1,"prerequisites":["agility"]},
-    {"id":"phantom_mastery","name_key":"upgrade.phantom","description_key":"upgrade.phantom.desc","page":"attack","max_level":4,"base_cost":260,"cost_growth_permille":1700,"effect_per_level":1,"prerequisites":["power_mastery"]},
-    {"id":"fire_mastery","name_key":"upgrade.fire","description_key":"upgrade.fire.desc","page":"magic","max_level":8,"base_cost":110,"cost_growth_permille":1500,"effect_per_level":9,"prerequisites":[]},
-    {"id":"ice_mastery","name_key":"upgrade.ice","description_key":"upgrade.ice.desc","page":"magic","max_level":8,"base_cost":110,"cost_growth_permille":1500,"effect_per_level":8,"prerequisites":[]},
-    {"id":"lightning_mastery","name_key":"upgrade.lightning","description_key":"upgrade.lightning.desc","page":"magic","max_level":8,"base_cost":130,"cost_growth_permille":1550,"effect_per_level":11,"prerequisites":[]},
-    {"id":"mana_capacity","name_key":"upgrade.mana_capacity","description_key":"upgrade.mana_capacity.desc","page":"magic","max_level":8,"base_cost":150,"cost_growth_permille":1500,"effect_per_level":10,"prerequisites":[]},
-    {"id":"mana_regen","name_key":"upgrade.mana_regen","description_key":"upgrade.mana_regen.desc","page":"magic","max_level":6,"base_cost":130,"cost_growth_permille":1450,"effect_per_level":1,"prerequisites":[]},
-    {"id":"spell_radius","name_key":"upgrade.spell_radius","description_key":"upgrade.spell_radius.desc","page":"magic","max_level":5,"base_cost":160,"cost_growth_permille":1500,"effect_per_level":60,"prerequisites":["fire_mastery"]},
-    {"id":"cooldown_mastery","name_key":"upgrade.cooldown","description_key":"upgrade.cooldown.desc","page":"magic","max_level":6,"base_cost":200,"cost_growth_permille":1550,"effect_per_level":3,"prerequisites":["mana_regen"]},
-    {"id":"wall_armor","name_key":"upgrade.wall_armor","description_key":"upgrade.wall_armor.desc","page":"defense","max_level":10,"base_cost":100,"cost_growth_permille":1450,"effect_per_level":3,"prerequisites":[]},
-    {"id":"wall_repair","name_key":"upgrade.wall_repair","description_key":"upgrade.wall_repair.desc","page":"defense","max_level":8,"base_cost":140,"cost_growth_permille":1500,"effect_per_level":35,"prerequisites":[]},
-    {"id":"lava_moat","name_key":"upgrade.lava_moat","description_key":"upgrade.lava_moat.desc","page":"defense","max_level":5,"base_cost":220,"cost_growth_permille":1650,"effect_per_level":1,"prerequisites":["wall_armor"]},
-    {"id":"magic_tower","name_key":"upgrade.magic_tower","description_key":"upgrade.magic_tower.desc","page":"defense","max_level":5,"base_cost":240,"cost_growth_permille":1650,"effect_per_level":1,"prerequisites":["wall_repair"]},
-    {"id":"coin_bounty","name_key":"upgrade.coin_bounty","description_key":"upgrade.coin_bounty.desc","page":"utility","max_level":10,"base_cost":180,"cost_growth_permille":1500,"effect_per_level":1,"prerequisites":[]},
-    {"id":"xp_bounty","name_key":"upgrade.xp_bounty","description_key":"upgrade.xp_bounty.desc","page":"utility","max_level":10,"base_cost":180,"cost_growth_permille":1500,"effect_per_level":1,"prerequisites":[]}
-  ,
-      {"id":"unlock_power_bow","page":"weapons","name_key":"upgrade.unlock_power_bow","description_key":"upgrade.unlock_power_bow.desc","max_level":1,"base_cost":600,"cost_growth_permille":1000,"effect_per_level":1,"prerequisites":[],"weapon_ref":"power_bow"},
-      {"id":"forge_power_bow","page":"weapons","name_key":"upgrade.forge_power_bow","description_key":"upgrade.forge_power_bow.desc","max_level":5,"base_cost":400,"cost_growth_permille":1500,"effect_per_level":8,"prerequisites":["unlock_power_bow"],"weapon_ref":"power_bow"},
-      {"id":"unlock_hurricane_bow","page":"weapons","name_key":"upgrade.unlock_hurricane_bow","description_key":"upgrade.unlock_hurricane_bow.desc","max_level":1,"base_cost":1200,"cost_growth_permille":1000,"effect_per_level":1,"prerequisites":[],"weapon_ref":"hurricane_bow"},
-      {"id":"forge_hurricane_bow","page":"weapons","name_key":"upgrade.forge_hurricane_bow","description_key":"upgrade.forge_hurricane_bow.desc","max_level":5,"base_cost":500,"cost_growth_permille":1500,"effect_per_level":8,"prerequisites":["unlock_hurricane_bow"],"weapon_ref":"hurricane_bow"},
-      {"id":"unlock_phantom_bow","page":"weapons","name_key":"upgrade.unlock_phantom_bow","description_key":"upgrade.unlock_phantom_bow.desc","max_level":1,"base_cost":2000,"cost_growth_permille":1000,"effect_per_level":1,"prerequisites":[],"weapon_ref":"phantom_bow"},
-      {"id":"forge_phantom_bow","page":"weapons","name_key":"upgrade.forge_phantom_bow","description_key":"upgrade.forge_phantom_bow.desc","max_level":5,"base_cost":600,"cost_growth_permille":1500,"effect_per_level":8,"prerequisites":["unlock_phantom_bow"],"weapon_ref":"phantom_bow"}
+    {
+      "id": "strength",
+      "name_key": "upgrade.strength",
+      "description_key": "upgrade.strength.desc",
+      "page": "attack",
+      "max_level": 12,
+      "base_cost": 90,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 4,
+      "prerequisites": [],
+      "prerequisite_levels": {},
+      "tree_column": 0,
+      "tree_row": 0
+    },
+    {
+      "id": "agility",
+      "name_key": "upgrade.agility",
+      "description_key": "upgrade.agility.desc",
+      "page": "attack",
+      "max_level": 6,
+      "base_cost": 120,
+      "cost_growth_permille": 1600,
+      "effect_per_level": 1,
+      "prerequisites": [],
+      "prerequisite_levels": {},
+      "tree_column": 0,
+      "tree_row": 2
+    },
+    {
+      "id": "power_shot",
+      "name_key": "upgrade.power_shot",
+      "description_key": "upgrade.power_shot.desc",
+      "page": "attack",
+      "max_level": 9,
+      "base_cost": 180,
+      "cost_growth_permille": 1400,
+      "effect_per_level": 20000,
+      "prerequisites": [
+        "strength"
+      ],
+      "prerequisite_levels": {
+        "strength": 3
+      },
+      "tree_column": 1,
+      "tree_row": 0,
+      "chance_per_level": 180
+    },
+    {
+      "id": "poisoned_arrow",
+      "name_key": "upgrade.poisoned_arrow",
+      "description_key": "upgrade.poisoned_arrow.desc",
+      "page": "attack",
+      "max_level": 9,
+      "base_cost": 200,
+      "cost_growth_permille": 1400,
+      "effect_per_level": 50,
+      "prerequisites": [
+        "strength",
+        "agility"
+      ],
+      "prerequisite_levels": {
+        "strength": 3,
+        "agility": 3
+      },
+      "tree_column": 1,
+      "tree_row": 1,
+      "duration_ticks": 90,
+      "interval_ticks": 30
+    },
+    {
+      "id": "fatal_blow",
+      "name_key": "upgrade.fatal_blow",
+      "description_key": "upgrade.fatal_blow.desc",
+      "page": "attack",
+      "max_level": 9,
+      "base_cost": 240,
+      "cost_growth_permille": 1400,
+      "effect_per_level": 500,
+      "prerequisites": [
+        "agility"
+      ],
+      "prerequisite_levels": {
+        "agility": 3
+      },
+      "tree_column": 1,
+      "tree_row": 2
+    },
+    {
+      "id": "multiple_arrows",
+      "name_key": "upgrade.multiple_arrows",
+      "description_key": "upgrade.multiple_arrows.desc",
+      "page": "attack",
+      "max_level": 9,
+      "base_cost": 360,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 1,
+      "prerequisites": [
+        "power_shot",
+        "fatal_blow"
+      ],
+      "prerequisite_levels": {
+        "power_shot": 3,
+        "fatal_blow": 3
+      },
+      "tree_column": 2,
+      "tree_row": 1,
+      "spread_milli": 90000,
+      "level_effects": [
+        {
+          "projectile_count": 1,
+          "damage_permille": 1000
+        },
+        {
+          "projectile_count": 2,
+          "damage_permille": 650
+        },
+        {
+          "projectile_count": 2,
+          "damage_permille": 750
+        },
+        {
+          "projectile_count": 3,
+          "damage_permille": 600
+        },
+        {
+          "projectile_count": 3,
+          "damage_permille": 700
+        },
+        {
+          "projectile_count": 4,
+          "damage_permille": 600
+        },
+        {
+          "projectile_count": 4,
+          "damage_permille": 700
+        },
+        {
+          "projectile_count": 5,
+          "damage_permille": 600
+        },
+        {
+          "projectile_count": 5,
+          "damage_permille": 750
+        },
+        {
+          "projectile_count": 5,
+          "damage_permille": 900
+        }
+      ]
+    },
+    {
+      "id": "senior_hunter",
+      "name_key": "upgrade.senior_hunter",
+      "description_key": "upgrade.senior_hunter.desc",
+      "page": "attack",
+      "max_level": 9,
+      "base_cost": 300,
+      "cost_growth_permille": 1350,
+      "effect_per_level": 50,
+      "prerequisites": [
+        "multiple_arrows"
+      ],
+      "prerequisite_levels": {
+        "multiple_arrows": 3
+      },
+      "tree_column": 3,
+      "tree_row": 1
+    },
+    {
+      "id": "mana_capacity",
+      "name_key": "upgrade.mana_capacity",
+      "description_key": "upgrade.mana_capacity.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 150,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 10,
+      "prerequisites": [],
+      "tree_column": 0,
+      "tree_row": 1
+    },
+    {
+      "id": "fire_mastery",
+      "name_key": "skill.fire",
+      "description_key": "skill.fire.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 110,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 9,
+      "prerequisites": [
+        "mana_capacity"
+      ],
+      "skill_ref": "fire_ball",
+      "prerequisite_levels": {
+        "mana_capacity": 1
+      },
+      "tree_column": 1,
+      "tree_row": 0
+    },
+    {
+      "id": "meteor",
+      "name_key": "skill.meteor",
+      "description_key": "skill.meteor.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 320,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 14,
+      "prerequisites": [
+        "fire_mastery"
+      ],
+      "prerequisite_levels": {
+        "fire_mastery": 3
+      },
+      "skill_ref": "meteor",
+      "tree_column": 2,
+      "tree_row": 0
+    },
+    {
+      "id": "armageddon",
+      "name_key": "skill.armageddon",
+      "description_key": "skill.armageddon.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 900,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 20,
+      "prerequisites": [
+        "meteor"
+      ],
+      "prerequisite_levels": {
+        "meteor": 3
+      },
+      "skill_ref": "armageddon",
+      "tree_column": 3,
+      "tree_row": 0
+    },
+    {
+      "id": "ice_mastery",
+      "name_key": "skill.ice",
+      "description_key": "skill.ice.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 110,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 8,
+      "prerequisites": [
+        "mana_capacity"
+      ],
+      "skill_ref": "glacial_spike",
+      "prerequisite_levels": {
+        "mana_capacity": 1
+      },
+      "tree_column": 1,
+      "tree_row": 1
+    },
+    {
+      "id": "frost_nova",
+      "name_key": "skill.frost_nova",
+      "description_key": "skill.frost_nova.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 320,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 14,
+      "prerequisites": [
+        "ice_mastery"
+      ],
+      "prerequisite_levels": {
+        "ice_mastery": 3
+      },
+      "skill_ref": "frost_nova",
+      "tree_column": 2,
+      "tree_row": 1
+    },
+    {
+      "id": "ice_age",
+      "name_key": "skill.ice_age",
+      "description_key": "skill.ice_age.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 900,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 20,
+      "prerequisites": [
+        "frost_nova"
+      ],
+      "prerequisite_levels": {
+        "frost_nova": 3
+      },
+      "skill_ref": "ice_age",
+      "tree_column": 3,
+      "tree_row": 1
+    },
+    {
+      "id": "lightning_mastery",
+      "name_key": "skill.lightning",
+      "description_key": "skill.lightning.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 130,
+      "cost_growth_permille": 1550,
+      "effect_per_level": 11,
+      "prerequisites": [
+        "mana_capacity"
+      ],
+      "skill_ref": "lightning_strike",
+      "prerequisite_levels": {
+        "mana_capacity": 1
+      },
+      "tree_column": 1,
+      "tree_row": 2
+    },
+    {
+      "id": "thunder_storm",
+      "name_key": "skill.thunder_storm",
+      "description_key": "skill.thunder_storm.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 320,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 14,
+      "prerequisites": [
+        "lightning_mastery"
+      ],
+      "prerequisite_levels": {
+        "lightning_mastery": 3
+      },
+      "skill_ref": "thunder_storm",
+      "tree_column": 2,
+      "tree_row": 2
+    },
+    {
+      "id": "ragnarok",
+      "name_key": "skill.ragnarok",
+      "description_key": "skill.ragnarok.desc",
+      "page": "magic",
+      "max_level": 8,
+      "base_cost": 900,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 20,
+      "prerequisites": [
+        "thunder_storm"
+      ],
+      "prerequisite_levels": {
+        "thunder_storm": 3
+      },
+      "skill_ref": "ragnarok",
+      "tree_column": 3,
+      "tree_row": 2
+    },
+    {
+      "id": "mana_regen",
+      "name_key": "upgrade.mana_regen",
+      "description_key": "upgrade.mana_regen.desc",
+      "page": "magic",
+      "max_level": 6,
+      "base_cost": 130,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 1,
+      "prerequisites": [],
+      "tree_column": 0,
+      "tree_row": 3
+    },
+    {
+      "id": "spell_radius",
+      "name_key": "upgrade.spell_radius",
+      "description_key": "upgrade.spell_radius.desc",
+      "page": "magic",
+      "max_level": 5,
+      "base_cost": 160,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 60,
+      "prerequisites": [
+        "fire_mastery"
+      ],
+      "tree_column": 1,
+      "tree_row": 3
+    },
+    {
+      "id": "cooldown_mastery",
+      "name_key": "upgrade.cooldown",
+      "description_key": "upgrade.cooldown.desc",
+      "page": "magic",
+      "max_level": 6,
+      "base_cost": 200,
+      "cost_growth_permille": 1550,
+      "effect_per_level": 3,
+      "prerequisites": [
+        "mana_regen"
+      ],
+      "tree_column": 2,
+      "tree_row": 3
+    },
+    {
+      "id": "wall_armor",
+      "name_key": "upgrade.wall_armor",
+      "description_key": "upgrade.wall_armor.desc",
+      "page": "defense",
+      "max_level": 10,
+      "base_cost": 100,
+      "cost_growth_permille": 1450,
+      "effect_per_level": 3,
+      "prerequisites": []
+    },
+    {
+      "id": "wall_repair",
+      "name_key": "upgrade.wall_repair",
+      "description_key": "upgrade.wall_repair.desc",
+      "page": "defense",
+      "max_level": 8,
+      "base_cost": 140,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 35,
+      "prerequisites": []
+    },
+    {
+      "id": "lava_moat",
+      "name_key": "upgrade.lava_moat",
+      "description_key": "upgrade.lava_moat.desc",
+      "page": "defense",
+      "max_level": 5,
+      "base_cost": 220,
+      "cost_growth_permille": 1650,
+      "effect_per_level": 1,
+      "prerequisites": [
+        "wall_armor"
+      ]
+    },
+    {
+      "id": "magic_tower",
+      "name_key": "upgrade.magic_tower",
+      "description_key": "upgrade.magic_tower.desc",
+      "page": "defense",
+      "max_level": 5,
+      "base_cost": 240,
+      "cost_growth_permille": 1650,
+      "effect_per_level": 1,
+      "prerequisites": [
+        "wall_repair"
+      ]
+    },
+    {
+      "id": "coin_bounty",
+      "name_key": "upgrade.coin_bounty",
+      "description_key": "upgrade.coin_bounty.desc",
+      "page": "utility",
+      "max_level": 10,
+      "base_cost": 180,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 1,
+      "prerequisites": []
+    },
+    {
+      "id": "xp_bounty",
+      "name_key": "upgrade.xp_bounty",
+      "description_key": "upgrade.xp_bounty.desc",
+      "page": "utility",
+      "max_level": 10,
+      "base_cost": 180,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 1,
+      "prerequisites": []
+    },
+    {
+      "id": "unlock_power_bow",
+      "page": "weapons",
+      "name_key": "upgrade.unlock_power_bow",
+      "description_key": "upgrade.unlock_power_bow.desc",
+      "max_level": 1,
+      "base_cost": 600,
+      "cost_growth_permille": 1000,
+      "effect_per_level": 1,
+      "prerequisites": [],
+      "weapon_ref": "power_bow"
+    },
+    {
+      "id": "forge_power_bow",
+      "page": "weapons",
+      "name_key": "upgrade.forge_power_bow",
+      "description_key": "upgrade.forge_power_bow.desc",
+      "max_level": 5,
+      "base_cost": 400,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 8,
+      "prerequisites": [
+        "unlock_power_bow"
+      ],
+      "weapon_ref": "power_bow"
+    },
+    {
+      "id": "unlock_hurricane_bow",
+      "page": "weapons",
+      "name_key": "upgrade.unlock_hurricane_bow",
+      "description_key": "upgrade.unlock_hurricane_bow.desc",
+      "max_level": 1,
+      "base_cost": 1200,
+      "cost_growth_permille": 1000,
+      "effect_per_level": 1,
+      "prerequisites": [],
+      "weapon_ref": "hurricane_bow"
+    },
+    {
+      "id": "forge_hurricane_bow",
+      "page": "weapons",
+      "name_key": "upgrade.forge_hurricane_bow",
+      "description_key": "upgrade.forge_hurricane_bow.desc",
+      "max_level": 5,
+      "base_cost": 500,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 8,
+      "prerequisites": [
+        "unlock_hurricane_bow"
+      ],
+      "weapon_ref": "hurricane_bow"
+    },
+    {
+      "id": "unlock_phantom_bow",
+      "page": "weapons",
+      "name_key": "upgrade.unlock_phantom_bow",
+      "description_key": "upgrade.unlock_phantom_bow.desc",
+      "max_level": 1,
+      "base_cost": 2000,
+      "cost_growth_permille": 1000,
+      "effect_per_level": 1,
+      "prerequisites": [],
+      "weapon_ref": "phantom_bow"
+    },
+    {
+      "id": "forge_phantom_bow",
+      "page": "weapons",
+      "name_key": "upgrade.forge_phantom_bow",
+      "description_key": "upgrade.forge_phantom_bow.desc",
+      "max_level": 5,
+      "base_cost": 600,
+      "cost_growth_permille": 1500,
+      "effect_per_level": 8,
+      "prerequisites": [
+        "unlock_phantom_bow"
+      ],
+      "weapon_ref": "phantom_bow"
+    }
   ],
   "stages": [
     {"id":"stage_001","number":1,"name_key":"stage.001","boss":false,"groups":[{"enemy_id":"melee_basic","count":10,"interval_ticks":36}],"clear_reward":{"coins":80,"xp":25}},
@@ -593,5 +1297,22 @@
     {"id":"stage_028","number":28,"name_key":"stage.028","boss":false,"groups":[{"enemy_id":"armored_guard","count":17,"interval_ticks":19},{"enemy_id":"ember_shaman","count":16,"interval_ticks":21},{"enemy_id":"fast_raider","count":16,"interval_ticks":15}],"clear_reward":{"coins":1105,"xp":352}},
     {"id":"stage_029","number":29,"name_key":"stage.029","boss":false,"groups":[{"enemy_id":"ranged_hexer","count":18,"interval_ticks":19},{"enemy_id":"sky_harrier","count":18,"interval_ticks":15},{"enemy_id":"armored_guard","count":14,"interval_ticks":19}],"clear_reward":{"coins":1150,"xp":368}},
     {"id":"stage_030","number":30,"name_key":"stage.030","boss":true,"groups":[{"enemy_id":"armored_guard","count":16,"interval_ticks":19},{"enemy_id":"ember_shaman","count":12,"interval_ticks":21},{"enemy_id":"sky_harrier","count":12,"interval_ticks":16},{"enemy_id":"storm_matron","count":1,"interval_ticks":1}],"clear_reward":{"coins":1400,"xp":500}}
-  ]
+  ],
+  "skill_source": {
+    "source_grade": "B/C",
+    "source_version": "classic-2012-inspired",
+    "verified_at": "2026-09-07",
+    "behavior_sources": [
+      "reference screenshots: it-blog_03 and unwire_05",
+      "https://news.gamebase.com.tw/news/detail/96090041",
+      "https://www.it-blog.ro/review-defender-ii"
+    ],
+    "tuning": "Original names/chains and elemental roles verified; numeric costs, ranges, damage, pulses, levels and unlock thresholds are project balance values, not original measured data."
+  },
+  "attack_research_source": {
+    "evidence": "classic-2012 local screenshots: Strength -> Power Shot / Poisoned Arrow; Agility -> Poisoned Arrow / Fatal Blow; Power Shot + Fatal Blow -> Multiple Arrows. Senior Hunter follows Multiple Arrows per archived requirements.",
+    "balance": "Windows remake: all prerequisite thresholds, costs, caps, proc chances, poison timing and volley level table are project tuning, not verified original constants.",
+    "poison_contract": "Periodic damage follows repository requirements. Community reports disagree with attack-speed reduction; exact original behavior remains unverified.",
+    "legacy": "Revision 1 refunds retired power_mastery / hurricane_mastery / phantom_mastery at their historical coin costs once; keeps levels in attack_research_migration.retired_levels."
+  }
 }
