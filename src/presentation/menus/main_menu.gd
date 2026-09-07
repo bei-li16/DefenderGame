@@ -779,7 +779,85 @@ func _show_settings() -> void:
 	var export_diagnostics := _button(GameApp.text("settings.export_diagnostics"), 54)
 	export_diagnostics.pressed.connect(_export_diagnostics)
 	settings_content.add_child(export_diagnostics)
+	_add_admin_section(settings_content)
 	_add_back_button(stack)
+
+
+# Admin console: entering the password unlocks two fields that directly set
+# the coin and crystal balances, persisted through the same save-first
+# transaction as every other profile write.
+func _add_admin_section(settings_content: VBoxContainer) -> void:
+	settings_content.add_child(HSeparator.new())
+	var admin_title := Label.new()
+	admin_title.text = GameApp.text("admin.title")
+	admin_title.add_theme_font_size_override("font_size", 22)
+	admin_title.add_theme_color_override("font_color", Color("ffd166"))
+	settings_content.add_child(admin_title)
+	var password_row := _setting_row(GameApp.text("admin.password"))
+	var password := LineEdit.new()
+	password.name = "AdminPassword"
+	password.secret = true
+	password.secret_character = "*"
+	password.custom_minimum_size.x = 250
+	password.placeholder_text = GameApp.text("admin.password_hint")
+	password_row.add_child(password)
+	settings_content.add_child(password_row)
+	var feedback := Label.new()
+	feedback.add_theme_font_size_override("font_size", 16)
+	settings_content.add_child(feedback)
+	var unlock := _button(GameApp.text("admin.unlock"), 54)
+	unlock.name = "AdminUnlock"
+	settings_content.add_child(unlock)
+	var panel := VBoxContainer.new()
+	panel.name = "AdminPanel"
+	panel.add_theme_constant_override("separation", 10)
+	panel.visible = false
+	settings_content.add_child(panel)
+	var coins_edit := _add_admin_amount_row(panel, "admin.coins", int(GameApp.profile.get("coins", 0)), "AdminCoins")
+	var crystals_edit := _add_admin_amount_row(panel, "admin.crystals", int(GameApp.profile.get("crystals", 0)), "AdminCrystals")
+	var apply := _button(GameApp.text("admin.apply"), 54)
+	apply.name = "AdminApply"
+	panel.add_child(apply)
+	unlock.pressed.connect(func() -> void:
+		if password.text == "root":
+			panel.visible = true
+			unlock.disabled = true
+			password.editable = false
+			feedback.text = GameApp.text("admin.unlocked")
+			feedback.add_theme_color_override("font_color", Color("8ce99a"))
+		else:
+			feedback.text = GameApp.text("admin.wrong_password")
+			feedback.add_theme_color_override("font_color", Color("ff8d7a"))
+	)
+	apply.pressed.connect(func() -> void:
+		var coins_result := GameApp.update_profile_field("coins", maxi(0, int(coins_edit.value)))
+		if not bool(coins_result.get("ok", false)):
+			feedback.text = GameApp.text("feedback.save_failed")
+			feedback.add_theme_color_override("font_color", Color("ff8d7a"))
+			return
+		var crystals_result := GameApp.update_profile_field("crystals", maxi(0, int(crystals_edit.value)))
+		if not bool(crystals_result.get("ok", false)):
+			feedback.text = GameApp.text("feedback.save_failed")
+			feedback.add_theme_color_override("font_color", Color("ff8d7a"))
+			return
+		feedback.text = GameApp.text("admin.applied")
+		feedback.add_theme_color_override("font_color", Color("8ce99a"))
+		_refresh_header()
+	)
+
+
+func _add_admin_amount_row(panel: VBoxContainer, label_key: String, current: int, node_name: String) -> SpinBox:
+	var row := _setting_row(GameApp.text(label_key))
+	var edit := SpinBox.new()
+	edit.name = node_name
+	edit.min_value = 0
+	edit.max_value = 999999999
+	edit.step = 1
+	edit.value = current
+	edit.custom_minimum_size.x = 250
+	row.add_child(edit)
+	panel.add_child(row)
+	return edit
 
 
 func _show_tutorial() -> void:

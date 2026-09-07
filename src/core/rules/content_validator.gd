@@ -25,7 +25,9 @@ const REQUIRED_UI_KEYS: Array[String] = [
 	"settings.fullscreen", "settings.borderless", "settings.resolution", "settings.aim_assist",
 	"settings.auto_fire",
 	"settings.shake", "settings.quality", "settings.ui_scale", "settings.applied",
-	"settings.export_diagnostics", "settings.diagnostics_exported",
+		"settings.export_diagnostics", "settings.diagnostics_exported",
+		"admin.title", "admin.password", "admin.password_hint", "admin.unlock", "admin.unlocked",
+		"admin.wrong_password", "admin.coins", "admin.crystals", "admin.apply", "admin.applied",
 	"quality.low", "quality.medium", "quality.high",
 	"recovery.title", "recovery.retry", "recovery.new_profile", "recovery.exit", "recovery.retrying", "recovery.body"
 ]

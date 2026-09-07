@@ -63,6 +63,31 @@ func _run() -> void:
 	var magic_tree := _research_tree(menu)
 	_expect(magic_tree != null and str(magic_tree.call("selected")) == "mana_capacity", "switching pages restarts selection at the Mana Research root")
 
+	menu.call("_show_settings")
+	await process_frame
+	var password_edit := menu.find_child("AdminPassword", true, false) as LineEdit
+	var unlock_button := menu.find_child("AdminUnlock", true, false) as Button
+	var admin_panel := menu.find_child("AdminPanel", true, false)
+	_expect(password_edit != null and unlock_button != null and admin_panel != null and not admin_panel.visible, "settings page shows a locked admin console")
+	password_edit.text = "wrong"
+	unlock_button.pressed.emit()
+	await process_frame
+	_expect(not admin_panel.visible, "a wrong password keeps the admin panel hidden")
+	password_edit.text = "root"
+	unlock_button.pressed.emit()
+	await process_frame
+	_expect(admin_panel.visible, "the root password unlocks the admin panel")
+	var coins_edit := menu.find_child("AdminCoins", true, false) as SpinBox
+	var crystals_edit := menu.find_child("AdminCrystals", true, false) as SpinBox
+	var apply_button := menu.find_child("AdminApply", true, false) as Button
+	coins_edit.value = 4321
+	crystals_edit.value = 87
+	apply_button.pressed.emit()
+	await process_frame
+	_expect(int(app.get("profile").get("coins", 0)) == 4321 and int(app.get("profile").get("crystals", 0)) == 87, "applying the admin panel updates both balances")
+	var persisted: Dictionary = app.get("save_service").load_profile_slot(app.get("active_save_slot"), {})
+	_expect(int(persisted.get("payload", {}).get("coins", 0)) == 4321 and int(persisted.get("payload", {}).get("crystals", 0)) == 87, "admin balance changes survive save reload")
+
 	root.remove_child(menu)
 	menu.free()
 	app.set("profile", original_profile)
