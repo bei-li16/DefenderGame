@@ -61,6 +61,12 @@ static func spawn_due(model, events: Array[Dictionary]) -> void:
 			1000 + (stage_number - 1) * int(scaling.get("speed_per_stage_permille", 0)),
 			int(scaling.get("max_speed_scale_permille", 1000))
 		)
+		# Coin income curve: kill rewards grow linearly per stage (capped) so
+		# failed runs still pay per kill and deep stages pay noticeably more.
+		var reward_scale_permille := mini(
+			1000 + (stage_number - 1) * int(scaling.get("reward_per_stage_permille", 0)),
+			int(scaling.get("max_reward_scale_permille", 1000))
+		)
 		var world: Dictionary = config.get("world", {})
 		var enemy := {
 			"entity_id": model.next_entity_id,
@@ -76,7 +82,7 @@ static func spawn_due(model, events: Array[Dictionary]) -> void:
 			"attack_cooldown": 0,
 			"attack_x_milli": int(template["attack_x_milli"]),
 			"armor": int(template.get("armor", 0)),
-			"reward_coins": int(template.get("reward_coins", 0)),
+			"reward_coins": maxi(1, int(template.get("reward_coins", 0)) * reward_scale_permille / 1000),
 			"reward_xp": int(template.get("reward_xp", 0)),
 			"collision_radius_milli": int(template.get("collision_radius_milli", 30000)),
 			"tags": template.get("tags", []).duplicate(),

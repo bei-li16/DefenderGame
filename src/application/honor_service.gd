@@ -41,7 +41,6 @@ func apply_result(profile: Dictionary, result: Dictionary, config: Dictionary) -
 		stats["battles_won"] = int(stats.get("battles_won", 0)) + 1
 	else:
 		stats["battles_lost"] = int(stats.get("battles_lost", 0)) + 1
-	var perfect_victory := victory and int(result.get("wall_percent", 0)) >= 100
 	if victory:
 		stats["stages_completed"] = int(stats.get("stages_completed", 0)) + 1
 		if int(result.get("wall_percent", 0)) >= 100:
@@ -58,9 +57,22 @@ func apply_result(profile: Dictionary, result: Dictionary, config: Dictionary) -
 	updated["honor_reward_ledger"] = evaluation["ledger"]
 	updated["coins"] = int(updated.get("coins", 0)) + evaluation["coins"]
 	updated["xp"] = int(updated.get("xp", 0)) + evaluation["xp"]
-	# Perfect guards earn one crystal (参考 Stage Complete bonus column); the
-	# surrounding reward-ledger duplicate check makes this idempotent per run.
-	var crystals_awarded := 1 if perfect_victory else 0
+	# Crystals reward the FIRST clear of a stage: two crystals, three on the
+	# boss stages (every tenth).  The best_results map still reflects the
+	# pre-settle state here, so a missing entry means this run is the first
+	# clear; the run reward ledger keeps repeats from paying again.
+	var crystals_awarded := 0
+	var stage_id := str(result.get("stage_id", ""))
+	var previous_best: Dictionary = updated.get("best_results", {}).get(stage_id, {})
+	if victory and str(previous_best.get("status", "")) != "victory":
+		crystals_awarded = 2
+		var stage: Dictionary = {}
+		for candidate in config.get("stages", []):
+			if candidate is Dictionary and str(candidate.get("id", "")) == str(result.get("stage_id", "")):
+				stage = candidate
+				break
+		if bool(stage.get("boss", false)):
+			crystals_awarded += 1
 	updated["crystals"] = int(updated.get("crystals", 0)) + crystals_awarded
 	if crystals_awarded > 0:
 		var crystal_stats: Dictionary = updated.get("stats", {})

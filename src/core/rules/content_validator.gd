@@ -43,9 +43,9 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 	if int(world.get("enemy_y_min_milli", 0)) >= int(world.get("enemy_y_max_milli", 0)) or int(world.get("enemy_y_max_milli", 0)) > int(world.get("height_milli", 0)):
 		_add_error(errors, "world.enemy_y_max_milli", "invalid_spawn_range")
 	var scaling: Dictionary = _as_dictionary(config.get("difficulty_scaling", {}))
-	for field in ["hp_per_stage_permille", "damage_per_stage_permille", "speed_per_stage_permille", "count_per_stage_permille"]:
+	for field in ["hp_per_stage_permille", "damage_per_stage_permille", "speed_per_stage_permille", "count_per_stage_permille", "reward_per_stage_permille"]:
 		_require_non_negative_int(scaling, field, errors, "difficulty_scaling.")
-	for field in ["max_hp_scale_permille", "max_damage_scale_permille", "max_speed_scale_permille", "max_count_scale_permille"]:
+	for field in ["max_hp_scale_permille", "max_damage_scale_permille", "max_speed_scale_permille", "max_count_scale_permille", "max_reward_scale_permille"]:
 		_require_positive_int(scaling, field, errors, "difficulty_scaling.")
 	for field in ["max_hp_scale_permille", "max_damage_scale_permille", "max_speed_scale_permille", "max_count_scale_permille"]:
 		if int(scaling.get(field, 0)) < 1000:

@@ -55,6 +55,7 @@ func _run() -> void:
 		_test_honor_chains(content.rules)
 		_test_honor_bonuses(content.rules)
 		_test_weapon_research(content.rules)
+		_test_reward_coin_curve(content.rules)
 		_test_event_position_anchor_contract(content.rules)
 		_test_migration()
 		_test_hashless_legacy_load()
@@ -802,14 +803,29 @@ func _test_progression_and_battle_record(source_config: Dictionary) -> void:
 	var after_loss: Dictionary = honor_service.apply_result(after_win, defeat, source_config).get("profile", {})
 	var loss_stats: Dictionary = after_loss.get("stats", {})
 	_expect(int(loss_stats.get("battles_won", 0)) == 1 and int(loss_stats.get("battles_lost", 0)) == 1, "defeat counts battles_lost separately")
-	# Perfect victories earn one crystal (参考 Stage Complete bonus column).
-	var perfect := {"status": "victory", "kills": 5, "coins": 10, "xp": 20, "stage_number": 2, "wall_percent": 100, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
-	var perfect_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 3}, perfect, source_config)
-	_expect(int(perfect_result.get("profile", {}).get("crystals", 0)) == 4, "perfect victory awards one crystal")
-	_expect(int(perfect_result.get("crystals_awarded", 0)) == 1, "settlement reports the awarded crystals")
-	var imperfect := {"status": "victory", "kills": 5, "coins": 10, "xp": 20, "stage_number": 2, "wall_percent": 87, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
-	var imperfect_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 3}, imperfect, source_config)
-	_expect(int(imperfect_result.get("crystals_awarded", 0)) == 0, "damaged-wall victory awards no crystal")
+	# Crystals pay on the FIRST clear of a stage: two, three on boss stages.
+	var first_clear := {"status": "victory", "stage_id": "stage_001", "stage_number": 1, "kills": 5, "coins": 10, "xp": 20, "wall_percent": 60, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
+	var first_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 3, "best_results": {}}, first_clear, source_config)
+	_expect(int(first_result.get("profile", {}).get("crystals", 0)) == 5, "first clear of a stage awards two crystals")
+	_expect(int(first_result.get("crystals_awarded", 0)) == 2, "settlement reports the first-clear crystals")
+	# settle_run records best_results after the honor pass; simulate that so
+	# the repeat sees the stage as already cleared.
+	var settled_profile: Dictionary = first_result.get("profile", {})
+	settled_profile["best_results"] = {"stage_001": {"status": "victory"}}
+	var repeat_result: Dictionary = honor_service.apply_result(settled_profile, first_clear, source_config)
+	_expect(int(repeat_result.get("crystals_awarded", 0)) == 0, "repeating a cleared stage pays no crystals")
+	var boss_clear := {"status": "victory", "stage_id": "stage_010", "stage_number": 10, "kills": 30, "coins": 60, "xp": 90, "wall_percent": 100, "weapon_id": "basic_bow", "bosses_slain": 1, "spells_cast": 0}
+	var boss_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 0, "best_results": {}}, boss_clear, source_config)
+	_expect(int(boss_result.get("crystals_awarded", 0)) == 3, "first clear of a boss stage awards three crystals")
+	var defeat_run := {"status": "defeat", "stage_id": "stage_002", "stage_number": 2, "kills": 4, "coins": 6, "xp": 5, "wall_percent": 0, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
+	var defeat_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 0, "best_results": {}}, defeat_run, source_config)
+	_expect(int(defeat_result.get("crystals_awarded", 0)) == 0, "a failed run pays no crystals")
+	# A recorded defeat does not consume the stage's first-clear crystals.
+	var after_defeat: Dictionary = defeat_result.get("profile", {})
+	after_defeat["best_results"] = {"stage_002": {"status": "defeat", "wall_percent": 0}}
+	var late_clear := {"status": "victory", "stage_id": "stage_002", "stage_number": 2, "kills": 5, "coins": 10, "xp": 20, "wall_percent": 80, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
+	var late_result: Dictionary = honor_service.apply_result(after_defeat, late_clear, source_config)
+	_expect(int(late_result.get("crystals_awarded", 0)) == 2, "a prior defeat record keeps the first-clear crystals")
 
 
 func _test_honor_chains(source_config: Dictionary) -> void:
@@ -935,6 +951,32 @@ func _test_weapon_research(source_config: Dictionary) -> void:
 		page_ids.append(str(page.get("id", "")))
 	_expect(page_ids.has("weapons"), "research pages include the weapons page")
 	_expect(_find_by_id_public(source_config, "upgrades", "forge_hurricane_bow").get("prerequisites", []).has("unlock_hurricane_bow"), "forge chains require their unlock node")
+
+
+func _test_reward_coin_curve(source_config: Dictionary) -> void:
+	# Kill rewards follow the configured per-stage curve (55 permille per
+	# stage, capped): the same template pays more on deeper stages, so failed
+	# runs still scale with kills and cleared stages pay on top.
+	var scaling: Dictionary = source_config.get("difficulty_scaling", {})
+	var per_stage := int(scaling.get("reward_per_stage_permille", 0))
+	_expect(per_stage > 0, "reward curve is configured")
+	var observed := {}
+	for stage_number in [1, 10, 20]:
+		var stage_id := "stage_%03d" % stage_number
+		var model := RunModel.new()
+		model.setup(source_config, stage_id, 24680, {"current_weapon_id": "basic_bow", "unlocked_weapons": ["basic_bow"], "upgrades": {}, "honors": {}})
+		var guard := 0
+		while model.enemies.size() < 2 and guard < 300:
+			model.step([{"type": "fire_stopped"}])
+			guard += 1
+		_expect(not model.enemies.is_empty(), "stage %02d spawns enemies for the coin curve probe" % stage_number)
+		for enemy in model.enemies:
+			var enemy_id := str(enemy.get("enemy_id", ""))
+			var base := int(_find_by_id_public(source_config, "enemies", enemy_id).get("reward_coins", 0))
+			var expected_scale := mini(1000 + (stage_number - 1) * per_stage, int(scaling.get("max_reward_scale_permille", 1000)))
+			var expected := maxi(1, base * expected_scale / 1000)
+			_expect(int(enemy.get("reward_coins", -1)) == expected, "%s pays %d coins on stage %02d (curve)" % [enemy_id, expected, stage_number])
+			observed[stage_number] = true
 
 
 func _find_by_id_public(source_config: Dictionary, collection: String, item_id: String) -> Dictionary:

@@ -31,10 +31,12 @@
     "damage_per_stage_permille": 22,
     "speed_per_stage_permille": 8,
     "count_per_stage_permille": 12,
+    "reward_per_stage_permille": 55,
     "max_hp_scale_permille": 1850,
     "max_damage_scale_permille": 1600,
     "max_speed_scale_permille": 1320,
-    "max_count_scale_permille": 1450
+    "max_count_scale_permille": 1450,
+    "max_reward_scale_permille": 2800
   },
   "weapons": [
     {
