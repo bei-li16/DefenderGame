@@ -59,9 +59,12 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 & $GodotConsole --headless --path . --script res://tests/weapon_selection_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/skill_chains_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/attack_research_acceptance.gd
+& $GodotConsole --headless --path . --script res://tests/materials_acceptance.gd
 ```
 
 弓箭选择验收覆盖顶部单一入口、四把弓的切换、锁定弓跳转研究、解锁后装备、研究页同步、存档失败与重试，以及实际战斗使用所选弓箭。测试使用隔离存档，不修改玩家存档。移除 `--headless` 还会验证原生/嵌入式下拉框在三档 UI 缩放下的位置；追加 `-- --capture` 可将界面截图保存到被 Git 忽略的 `Builds/weapon-selection-review/`。
+
+素材动画验收覆盖 19 张纹理导入、弓箭映射、弩塔 UV 裁切、快照隔离、冻结/眩晕/减速/暂停、真实事件触发动作、死亡回收和共享网格。移除 `--headless` 并追加 `-- --capture` 可进行 100 动画怪物＋200 箭的真实渲染检查，并保存菜单/研究/战场截图到 `Builds/materials-review/`。接入规则与现有立绘动画的限制见 [素材接入说明](materials-integration.md)。
 
 攻击研究验收覆盖七节点前置、四弓全部齐射档位、毒伤/击退/暴击快照、经验结算、一次性退款及中英文购买/装备同步。移除 `--headless` 并追加 `-- --capture` 可截图到 `Builds/attack-research-review/`；测试仅使用隔离存档。完整规则见 [攻击研究说明](attack-research-reimplementation.md)。
 

@@ -5,6 +5,12 @@ const RunOrchestrator = preload("res://src/application/run_orchestrator.gd")
 const UiTheme = preload("res://src/presentation/ui_theme.gd")
 const Progression = preload("res://src/core/rules/progression.gd")
 const GameplayHud = preload("res://src/presentation/gameplay/gameplay_hud.gd")
+const Art = preload("res://src/presentation/art/game_art.gd")
+const CreatureVisuals = preload("res://src/presentation/art/creature_visuals.gd")
+
+var _creatures := CreatureVisuals.new()
+var _bow_recoil := 0.0
+var _aim_visual_angle := 0.0
 
 var session: DefenderGameSession
 var snapshot: Dictionary = {}
@@ -35,6 +41,9 @@ var _last_known_positions: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	for key in Art.FILES:
+		Art.texture(key)
 	GameApp.audio.play_music("battle", float(GameApp.settings.get("music_volume", 0.65)))
 	_build_hud()
 	session = GameSession.new()
@@ -66,6 +75,13 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	# Keep menu/input processing alive while battlefield animation is paused.
+	if get_tree().paused:
+		delta = 0.0
+	else:
+		_aim_visual_angle = clampf((get_global_mouse_position() - Vector2(245, 555)).angle(), -1.15, 1.15)
+	_creatures.advance(delta)
+	_bow_recoil = maxf(0.0, _bow_recoil - delta * 7.0)
 	_elapsed_visual += delta
 	for index in range(effects.size() - 1, -1, -1):
 		effects[index]["age"] = float(effects[index].get("age", 0.0)) + delta
@@ -189,9 +205,11 @@ func _cancel_cast_drag() -> void:
 
 func _on_snapshot(value: Dictionary) -> void:
 	snapshot = value
+	_creatures.sync(value.get("enemies", []))
 	if _hud == null:
 		return
 	_hud.update_snapshot(value)
+	_last_known_positions.clear()
 	for enemy in snapshot.get("enemies", []):
 		_last_known_positions[int(enemy.get("entity_id", 0))] = Vector2(float(enemy.get("x_milli", 0)) / 1000.0, float(enemy.get("y_milli", 0)) / 1000.0)
 
@@ -200,6 +218,7 @@ func _on_events(events_value: Array) -> void:
 	var sfx_volume := float(GameApp.settings.get("sfx_volume", 0.85))
 	for event_value in events_value:
 		var event: Dictionary = event_value
+		_creatures.event(event)
 		# Events arrive ordered (spawn < hit < damage < death). Recording spawn
 		# positions first keeps same-tick hits on freshly spawned enemies anchored
 		# to the real position instead of the unknown-entity fallback.
@@ -207,6 +226,8 @@ func _on_events(events_value: Array) -> void:
 			_last_known_positions[int(event.get("entity_id", 0))] = Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0)
 		GameApp.audio.play_event(event, sfx_volume)
 		match str(event.get("type", "")):
+			"shot":
+				_bow_recoil = 1.0
 			"skill_cast":
 				_shake_strength = _quality_shake(10.0)
 			"skill_pulse":
@@ -225,6 +246,8 @@ func _on_events(events_value: Array) -> void:
 				_append_effect({"kind": "death", "position": _entity_position(int(event.get("entity_id", 0))), "age": 0.0, "duration": 0.55})
 			"wall_damage":
 				_shake_strength = _quality_shake(13.0)
+				var attacker := _entity_position(int(event.get("entity_id", 0)))
+				_append_effect({"kind": "enemy_attack", "position": attacker, "age": 0.0, "duration": 0.32})
 				_feedback("⚠  " + (GameApp.text("feedback.wall_damage") % int(event.get("amount", 0))), Color("ff7b6b"))
 			"skill_rejected":
 				var reason := str(event.get("reason", ""))
@@ -236,10 +259,10 @@ func _on_events(events_value: Array) -> void:
 				_feedback("⚠  " + GameApp.text("feedback.boss") + "  ⚠", Color("ff587d"), 3.5)
 			"boss_special":
 				_shake_strength = _quality_shake(18.0)
-				_append_effect({"kind": "boss_wave", "position": Vector2(780, 540), "age": 0.0, "duration": 0.8})
+				_append_effect({"kind": "boss_wave", "special": event.get("special", ""), "position": _entity_position(int(event.get("entity_id", 0))), "age": 0.0, "duration": 0.8})
 			"defense_attack":
 				_feedback(GameApp.text("feedback.defense"), Color("ff9b54"), 0.8)
-				_append_effect({"kind": "defense", "position": Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0), "age": 0.0, "duration": 0.35})
+				_append_effect({"kind": "defense", "defense_id": event.get("defense_id", ""), "position": Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0), "age": 0.0, "duration": 0.35})
 
 
 func _on_run_finished(result: Dictionary) -> void:
@@ -686,7 +709,10 @@ func _draw() -> void:
 	draw_set_transform(offset)
 	_draw_background()
 	_draw_castle()
-	for enemy in snapshot.get("enemies", []):
+	_creatures.draw_retired(self)
+	var sorted_enemies: Array = snapshot.get("enemies", []).duplicate()
+	sorted_enemies.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["y_milli"]) < int(b["y_milli"]))
+	for enemy in sorted_enemies:
 		_draw_enemy(enemy)
 	for projectile in snapshot.get("projectiles", []):
 		_draw_projectile(projectile)
@@ -703,73 +729,39 @@ func _draw() -> void:
 
 
 func _draw_background() -> void:
-	var quality := _quality_profile()
-	var background_bands := int(quality["background_bands"])
-	for band in range(background_bands):
-		var ratio := float(band) / float(background_bands - 1)
-		draw_rect(Rect2(0, ratio * 720.0, 1920, 68), Color("173452").lerp(Color("31516a"), ratio))
-	draw_circle(Vector2(1530, 220), 92, Color(1.0, 0.83, 0.52, 0.14))
-	var far_mountains := PackedVector2Array([Vector2(0, 560), Vector2(260, 320), Vector2(480, 560), Vector2(760, 280), Vector2(1020, 560), Vector2(1330, 340), Vector2(1600, 560), Vector2(1920, 300), Vector2(1920, 760), Vector2(0, 760)])
-	draw_colored_polygon(far_mountains, Color("1a2b3a"))
-	var near_mountains := PackedVector2Array([Vector2(0, 650), Vector2(330, 450), Vector2(630, 650), Vector2(950, 420), Vector2(1260, 660), Vector2(1590, 455), Vector2(1920, 640), Vector2(1920, 820), Vector2(0, 820)])
-	draw_colored_polygon(near_mountains, Color("233342"))
-	draw_rect(Rect2(0, 660, 1920, 420), Color("49392d"))
-	for row in range(7):
-		var y := 700.0 + float(row) * 58.0
-		draw_line(Vector2(0, y), Vector2(1920, y + 24), Color(0.66, 0.53, 0.38, 0.12), 2)
-	for stone in range(int(quality["background_stones"])):
-		var x := 390.0 + fmod(float(stone * 137), 1500.0)
-		var y := 710.0 + fmod(float(stone * 83), 330.0)
-		draw_circle(Vector2(x, y), 4.0 + float(stone % 5), Color(0.72, 0.58, 0.42, 0.18))
-
+	Art.cover(self, "battle", Rect2(0, 0, 1920, 1080), Color(0.86, 0.9, 0.98))
+	if int(snapshot.get("defenses", {}).get("lava_moat_level", 0)) > 0:
+		# Crop the portrait plate's channel; right bank matches defense range.
+		var castle_x := float(GameApp.content.rules["world"]["castle_x_milli"]) / 1000.0
+		var reach := float(GameApp.content.rules["defenses"]["lava_moat"]["range_milli"]) / 1000.0
+		var lava := Art.region("lava", Rect2(0.08, 0.0, 0.25, 1.0))
+		draw_texture_rect(lava, Rect2(castle_x, 0, reach, 1080), false)
+		for spark in range(12):
+			var y := fmod(spark * 97.0 - _elapsed_visual * 25.0 + 10800.0, 1080.0)
+			draw_circle(Vector2(castle_x + reach * 0.55 + sin(spark * 7.0) * reach * 0.3, y), 2.5, Color(1, 0.64, 0.15, 0.6))
+	draw_rect(Rect2(0, 0, 1920, 145), Color(0.02, 0.04, 0.07, 0.2))
 
 func _draw_castle() -> void:
-	draw_rect(Rect2(0, 170, 255, 720), Color("44576b"))
-	for row in range(9):
-		for column in range(4):
-			var rect := Rect2(column * 65.0 - float(row % 2) * 20.0, 205.0 + row * 70.0, 58, 58)
-			draw_rect(rect, Color("536a7f"), true)
-			draw_rect(rect, Color("263a4d"), false, 2)
-	draw_rect(Rect2(245, 205, 75, 655), Color("71849a"))
-	for y in range(245, 840, 90):
-		draw_rect(Rect2(265, y, 24, 38), Color("91c9e8"))
-	for tower_y in [180.0, 765.0]:
-		draw_circle(Vector2(170, tower_y), 82, Color("596f85"))
-		draw_circle(Vector2(170, tower_y), 60, Color("263a50"))
-		draw_circle(Vector2(170, tower_y), 28, Color("81d4fa"))
+	var wall := Art.texture("wall")
+	var wall_height := 1120.0
+	var wall_width := wall_height * wall.get_width() / wall.get_height()
+	# Mirror the illustration so its tall crystal tower borders the battlefield,
+	# not the cropped-away left edge. The attack line remains x=350.
+	Art.draw_sprite(self, wall, Vector2(348.0 - wall_width * 0.5, 545), Vector2(-wall_width, wall_height))
 	var origin := Vector2(245, 555)
-	var mouse := get_global_mouse_position()
-	var direction := (mouse - origin).normalized()
-	var aim_angle := direction.angle()
-	draw_line(origin, origin + direction * 132.0, Color("f0c36a"), 13)
-	# Bow limbs straddle the firing line: the arc span is centered on the aim
-	# angle so limbs and crossbow body rotate together.
-	draw_arc(origin, 68, aim_angle - 1.15, aim_angle + 1.15, 22, Color("d8a44c"), 8)
-	draw_circle(origin, 24, Color("243447"))
-
+	var aim_angle := _aim_visual_angle
+	var base := Art.region("turret", Rect2(0.10, 0.51, 0.81, 0.49))
+	var bow := Art.region("turret", Rect2(0.05, 0.0, 0.91, 0.55))
+	Art.draw_sprite(self, base, origin + Vector2(0, 94), Vector2(214, 97))
+	Art.draw_sprite(self, bow, origin - Vector2.RIGHT.rotated(aim_angle) * _bow_recoil * 12.0, Vector2(242, 110), aim_angle)
+	if int(snapshot.get("defenses", {}).get("magic_tower_level", 0)) > 0:
+		draw_circle(Vector2(150, 120), 38.0, Color(0.3, 0.75, 1.0, 0.2 + sin(_elapsed_visual * 3.0) * 0.06))
+		draw_arc(Vector2(150, 120), 29.0, 0, TAU, 32, Color(0.6, 0.9, 1.0, 0.75), 2.0)
 
 func _draw_enemy(enemy: Dictionary) -> void:
-	var position := Vector2(float(enemy["x_milli"]) / 1000.0, float(enemy["y_milli"]) / 1000.0)
+	var position: Vector2 = _creatures.actors.get(int(enemy["entity_id"]), {}).get("position", Vector2(float(enemy["x_milli"]), float(enemy["y_milli"])) / 1000.0)
 	var radius := float(enemy["collision_radius_milli"]) / 1000.0
-	var enemy_id := str(enemy.get("enemy_id", ""))
-	match enemy_id:
-		"fast_raider":
-			draw_colored_polygon(PackedVector2Array([position + Vector2(-radius, 10), position + Vector2(-radius * 0.35, -radius * 0.75), position + Vector2(radius, -5), position + Vector2(radius * 0.25, radius * 0.65)]), Color("f0a35e"))
-			draw_line(position + Vector2(-radius * 0.6, 18), position + Vector2(-radius, radius), Color("3d2630"), 7)
-			draw_line(position + Vector2(radius * 0.5, 16), position + Vector2(radius, radius), Color("3d2630"), 7)
-		"ranged_hexer":
-			draw_colored_polygon(PackedVector2Array([position + Vector2(0, -radius), position + Vector2(radius * 0.82, radius), position + Vector2(-radius * 0.82, radius)]), Color("9d6bd1"))
-			draw_circle(position + Vector2(0, -radius * 0.35), radius * 0.36, Color("26304f"))
-			draw_line(position + Vector2(radius * 0.65, -radius * 0.4), position + Vector2(radius * 1.18, radius * 0.8), Color("f0d890"), 6)
-		"ember_warlord":
-			draw_circle(position, radius, Color("a82e52"))
-			draw_colored_polygon(PackedVector2Array([position + Vector2(-radius * 0.8, -radius * 0.5), position + Vector2(-radius * 0.45, -radius * 1.2), position + Vector2(-radius * 0.15, -radius * 0.55)]), Color("f07c45"))
-			draw_colored_polygon(PackedVector2Array([position + Vector2(radius * 0.8, -radius * 0.5), position + Vector2(radius * 0.45, -radius * 1.2), position + Vector2(radius * 0.15, -radius * 0.55)]), Color("f07c45"))
-			draw_circle(position, radius * 0.48, Color("391c32"))
-		_:
-			draw_circle(position, radius, Color("d9534f"))
-			draw_colored_polygon(PackedVector2Array([position + Vector2(-radius * 0.8, -radius * 0.5), position + Vector2(-radius * 0.25, -radius * 1.0), position + Vector2(-radius * 0.1, -radius * 0.45)]), Color("efb261"))
-			draw_colored_polygon(PackedVector2Array([position + Vector2(radius * 0.8, -radius * 0.5), position + Vector2(radius * 0.25, -radius * 1.0), position + Vector2(radius * 0.1, -radius * 0.45)]), Color("efb261"))
+	_creatures.draw_enemy(self, enemy)
 	if int(enemy.get("stun_ticks", 0)) > 0:
 		draw_arc(position, radius + 9, 0, TAU, 16, Color("e5d5ff"), 4)
 	if int(enemy.get("freeze_ticks", 0)) > 0:
@@ -781,20 +773,21 @@ func _draw_enemy(enemy: Dictionary) -> void:
 		for bubble in range(3):
 			draw_circle(position + Vector2(radius + 8 + bubble * 6, -12 - bubble * 14), 5 - bubble, Color("91e76d"))
 	var bar_width := radius * 2.0
+	var art := Art.creature(enemy)
+	var texture := Art.texture(str(art["art"]))
+	var bar_y := position.y - float(art["width"]) * texture.get_height() / texture.get_width() * 0.5 - 8.0
 	var hp_ratio := float(enemy["hp"]) / maxf(1.0, float(enemy["max_hp"]))
-	draw_rect(Rect2(position.x - radius, position.y - radius - 18, bar_width, 8), Color("301824"))
-	draw_rect(Rect2(position.x - radius, position.y - radius - 18, bar_width * hp_ratio, 8), Color("78d887"))
-
+	draw_rect(Rect2(position.x - radius - 2, bar_y - 2, bar_width + 4, 10), Color("1b1824"))
+	draw_rect(Rect2(position.x - radius, bar_y, bar_width * hp_ratio, 6), Color("78d887"))
 
 func _draw_projectile(projectile: Dictionary) -> void:
 	var position := Vector2(float(projectile["x_milli"]) / 1000.0, float(projectile["y_milli"]) / 1000.0)
 	var velocity := Vector2(float(projectile["vx_milli"]), float(projectile["vy_milli"])).normalized()
-	var color := Color("fff0a8") if not bool(projectile.get("fatal", false)) else Color("ffcb47")
+	var color := Color.WHITE if not bool(projectile.get("fatal", false)) else Color(1.4, 1.1, 0.6)
 	if int(projectile.get("poison_damage", 0)) > 0:
-		draw_line(position - velocity * 42.0, position - velocity * 22.0, Color("91e76d"), 7.0)
-	draw_line(position - velocity * 30.0, position + velocity * 8.0, color, 5.0)
-	draw_colored_polygon(PackedVector2Array([position + velocity * 15.0, position - velocity.rotated(0.7) * 8.0, position - velocity.rotated(-0.7) * 8.0]), color)
-
+		draw_line(position - velocity * 58.0, position - velocity * 24.0, Color("91e76d"), 4.0)
+	# Art faces left; anchor its tip at the collision point, trail behind it.
+	Art.draw_sprite(self, Art.texture("arrow"), position - velocity * 29.0, Vector2(76, 25.3), velocity.angle() + PI, color)
 
 func _draw_effect(effect: Dictionary) -> void:
 	var kind := str(effect.get("kind", ""))
@@ -805,6 +798,20 @@ func _draw_effect(effect: Dictionary) -> void:
 		_draw_spell_effect(effect, progress, detail)
 		return
 	match kind:
+		"enemy_attack":
+			var impact := Vector2(315, position.y)
+			if position.x > 440.0:
+				var orb := position.lerp(impact, minf(1.0, progress * 2.0))
+				draw_line(orb + Vector2(25, 0), orb, Color(0.7, 0.35, 1.0, 1.0 - progress), 8.0)
+				draw_circle(orb, 9.0, Color(0.85, 0.6, 1.0, 1.0 - progress))
+			else:
+				draw_arc(impact, 18.0 + progress * 32.0, -1.1, 1.1, 12, Color(1.0, 0.75, 0.4, 1.0 - progress), 5.0)
+		"defense":
+			if str(effect.get("defense_id", "")) == "magic_tower":
+				draw_line(Vector2(150, 120), position, Color(0.25, 0.6, 1, (1.0 - progress) * 0.5), 12.0)
+				draw_line(Vector2(150, 120), position, Color(0.75, 0.95, 1, 1.0 - progress), 3.0)
+			else:
+				draw_circle(position, 22.0 + progress * 20.0, Color(1, 0.4, 0.05, (1.0 - progress) * 0.65))
 		"hit":
 			var hit_rays := maxi(3, int(round(6.0 * detail)))
 			for ray in range(hit_rays):
@@ -813,7 +820,14 @@ func _draw_effect(effect: Dictionary) -> void:
 		"death":
 			draw_arc(position, 24.0 + progress * 70.0, 0, TAU, maxi(10, int(round(24.0 * detail))), Color(1.0, 0.43, 0.22, 1.0 - progress), 8)
 		"boss_wave":
-			draw_arc(position, 80.0 + progress * 620.0, -1.2, 1.2, maxi(16, int(round(48.0 * detail))), Color(0.9, 0.16, 0.36, 1.0 - progress), 14)
+			var special := str(effect.get("special", ""))
+			var tint := Color("ff7946")
+			if special == "frost_nova":
+				tint = Color("91e2ff")
+				_draw_ice_prison(Vector2(150, 555), 130.0, (1.0 - progress) * 0.55)
+			elif special == "storm_surge":
+				tint = Color("d0a0ff")
+			draw_arc(position, 80.0 + progress * 400.0, 0, TAU, maxi(16, int(round(48.0 * detail))), Color(tint, 1.0 - progress), 9)
 
 
 func _draw_spell_effect(effect: Dictionary, progress: float, detail: float) -> void:

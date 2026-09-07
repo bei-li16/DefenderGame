@@ -74,7 +74,8 @@ src/
     replay/event_hasher.gd
   application/                  # GameSession、RunOrchestrator、Save/Upgrade/Content/ReplayService
   presentation/
-    gameplay/                   # 战场渲染与 HUD(过程式 CanvasItem 绘制)
+    art/                        # GameArt 素材注册、共享 UV 网格与怪物动作
+    gameplay/                   # 战场渲染与 HUD(CanvasItem 纹理/网格 + 程序特效)
     menus/                      # bootstrap、主菜单、背景
     ui_theme.gd
   infrastructure/
@@ -174,7 +175,7 @@ func snapshot() -> RunSnapshot:
 
 ### 6.3 Presentation
 
-- `GameplayView`：按快照渲染战场。当前实现采用过程式 `CanvasItem._draw()` 程序绘制，无 Sprite/粒子节点；架构中的节点池策略仅在切换到 Sprite 实体渲染时生效。飘字与特效由表现层自有数组按画质预算管理。
+- `GameplayView`：按只读快照渲染战场。背景/城墙/弩塔/箭矢使用导入纹理，怪物使用共享 ArrayMesh UV 网格动作和快照位置插值，技能/状态继续由 CanvasItem 绘制。无逐实体 Sprite/粒子节点；飘字、特效和死亡立绘队列按预算回收。暂停停止表现层时钟，伤害只来自 core 事件。详见 [素材与动画接入](materials-integration.md)。
 - `HudView`：城墙、Mana、Stage、技能、暂停和结算。
 - `MenuController`：主菜单、Stage 选择、升级和设置。
 - `InputController`：InputMap -> 应用命令。
@@ -328,7 +329,7 @@ PauseRequested
 }
 ```
 
-当前 MVP 的视觉全部由程序绘制，没有表现资源文件。`.tres` 资源目录方案在引入真实美术资产时启用，届时只负责稳定 ID 到表现资源的映射：
+当前已接入 `Gamematerials/` 的 19 张纹理，`src/presentation/art/game_art.gd` 注册稳定 ID 到导入资源的映射，`creature_visuals.gd` 管理只读动作状态。`.tres` 目录是后续更大资源库的可选演进方案，不是当前运行依赖：
 
 ```text
 enemy_id -> PackedScene / Texture2D / sound_id
@@ -427,7 +428,7 @@ Core 测试：
 ## 13. 性能策略
 
 - 敌人、箭矢、飘字和高频特效使用预热节点池。
-- Core 使用紧凑数据数组，Presentation 只为可见实体维护 Node。
+- Core 使用紧凑数据数组；Presentation 使用有界动作字典和共享纹理/网格，不为每只怪创建 Node。
 - 使用网格或纵向 band 加速空间查询，但不把敌人吸附到 lane。
 - 高速箭使用 core 的 swept collision，不依赖 Area2D signal 的处理顺序。
 - 粒子数量、屏幕震动和飘字可按画质关闭，不影响规则。

@@ -5,6 +5,7 @@ const UiTheme = preload("res://src/presentation/ui_theme.gd")
 const SkillButton = preload("res://src/presentation/gameplay/skill_button.gd")
 const SkillCatalog = preload("res://src/core/rules/skill_catalog.gd")
 const SkillText = preload("res://src/presentation/skill_text.gd")
+const Art = preload("res://src/presentation/art/game_art.gd")
 
 # Battle HUD (architecture §6.3 HudView): top stage bar with spawn progress,
 # bottom-left wall/mana cluster, boss banner, and the circular skill buttons.
@@ -25,6 +26,7 @@ var _mana_bar: ProgressBar
 var _wall_value_label: Label
 var _mana_value_label: Label
 var _weapon_label: Label
+var _weapon_icon: TextureRect
 var _defense_label: Label
 var _boss_panel: PanelContainer
 var _boss_bar: ProgressBar
@@ -136,10 +138,20 @@ func _build_status_cluster() -> void:
 	_mana_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_mana_bar.add_theme_stylebox_override("fill", _bar_fill(Color("2e86de")))
 	mana_stack.add_child(_mana_bar)
-	_weapon_label = _hud_label("", 18, Color("b9d7ea"), 430)
+	var weapon_row := HBoxContainer.new()
+	weapon_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	weapon_row.add_theme_constant_override("separation", 8)
+	status_stack.add_child(weapon_row)
+	_weapon_icon = TextureRect.new()
+	_weapon_icon.custom_minimum_size = Vector2(28, 28)
+	_weapon_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_weapon_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_weapon_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	weapon_row.add_child(_weapon_icon)
+	_weapon_label = _hud_label("", 18, Color("b9d7ea"), 392)
 	_weapon_label.size.y = 32
 	_weapon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	status_stack.add_child(_weapon_label)
+	weapon_row.add_child(_weapon_label)
 	_defense_label = _hud_label("", 17, Color("f2bd76"), 430)
 	_defense_label.size.y = 32
 	_defense_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -219,6 +231,7 @@ func update_snapshot(snapshot: Dictionary) -> void:
 	_progress_bar.tooltip_text = "%s %d / %d" % [GameApp.text("hud.wave"), int(snapshot.get("spawned", 0)), int(snapshot.get("spawn_total", 0))]
 	_coin_label.text = "◆  %d" % int(snapshot.get("coins_earned", 0))
 	_weapon_label.text = "%s: %s" % [GameApp.text("hud.weapon"), GameApp.text(str(snapshot.get("weapon_name_key", "weapon.basic_bow")))]
+	_weapon_icon.texture = Art.texture(str(snapshot.get("weapon_id", "basic_bow")))
 	var defenses: Dictionary = snapshot.get("defenses", {})
 	_defense_label.text = "%s  %s %d  ·  %s %d" % [
 		GameApp.text("hud.defenses"), GameApp.text("hud.lava_moat"), int(defenses.get("lava_moat_level", 0)),
