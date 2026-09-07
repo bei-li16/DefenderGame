@@ -19,6 +19,7 @@ const REQUIRED_UI_KEYS: Array[String] = [
 	"research.weapons", "research.visit_hint", "research.unlocked", "research.equip", "loadout.dropdown_hint", "upgrade.unlock_power_bow", "upgrade.forge_power_bow",
 	"upgrade.unlock_hurricane_bow", "upgrade.forge_hurricane_bow", "upgrade.unlock_phantom_bow", "upgrade.forge_phantom_bow",
 	"feedback.no_mana", "feedback.cooldown", "feedback.invalid_target", "feedback.fatal", "feedback.power", "feedback.boss", "feedback.defense", "feedback.wall_damage", "feedback.save_failed",
+	"feedback.insufficient_coins", "feedback.insufficient_crystals",
 	"tutorial.title", "tutorial.body", "dialog.abandon_run",
 	"settings.title", "settings.language", "settings.master", "settings.music", "settings.sfx",
 	"settings.fullscreen", "settings.borderless", "settings.resolution", "settings.aim_assist",
@@ -94,6 +95,45 @@ static func _validate_attack_tree(config: Dictionary, errors: Array[Dictionary])
 				_add_error(errors, "research_pages.attack.upgrade_ids", "must_match_attack_nodes")
 	if not has_attack_page:
 		_add_error(errors, "research_pages.attack", "missing_attack_page")
+
+
+# Magic research is the only crystal sink.  The crystal economy must let a
+# player who first-clears every stage afford every crystal-priced level
+# without a large leftover: total income >= total cost, and the surplus stays
+# within 25% of the cost.
+static func _validate_crystal_economy(config: Dictionary, errors: Array[Dictionary]) -> void:
+	var rewards: Dictionary = _as_dictionary(config.get("crystal_rewards", {}))
+	for field in ["first_clear_base", "first_clear_step_stages", "first_clear_step_bonus", "boss_bonus", "repeat_clear"]:
+		_require_non_negative_int(rewards, field, errors, "crystal_rewards.")
+	if int(rewards.get("first_clear_step_stages", 0)) < 1:
+		_add_error(errors, "crystal_rewards.first_clear_step_stages", "less_than_one")
+	var total_cost := 0
+	for upgrade in _as_array(config.get("upgrades", [])):
+		var definition := _as_dictionary(upgrade)
+		if str(definition.get("currency", "coins")) != "crystals":
+			continue
+		var price := int(definition.get("base_cost", 0))
+		var growth := int(definition.get("cost_growth_permille", 1000))
+		for ignored in range(int(definition.get("max_level", 0))):
+			total_cost += price
+			if growth > 1000:
+				price = maxi(price + 1, int(round(float(price) * float(growth) / 1000.0)))
+	var base := int(rewards.get("first_clear_base", 0))
+	var step_stages := maxi(1, int(rewards.get("first_clear_step_stages", 1)))
+	var step_bonus := int(rewards.get("first_clear_step_bonus", 0))
+	var boss_bonus := int(rewards.get("boss_bonus", 0))
+	var total_income := 0
+	var stages := _as_array(config.get("stages", []))
+	for index in range(stages.size()):
+		var stage := _as_dictionary(stages[index])
+		var amount := base + (index / step_stages) * step_bonus
+		if bool(stage.get("boss", false)):
+			amount += boss_bonus
+		total_income += amount
+	if total_cost > total_income:
+		_add_error(errors, "crystal_rewards", "crystal_cost_exceeds_income")
+	if total_income - total_cost > maxi(10, int(ceil(float(total_cost) * 0.25))):
+		_add_error(errors, "crystal_rewards", "crystal_income_surplus_too_large")
 
 
 static func validate(config: Dictionary) -> Array[Dictionary]:
@@ -225,6 +265,11 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 			_require_positive_int(upgrade, field, errors, "upgrades[%d]." % index)
 		if str(upgrade.get("name_key", "")).is_empty() or str(upgrade.get("description_key", "")).is_empty():
 			_add_error(errors, "upgrades[%d]" % index, "missing_display_keys")
+		var currency := str(upgrade.get("currency", "coins"))
+		if currency != "coins" and currency != "crystals":
+			_add_error(errors, "upgrades[%d].currency" % index, "unknown_currency")
+		if str(upgrade.get("page", "")) == "magic" and currency != "crystals":
+			_add_error(errors, "upgrades[%d].currency" % index, "magic_research_requires_crystals")
 		for prerequisite in _as_array(upgrade.get("prerequisites", [])):
 			if not upgrade_ids.has(str(prerequisite)):
 				_add_error(errors, "upgrades[%d].prerequisites" % index, "unknown_reference")
@@ -232,6 +277,7 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 		_add_error(errors, "upgrades", "dependency_cycle")
 	_validate_skill_chains(skills, upgrades, errors)
 	_validate_attack_tree(config, errors)
+	_validate_crystal_economy(config, errors)
 	var upgrade_id_set: Array[String] = upgrade_ids.duplicate()
 	var research_pages_value: Variant = config.get("research_pages", [])
 	var research_pages: Array = research_pages_value if research_pages_value is Array else []

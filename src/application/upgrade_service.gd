@@ -13,14 +13,17 @@ func purchase(profile: Dictionary, config: Dictionary, upgrade_id: String) -> Di
 		if int(current_upgrades.get(str(prerequisite), 0)) < int(definition.get("prerequisite_levels", {}).get(str(prerequisite), 1)):
 			return {"ok": false, "error_code": "missing_prerequisite", "profile": profile}
 	var price := price_for_level(definition, current_level)
-	if int(profile.get("coins", 0)) < price:
-		return {"ok": false, "error_code": "insufficient_coins", "price": price, "profile": profile}
+	var currency := str(definition.get("currency", "coins"))
+	if currency != "coins" and currency != "crystals":
+		return {"ok": false, "error_code": "unknown_currency", "price": price, "profile": profile}
+	if int(profile.get(currency, 0)) < price:
+		return {"ok": false, "error_code": "insufficient_" + currency, "price": price, "currency": currency, "profile": profile}
 	var updated := profile.duplicate(true)
-	updated["coins"] = int(updated.get("coins", 0)) - price
+	updated[currency] = int(updated.get(currency, 0)) - price
 	var updated_upgrades: Dictionary = updated.get("upgrades", {}).duplicate(true)
 	updated_upgrades[upgrade_id] = current_level + 1
 	updated["upgrades"] = updated_upgrades
-	return {"ok": true, "price": price, "new_level": current_level + 1, "profile": updated}
+	return {"ok": true, "price": price, "currency": currency, "new_level": current_level + 1, "profile": updated}
 
 
 func apply_run_reward(profile: Dictionary, result: Dictionary) -> Dictionary:
@@ -48,6 +51,9 @@ func apply_run_reward(profile: Dictionary, result: Dictionary) -> Dictionary:
 static func price_for_level(definition: Dictionary, current_level: int) -> int:
 	var price := int(definition.get("base_cost", 0))
 	var growth := int(definition.get("cost_growth_permille", 1000))
+	# Growth 1000 documents "no growth": the price stays flat at every level.
+	if growth <= 1000:
+		return price
 	for ignored in range(current_level):
 		price = maxi(price + 1, int(round(float(price) * float(growth) / 1000.0)))
 	return price

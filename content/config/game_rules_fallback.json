@@ -1,6 +1,6 @@
 {
-  "config_version": 5,
-  "ruleset_version": "aegis-windows-fallback-attack-tree-v1",
+  "config_version": 6,
+  "ruleset_version": "aegis-windows-fallback-crystal-magic-v1",
   "source": "Built-in release fallback configuration",
   "simulation_tick_rate": 30,
   "rules": {"status_resistance_floor_permille": 950},
@@ -189,7 +189,14 @@
     "lava_moat":{"name_key":"defense.lava_moat","description_key":"defense.lava_moat.desc","damage":30,"damage_per_level":12,"interval_ticks":45,"range_milli":260000,"burn_damage":4,"burn_interval_ticks":15,"burn_duration_ticks":60},
     "magic_tower":{"name_key":"defense.magic_tower","description_key":"defense.magic_tower.desc","damage":50,"damage_per_level":20,"interval_ticks":60,"range_milli":1250000}
   },
-    "honors": [{"id":"big_spender","name_key":"honor.big_spender","description_key":"honor.big_spender.desc","condition_type":"coins_spent","milestones":[50000,250000,1000000],"bonus_type":"coin_per_kill","bonus_per_level":1,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"defender","name_key":"honor.defender","description_key":"honor.defender.desc","condition_type":"highest_stage_reached","milestones":[10,20,30],"bonus_type":"wall_hp_pct","bonus_per_level":5,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"monster_hunter","name_key":"honor.monster_hunter","description_key":"honor.monster_hunter.desc","condition_type":"total_kills","milestones":[5000,30000,100000],"bonus_type":"weapon_damage_pct","bonus_per_level":2,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"tactician_master","name_key":"honor.tactician_master","description_key":"honor.tactician_master.desc","condition_type":"battles_won","milestones":[30,100,300],"bonus_type":"xp_pct","bonus_per_level":5,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"great_mage","name_key":"honor.great_mage","description_key":"honor.great_mage.desc","condition_type":"crystals_earned","milestones":[3,15,50],"bonus_type":"max_mana_pct","bonus_per_level":5,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"fire_master","name_key":"honor.fire_master","description_key":"honor.fire_master.desc","condition_type":"fire_casts","milestones":[200,1000,3000],"bonus_type":"fire_damage_pct","bonus_per_level":3,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"ice_master","name_key":"honor.ice_master","description_key":"honor.ice_master.desc","condition_type":"ice_casts","milestones":[200,1000,3000],"bonus_type":"ice_damage_pct","bonus_per_level":3,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"lightning_master","name_key":"honor.lightning_master","description_key":"honor.lightning_master.desc","condition_type":"lightning_casts","milestones":[200,1000,3000],"bonus_type":"lightning_damage_pct","bonus_per_level":3,"reward_coins":[150,300,600],"reward_xp":[50,100,200]}],
+    "honors": [{"id":"big_spender","name_key":"honor.big_spender","description_key":"honor.big_spender.desc","condition_type":"coins_spent","milestones":[50000,250000,1000000],"bonus_type":"coin_per_kill","bonus_per_level":1,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"defender","name_key":"honor.defender","description_key":"honor.defender.desc","condition_type":"highest_stage_reached","milestones":[10,20,30],"bonus_type":"wall_hp_pct","bonus_per_level":5,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"monster_hunter","name_key":"honor.monster_hunter","description_key":"honor.monster_hunter.desc","condition_type":"total_kills","milestones":[5000,30000,100000],"bonus_type":"weapon_damage_pct","bonus_per_level":2,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"tactician_master","name_key":"honor.tactician_master","description_key":"honor.tactician_master.desc","condition_type":"battles_won","milestones":[30,100,300],"bonus_type":"xp_pct","bonus_per_level":5,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"great_mage","name_key":"honor.great_mage","description_key":"honor.great_mage.desc","condition_type":"crystals_earned","milestones":[30,90,160],"bonus_type":"max_mana_pct","bonus_per_level":5,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"fire_master","name_key":"honor.fire_master","description_key":"honor.fire_master.desc","condition_type":"fire_casts","milestones":[200,1000,3000],"bonus_type":"fire_damage_pct","bonus_per_level":3,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"ice_master","name_key":"honor.ice_master","description_key":"honor.ice_master.desc","condition_type":"ice_casts","milestones":[200,1000,3000],"bonus_type":"ice_damage_pct","bonus_per_level":3,"reward_coins":[150,300,600],"reward_xp":[50,100,200]},{"id":"lightning_master","name_key":"honor.lightning_master","description_key":"honor.lightning_master.desc","condition_type":"lightning_casts","milestones":[200,1000,3000],"bonus_type":"lightning_damage_pct","bonus_per_level":3,"reward_coins":[150,300,600],"reward_xp":[50,100,200]}],
+  "crystal_rewards": {
+    "first_clear_base": 3,
+    "first_clear_step_stages": 5,
+    "first_clear_step_bonus": 1,
+    "boss_bonus": 4,
+    "repeat_clear": 0
+  },
   "research_pages": [
     {
       "id": "attack",
@@ -433,9 +440,10 @@
       "name_key": "upgrade.mana_capacity",
       "description_key": "upgrade.mana_capacity.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 150,
-      "cost_growth_permille": 1500,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 10,
       "prerequisites": [],
       "tree_column": 0,
@@ -446,9 +454,10 @@
       "name_key": "skill.fire",
       "description_key": "skill.fire.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 110,
-      "cost_growth_permille": 1500,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 9,
       "prerequisites": [
         "mana_capacity"
@@ -465,9 +474,10 @@
       "name_key": "skill.meteor",
       "description_key": "skill.meteor.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 320,
-      "cost_growth_permille": 1450,
+      "base_cost": 2,
+      "cost_growth_permille": 1000,
       "effect_per_level": 14,
       "prerequisites": [
         "fire_mastery"
@@ -484,9 +494,10 @@
       "name_key": "skill.armageddon",
       "description_key": "skill.armageddon.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 900,
-      "cost_growth_permille": 1450,
+      "base_cost": 3,
+      "cost_growth_permille": 1000,
       "effect_per_level": 20,
       "prerequisites": [
         "meteor"
@@ -503,9 +514,10 @@
       "name_key": "skill.ice",
       "description_key": "skill.ice.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 110,
-      "cost_growth_permille": 1500,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 8,
       "prerequisites": [
         "mana_capacity"
@@ -522,9 +534,10 @@
       "name_key": "skill.frost_nova",
       "description_key": "skill.frost_nova.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 320,
-      "cost_growth_permille": 1450,
+      "base_cost": 2,
+      "cost_growth_permille": 1000,
       "effect_per_level": 14,
       "prerequisites": [
         "ice_mastery"
@@ -541,9 +554,10 @@
       "name_key": "skill.ice_age",
       "description_key": "skill.ice_age.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 900,
-      "cost_growth_permille": 1450,
+      "base_cost": 3,
+      "cost_growth_permille": 1000,
       "effect_per_level": 20,
       "prerequisites": [
         "frost_nova"
@@ -560,9 +574,10 @@
       "name_key": "skill.lightning",
       "description_key": "skill.lightning.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 130,
-      "cost_growth_permille": 1550,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 11,
       "prerequisites": [
         "mana_capacity"
@@ -579,9 +594,10 @@
       "name_key": "skill.thunder_storm",
       "description_key": "skill.thunder_storm.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 320,
-      "cost_growth_permille": 1450,
+      "base_cost": 2,
+      "cost_growth_permille": 1000,
       "effect_per_level": 14,
       "prerequisites": [
         "lightning_mastery"
@@ -598,9 +614,10 @@
       "name_key": "skill.ragnarok",
       "description_key": "skill.ragnarok.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 900,
-      "cost_growth_permille": 1450,
+      "base_cost": 3,
+      "cost_growth_permille": 1000,
       "effect_per_level": 20,
       "prerequisites": [
         "thunder_storm"
@@ -617,9 +634,10 @@
       "name_key": "upgrade.mana_regen",
       "description_key": "upgrade.mana_regen.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 6,
-      "base_cost": 130,
-      "cost_growth_permille": 1450,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 1,
       "prerequisites": [],
       "tree_column": 0,
@@ -630,9 +648,10 @@
       "name_key": "upgrade.spell_radius",
       "description_key": "upgrade.spell_radius.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 5,
-      "base_cost": 160,
-      "cost_growth_permille": 1500,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 60,
       "prerequisites": [
         "fire_mastery"
@@ -645,9 +664,10 @@
       "name_key": "upgrade.cooldown",
       "description_key": "upgrade.cooldown.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 6,
-      "base_cost": 200,
-      "cost_growth_permille": 1550,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 3,
       "prerequisites": [
         "mana_regen"

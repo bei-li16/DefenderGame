@@ -1,6 +1,6 @@
 {
-  "config_version": 5,
-  "ruleset_version": "aegis-windows-attack-tree-v1",
+  "config_version": 6,
+  "ruleset_version": "aegis-windows-crystal-magic-v1",
   "source": "Windows offline 1.0 tuning derived from the Defender II requirements",
   "simulation_tick_rate": 30,
   "rules": {
@@ -565,9 +565,9 @@
       "description_key": "honor.great_mage.desc",
       "condition_type": "crystals_earned",
       "milestones": [
-        3,
-        15,
-        50
+        30,
+        90,
+        160
       ],
       "bonus_type": "max_mana_pct",
       "bonus_per_level": 5,
@@ -652,6 +652,13 @@
       ]
     }
   ],
+  "crystal_rewards": {
+    "first_clear_base": 3,
+    "first_clear_step_stages": 5,
+    "first_clear_step_bonus": 1,
+    "boss_bonus": 4,
+    "repeat_clear": 0
+  },
   "research_pages": [
     {
       "id": "attack",
@@ -895,9 +902,10 @@
       "name_key": "upgrade.mana_capacity",
       "description_key": "upgrade.mana_capacity.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 150,
-      "cost_growth_permille": 1500,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 10,
       "prerequisites": [],
       "tree_column": 0,
@@ -908,9 +916,10 @@
       "name_key": "skill.fire",
       "description_key": "skill.fire.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 110,
-      "cost_growth_permille": 1500,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 9,
       "prerequisites": [
         "mana_capacity"
@@ -927,9 +936,10 @@
       "name_key": "skill.meteor",
       "description_key": "skill.meteor.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 320,
-      "cost_growth_permille": 1450,
+      "base_cost": 2,
+      "cost_growth_permille": 1000,
       "effect_per_level": 14,
       "prerequisites": [
         "fire_mastery"
@@ -946,9 +956,10 @@
       "name_key": "skill.armageddon",
       "description_key": "skill.armageddon.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 900,
-      "cost_growth_permille": 1450,
+      "base_cost": 3,
+      "cost_growth_permille": 1000,
       "effect_per_level": 20,
       "prerequisites": [
         "meteor"
@@ -965,9 +976,10 @@
       "name_key": "skill.ice",
       "description_key": "skill.ice.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 110,
-      "cost_growth_permille": 1500,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 8,
       "prerequisites": [
         "mana_capacity"
@@ -984,9 +996,10 @@
       "name_key": "skill.frost_nova",
       "description_key": "skill.frost_nova.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 320,
-      "cost_growth_permille": 1450,
+      "base_cost": 2,
+      "cost_growth_permille": 1000,
       "effect_per_level": 14,
       "prerequisites": [
         "ice_mastery"
@@ -1003,9 +1016,10 @@
       "name_key": "skill.ice_age",
       "description_key": "skill.ice_age.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 900,
-      "cost_growth_permille": 1450,
+      "base_cost": 3,
+      "cost_growth_permille": 1000,
       "effect_per_level": 20,
       "prerequisites": [
         "frost_nova"
@@ -1022,9 +1036,10 @@
       "name_key": "skill.lightning",
       "description_key": "skill.lightning.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 130,
-      "cost_growth_permille": 1550,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 11,
       "prerequisites": [
         "mana_capacity"
@@ -1041,9 +1056,10 @@
       "name_key": "skill.thunder_storm",
       "description_key": "skill.thunder_storm.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 320,
-      "cost_growth_permille": 1450,
+      "base_cost": 2,
+      "cost_growth_permille": 1000,
       "effect_per_level": 14,
       "prerequisites": [
         "lightning_mastery"
@@ -1060,9 +1076,10 @@
       "name_key": "skill.ragnarok",
       "description_key": "skill.ragnarok.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 8,
-      "base_cost": 900,
-      "cost_growth_permille": 1450,
+      "base_cost": 3,
+      "cost_growth_permille": 1000,
       "effect_per_level": 20,
       "prerequisites": [
         "thunder_storm"
@@ -1079,9 +1096,10 @@
       "name_key": "upgrade.mana_regen",
       "description_key": "upgrade.mana_regen.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 6,
-      "base_cost": 130,
-      "cost_growth_permille": 1450,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 1,
       "prerequisites": [],
       "tree_column": 0,
@@ -1092,9 +1110,10 @@
       "name_key": "upgrade.spell_radius",
       "description_key": "upgrade.spell_radius.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 5,
-      "base_cost": 160,
-      "cost_growth_permille": 1500,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 60,
       "prerequisites": [
         "fire_mastery"
@@ -1107,9 +1126,10 @@
       "name_key": "upgrade.cooldown",
       "description_key": "upgrade.cooldown.desc",
       "page": "magic",
+      "currency": "crystals",
       "max_level": 6,
-      "base_cost": 200,
-      "cost_growth_permille": 1550,
+      "base_cost": 1,
+      "cost_growth_permille": 1000,
       "effect_per_level": 3,
       "prerequisites": [
         "mana_regen"

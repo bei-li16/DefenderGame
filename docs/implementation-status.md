@@ -1,6 +1,6 @@
 # Windows / Godot 实施状态
 
-版本：1.1.0-windows（以 `project.godot` 的 `application/config/version` 为准）
+版本：1.2.0-windows（以 `project.godot` 的 `application/config/version` 为准）
 
 文档日期：2026-09-07
 
@@ -21,6 +21,8 @@
 2026-09-07 武器解锁与升级迁入升级研究（参考 unwire_08 武器弩研究页）：研究树新增第五页"武器研究"——三把长弓各两个节点(解锁：一次性购买；锻造：每级 +8% 该弓伤害,5 级,前置为对应解锁节点)；按关卡自动解锁武器移除(老档已解锁武器自动视为解锁节点已购,不重复扣费)；顶栏 loadout 锁定弓点击直接跳转武器研究页并预选该解锁节点；研究详情面板对武器节点追加属性摘要与"装备"按钮；修复 en_US 五页签最小宽超出 1920 画布的布局门禁(页签 clip_text 均分)。技能钮冷却改为顺时针由缺到满。回归 124/124,全套件通过。
 
 2026-09-07 奖励经济按玩家需求重构：①水晶改为首次通关发放(普通关 2 颗、每 10 关 Boss 关 3 颗,替代原"完美城墙 +1";历史败局记录不占用首通)；②金币通关/失败均可获得——失败收入与击杀数挂钩(击杀即得),通关另得大额通关奖励(80→1400)显著高于失败；③击杀金币按关卡曲线增长(新增 `reward_per_stage_permille: 55`/`max_reward_scale_permille: 2800`:每关 +5.5% 线性、上限 2.8×,关 10 = 1.5×、关 20 = 2.05×、关 30 = 2.6×,数据驱动双规则包)。回归 137/137,全套件通过。
+
+2026-09-07 v1.2.0 魔法研究改用水晶经济(对齐原作 Defender II)：①魔法页 13 节点(九技能链+魔力研究/回复/范围/冷却)全部从金币改为水晶,平直价——I 阶精通/辅助 1、II 阶 2、III 阶 3 每级,总成本 169 颗;②水晶收入改数据驱动 `crystal_rewards`(首通第 N 关 3+⌊(N-1)/5⌋ 颗、Boss 关 +4、重复通关 0),30 关总收入 177 颗,余量 8(≈5%),既不剩余过多也升得起;③升级服务支持多币种(节点 `currency` 字段,新错误码 `insufficient_crystals`),研究树/详情面板按币种显示 ◆/✦ 并按对应余额着色;④旧档迁移:启动/切槽 reconcile 按新曲线对已通关关卡一次性补差(`crystal_topup_v1` 标记,只补一次),v1.0.9 全通关档补 114 颗;⑤大法师荣誉里程碑 3/15/50→30/90/160;⑥修正 `price_for_level` 在 growth=1000 时仍 +1/级 的实现偏差(文档口径"1000=不增长",仅影响新增水晶节点,金币节点无此配置);⑦校验器新增经济守恒断言(水晶总成本 ≤ 首通总收入 且 余量 ≤ 25%)。配置 v6 / `aegis-windows-crystal-magic-v1`。回归 162/162,技能链 177/177、攻击研究 196/196、弓箭选择 30/30、菜单 7/7、存档槽位 18/18、布局 0 失败、30 关自动通关全胜。
 
 ## 0. Windows 1.0 内容（历史落地快照，2026-09-03）
 
@@ -185,12 +187,12 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 | 项目 | 当前结果 | 依据 |
 |---|---|---|
-| 应用/规则版本 | `1.1.0-windows` / config v5 / `aegis-windows-attack-tree-v1` | `project.godot`、`content/config/game_rules.json` |
-| 内容规模 | 30 Stage（3 Boss）、6 类普通敌人、4 武器、9 技能（3 系×3 阶）、攻击/魔法/防御/后勤 4 研究页、8 Honors | `content/config/game_rules.json` 解析 |
-| 内容校验 | 通过 | `tools/validate_content.gd`（本轮运行） |
-| 核心回归 | **137 passed / 0 failed** | `tests/run_all.gd`（本轮运行） |
+| 应用/规则版本 | `1.2.0-windows` / config v6 / `aegis-windows-crystal-magic-v1` | `project.godot`、`content/config/game_rules.json` |
+| 内容规模 | 30 Stage（3 Boss）、6 类普通敌人、4 武器、9 技能（3 系×3 阶）、攻击/魔法/防御/武器/后勤 5 研究页、8 Honors；魔法页水晶经济（收入 177 / 成本 169） | `content/config/game_rules.json` 解析 |
+| 内容校验 | 通过（含水晶经济守恒断言） | `tools/validate_content.gd`（本轮运行） |
+| 核心回归 | **162 passed / 0 failed** | `tests/run_all.gd`（本轮运行，含水晶经济/迁移/双币种用例） |
 | 技能链专项 | **177 passed / 0 failed** | `tests/skill_chains_acceptance.gd`（本轮运行） |
-| 攻击研究专项 | **194 passed / 0 failed** | `tests/attack_research_acceptance.gd`（本轮运行） |
+| 攻击研究专项 | **196 passed / 0 failed** | `tests/attack_research_acceptance.gd`（本轮运行） |
 | 弓箭选择专项 | **30 passed / 0 failed** | `tests/weapon_selection_acceptance.gd`（本轮运行） |
 | 菜单选择 | **7 passed / 0 failed** | `tests/menu_selection_acceptance.gd`（本轮运行） |
 | Stage 自动通关 | 30/30 victory；Boss 10/20/30 各 1 次 | `tests/stage_autoplay.gd`（本轮运行） |
@@ -199,4 +201,4 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | 压力/浸泡 | p95 1.376 ms；60 逻辑分钟内存平稳 | `tests/performance_stress.gd`、`tests/long_soak.gd`（本轮运行） |
 | 发布清单 | 重建后 manifest 指向当前 HEAD | `content/build/build-manifest.json`（构建时刷新） |
 
-当前发布候选为 `Aegis-of-Ember-1.1.0-Windows-x64.zip`；已发布的 v1.0.3～v1.0.9 不包含本轮技能链与攻击研究树改进，不应继续分发。
+当前发布候选为 `Aegis-of-Ember-1.2.0-Windows-x64.zip`；已发布的 v1.0.3～v1.1.0 不包含本轮水晶魔法经济改进，不应继续分发。

@@ -1,6 +1,8 @@
 class_name DefenderResearchTree
 extends Control
 
+const Art = preload("res://src/presentation/art/game_art.gd")
+
 signal node_selected(upgrade_id: String)
 
 # Tree-shaped research layout matching the classic Defender II research pages:
@@ -26,17 +28,17 @@ const NODE_GLYPHS := {
 
 var _definitions: Array = []
 var _levels: Dictionary = {}
-var _coins: int = 0
+var _balances: Dictionary = {}
 var _selected_id: String = ""
 var _node_buttons: Dictionary = {}
 var _node_rects: Dictionary = {}
 var _edges: Array = []
 
 
-func build(definitions: Array, levels: Dictionary, coins: int, selected_id: String = "") -> void:
+func build(definitions: Array, levels: Dictionary, balances: Dictionary, selected_id: String = "") -> void:
 	_definitions = definitions
 	_levels = levels
-	_coins = coins
+	_balances = balances
 	for child in get_children():
 		child.queue_free()
 	_node_buttons.clear()
@@ -104,6 +106,15 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 	glyph.add_theme_font_size_override("font_size", 34)
 	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.add_child(glyph)
+	if not str(definition.get("weapon_ref", "")).is_empty():
+		glyph.hide()
+		var illustration := TextureRect.new()
+		illustration.texture = Art.texture(str(definition["weapon_ref"]))
+		illustration.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		illustration.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		illustration.size = icon.size
+		illustration.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.add_child(illustration)
 	var level_badge := Label.new()
 	level_badge.text = "Lv %d" % level
 	if definition.has("skill_ref"):
@@ -124,8 +135,11 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 		price_badge.add_theme_color_override("font_color", Color("9fb2c8"))
 	else:
 		var price := GameApp.upgrade_service.price_for_level(definition, level)
-		price_badge.text = "◆ %d" % price
-		price_badge.add_theme_color_override("font_color", Color("ffd166") if _coins >= price else Color("8693a6"))
+		var currency := str(definition.get("currency", "coins"))
+		var glyph_symbol := "✦" if currency == "crystals" else "◆"
+		var affordable_color := Color("8fd3ff") if currency == "crystals" else Color("ffd166")
+		price_badge.text = "%s %d" % [glyph_symbol, price]
+		price_badge.add_theme_color_override("font_color", affordable_color if int(_balances.get(currency, 0)) >= price else Color("8693a6"))
 	price_badge.position = icon_origin + Vector2(-2.0, ICON_SIZE - 4.0)
 	price_badge.size = Vector2(72, 18)
 	price_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

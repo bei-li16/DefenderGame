@@ -57,22 +57,17 @@ func apply_result(profile: Dictionary, result: Dictionary, config: Dictionary) -
 	updated["honor_reward_ledger"] = evaluation["ledger"]
 	updated["coins"] = int(updated.get("coins", 0)) + evaluation["coins"]
 	updated["xp"] = int(updated.get("xp", 0)) + evaluation["xp"]
-	# Crystals reward the FIRST clear of a stage: two crystals, three on the
-	# boss stages (every tenth).  The best_results map still reflects the
-	# pre-settle state here, so a missing entry means this run is the first
-	# clear; the run reward ledger keeps repeats from paying again.
+	# Crystals reward the FIRST clear of a stage.  Amounts come from
+	# rules.crystal_rewards: base + one step bonus per step_stages of stage
+	# number, plus a boss bonus; repeats pay nothing.  The best_results map
+	# still reflects the pre-settle state here, so a missing victory entry
+	# means this run is the first clear; the run reward ledger keeps repeats
+	# from paying again.
 	var crystals_awarded := 0
 	var stage_id := str(result.get("stage_id", ""))
 	var previous_best: Dictionary = updated.get("best_results", {}).get(stage_id, {})
 	if victory and str(previous_best.get("status", "")) != "victory":
-		crystals_awarded = 2
-		var stage: Dictionary = {}
-		for candidate in config.get("stages", []):
-			if candidate is Dictionary and str(candidate.get("id", "")) == str(result.get("stage_id", "")):
-				stage = candidate
-				break
-		if bool(stage.get("boss", false)):
-			crystals_awarded += 1
+		crystals_awarded = first_clear_crystals(stage_id, config)
 	updated["crystals"] = int(updated.get("crystals", 0)) + crystals_awarded
 	if crystals_awarded > 0:
 		var crystal_stats: Dictionary = updated.get("stats", {})
@@ -87,18 +82,73 @@ func apply_result(profile: Dictionary, result: Dictionary, config: Dictionary) -
 	}
 
 
+# First-clear crystal payout for a stage: base plus one step bonus per
+# step_stages of stage number (stage 1-5 pay base, 6-10 pay base+bonus, ...),
+# plus boss_bonus on boss stages.  Unknown stages pay nothing.
+static func first_clear_crystals(stage_id: String, config: Dictionary) -> int:
+	var rewards: Dictionary = config.get("crystal_rewards", {})
+	var base := int(rewards.get("first_clear_base", 2))
+	var step_stages := maxi(1, int(rewards.get("first_clear_step_stages", 5)))
+	var step_bonus := int(rewards.get("first_clear_step_bonus", 0))
+	var boss_bonus := int(rewards.get("boss_bonus", 1))
+	var stage_number := 0
+	var is_boss := false
+	var stages: Array = config.get("stages", [])
+	for index in range(stages.size()):
+		var candidate: Variant = stages[index]
+		if candidate is Dictionary and str(candidate.get("id", "")) == stage_id:
+			stage_number = index + 1
+			is_boss = bool(candidate.get("boss", false))
+			break
+	if stage_number <= 0:
+		return 0
+	var amount := base + ((stage_number - 1) / step_stages) * step_bonus
+	if is_boss:
+		amount += boss_bonus
+	return amount
+
+
+# Total crystals the profile's cleared stages would have paid under the
+# current crystal_rewards curve.  Used by the one-time migration top-up.
+static func expected_crystal_income(profile: Dictionary, config: Dictionary) -> int:
+	var total := 0
+	var best: Dictionary = profile.get("best_results", {})
+	for stage in config.get("stages", []):
+		if not stage is Dictionary:
+			continue
+		var stage_id := str(stage.get("id", ""))
+		var record: Variant = best.get(stage_id, {})
+		if record is Dictionary and str(record.get("status", "")) == "victory":
+			total += first_clear_crystals(stage_id, config)
+	return total
+
+
 # Brings an arbitrary profile's honor levels and ledger up to what its stats
 # already justify, paying the level rewards exactly once.  Used at startup to
 # absorb legacy saves and to grant chains after stat backfills.
+# Also performs the one-time v1.2.0 crystal top-up: magic research moved from
+# coins to crystals, so stages cleared under the old flat payout (or before
+# crystals existed) are credited the difference to the new curve exactly once.
 func reconcile(profile: Dictionary, config: Dictionary) -> Dictionary:
-	var evaluation := evaluate(profile, config)
 	var updated := profile.duplicate(true)
+	var topup := 0
+	if not bool(updated.get("crystal_topup_v1", false)):
+		var expected := expected_crystal_income(updated, config)
+		var earned := int(updated.get("stats", {}).get("crystals_earned", 0))
+		topup = maxi(0, expected - earned)
+		if topup > 0:
+			updated["crystals"] = int(updated.get("crystals", 0)) + topup
+			var topup_stats: Dictionary = updated.get("stats", {}).duplicate(true)
+			topup_stats["crystals_earned"] = earned + topup
+			updated["stats"] = topup_stats
+		updated["crystal_topup_v1"] = true
+	var evaluation := evaluate(updated, config)
 	updated["honors"] = evaluation["honors"]
 	updated["honor_reward_ledger"] = evaluation["ledger"]
 	if evaluation["coins"] > 0 or evaluation["xp"] > 0:
 		updated["coins"] = int(updated.get("coins", 0)) + evaluation["coins"]
 		updated["xp"] = int(updated.get("xp", 0)) + evaluation["xp"]
-	return {"ok": true, "profile": updated, "honor_coins": evaluation["coins"], "honor_xp": evaluation["xp"], "new_honors": evaluation["new_honors"]}
+	return {"ok": true, "profile": updated, "honor_coins": evaluation["coins"], "honor_xp": evaluation["xp"], "new_honors": evaluation["new_honors"], "crystal_topup": topup}
 
 
 func evaluate(profile: Dictionary, config: Dictionary) -> Dictionary:

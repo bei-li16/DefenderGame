@@ -283,6 +283,9 @@ func switch_save_slot(slot_id: int) -> Dictionary:
 		_record_failure("slot_load", load_result, "MainMenu")
 		return load_result
 	var new_profile := _normalize_profile(load_result["payload"])
+	# Legacy slots also need the honor/crystal reconciliation the startup path
+	# applies (one-time crystal top-up for the v1.2.0 magic research economy).
+	new_profile = honor_service.reconcile(new_profile, content.rules)["profile"]
 	var slot_save := save_service.save_profile_slot(slot, new_profile, int(content.rules["config_version"]))
 	if not bool(slot_save.get("ok", false)):
 		_record_failure("slot_save", slot_save, "MainMenu")
@@ -352,9 +355,12 @@ func purchase_upgrade(upgrade_id: String) -> Dictionary:
 	var result := upgrade_service.purchase(profile, content.rules, upgrade_id)
 	if bool(result.get("ok", false)):
 		var updated: Dictionary = result["profile"]
-		# Big Spender honor chain tracks lifetime coin spending.
+		# Big Spender tracks lifetime coin spending; crystal research has its own counter.
 		var updated_stats: Dictionary = updated.get("stats", {}).duplicate(true)
-		updated_stats["coins_spent"] = int(updated_stats.get("coins_spent", 0)) + int(result.get("price", 0))
+		if str(result.get("currency", "coins")) == "crystals":
+			updated_stats["crystals_spent"] = int(updated_stats.get("crystals_spent", 0)) + int(result.get("price", 0))
+		else:
+			updated_stats["coins_spent"] = int(updated_stats.get("coins_spent", 0)) + int(result.get("price", 0))
 		updated["stats"] = updated_stats
 		var upgrade := content.find_by_id("upgrades", upgrade_id)
 		var skill_id := str(upgrade.get("skill_ref", ""))
@@ -519,7 +525,7 @@ func _default_profile() -> Dictionary:
 		"best_results": {},
 		"reward_ledger": [],
 		"reward_ledger_pruned": 0,
-		"stats": {"total_kills": 0, "stages_completed": 0, "battles_won": 0, "battles_lost": 0, "coins_spent": 0, "fire_casts": 0, "ice_casts": 0, "lightning_casts": 0, "crystals_earned": 0, "bosses_defeated": 0, "perfect_stages": 0, "spells_cast": 0, "total_coins_earned": 0, "highest_stage_reached": 0, "weapons_used": []},
+		"stats": {"total_kills": 0, "stages_completed": 0, "battles_won": 0, "battles_lost": 0, "coins_spent": 0, "crystals_spent": 0, "fire_casts": 0, "ice_casts": 0, "lightning_casts": 0, "crystals_earned": 0, "bosses_defeated": 0, "perfect_stages": 0, "spells_cast": 0, "total_coins_earned": 0, "highest_stage_reached": 0, "weapons_used": []},
 		"honors": {},
 		"honor_reward_ledger": [],
 		"tutorial_complete": false

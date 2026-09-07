@@ -46,6 +46,7 @@ func _run() -> void:
 func _profile(skill_id: String = "") -> Dictionary:
 	var profile: Dictionary = app.call("_default_profile")
 	profile["coins"] = 1000000
+	profile["crystals"] = 100000
 	profile["tutorial_complete"] = true
 	if not skill_id.is_empty():
 		var skill := SkillCatalog.find(config, skill_id)

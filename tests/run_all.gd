@@ -56,6 +56,7 @@ func _run() -> void:
 		_test_honor_bonuses(content.rules)
 		_test_weapon_research(content.rules)
 		_test_reward_coin_curve(content.rules)
+		_test_crystal_economy(content.rules)
 		_test_event_position_anchor_contract(content.rules)
 		_test_migration()
 		_test_hashless_legacy_load()
@@ -421,11 +422,21 @@ func _test_upgrade_atomicity(config: Dictionary) -> void:
 	for definition in prerequisite_config["upgrades"]:
 		if definition["id"] == "ice_mastery":
 			definition["prerequisites"] = ["strength"]
-	var blocked_profile := {"coins": 1000, "upgrades": {"strength": 0, "ice_mastery": 0}}
+	var blocked_profile := {"coins": 1000, "crystals": 1000, "upgrades": {"strength": 0, "ice_mastery": 0}}
 	var blocked := service.purchase(blocked_profile, prerequisite_config, "ice_mastery")
 	blocked_profile["upgrades"]["strength"] = 1
 	var allowed := service.purchase(blocked_profile, prerequisite_config, "ice_mastery")
 	_expect(not bool(blocked.get("ok", false)) and bool(allowed.get("ok", false)), "upgrade prerequisites block and allow purchase atomically")
+	# Magic research costs crystals; coins stay untouched and vice versa.
+	var crystal_poor := {"coins": 100000, "crystals": 0, "upgrades": {"mana_capacity": 0}}
+	var crystal_rejected := service.purchase(crystal_poor, config, "mana_capacity")
+	_expect(not bool(crystal_rejected.get("ok", false)) and str(crystal_rejected.get("error_code", "")) == "insufficient_crystals" and int(crystal_poor["coins"]) == 100000, "magic research rejects coin-only balances as insufficient crystals")
+	var crystal_funded := {"coins": 100, "crystals": 5, "upgrades": {"mana_capacity": 0}}
+	var crystal_bought := service.purchase(crystal_funded, config, "mana_capacity")
+	_expect(bool(crystal_bought.get("ok", false)) and int(crystal_bought["profile"]["crystals"]) == 4 and int(crystal_bought["profile"]["coins"]) == 100 and str(crystal_bought.get("currency", "")) == "crystals", "magic research spends crystals and keeps coins")
+	var coin_only := {"coins": 0, "crystals": 1000, "upgrades": {"strength": 0}}
+	var coin_rejected := service.purchase(coin_only, config, "strength")
+	_expect(not bool(coin_rejected.get("ok", false)) and str(coin_rejected.get("error_code", "")) == "insufficient_coins" and int(coin_only["crystals"]) == 1000, "attack research rejects crystal-only balances as insufficient coins")
 
 
 func _test_data_driven_upgrade_effects(source_config: Dictionary) -> void:
@@ -803,11 +814,12 @@ func _test_progression_and_battle_record(source_config: Dictionary) -> void:
 	var after_loss: Dictionary = honor_service.apply_result(after_win, defeat, source_config).get("profile", {})
 	var loss_stats: Dictionary = after_loss.get("stats", {})
 	_expect(int(loss_stats.get("battles_won", 0)) == 1 and int(loss_stats.get("battles_lost", 0)) == 1, "defeat counts battles_lost separately")
-	# Crystals pay on the FIRST clear of a stage: two, three on boss stages.
+	# Crystals pay on the FIRST clear of a stage, following rules.crystal_rewards:
+	# base 3, +1 per five stages of stage number, +4 extra on boss stages.
 	var first_clear := {"status": "victory", "stage_id": "stage_001", "stage_number": 1, "kills": 5, "coins": 10, "xp": 20, "wall_percent": 60, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
 	var first_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 3, "best_results": {}}, first_clear, source_config)
-	_expect(int(first_result.get("profile", {}).get("crystals", 0)) == 5, "first clear of a stage awards two crystals")
-	_expect(int(first_result.get("crystals_awarded", 0)) == 2, "settlement reports the first-clear crystals")
+	_expect(int(first_result.get("profile", {}).get("crystals", 0)) == 6, "first clear of a stage awards the base three crystals")
+	_expect(int(first_result.get("crystals_awarded", 0)) == 3, "settlement reports the first-clear crystals")
 	# settle_run records best_results after the honor pass; simulate that so
 	# the repeat sees the stage as already cleared.
 	var settled_profile: Dictionary = first_result.get("profile", {})
@@ -816,7 +828,7 @@ func _test_progression_and_battle_record(source_config: Dictionary) -> void:
 	_expect(int(repeat_result.get("crystals_awarded", 0)) == 0, "repeating a cleared stage pays no crystals")
 	var boss_clear := {"status": "victory", "stage_id": "stage_010", "stage_number": 10, "kills": 30, "coins": 60, "xp": 90, "wall_percent": 100, "weapon_id": "basic_bow", "bosses_slain": 1, "spells_cast": 0}
 	var boss_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 0, "best_results": {}}, boss_clear, source_config)
-	_expect(int(boss_result.get("crystals_awarded", 0)) == 3, "first clear of a boss stage awards three crystals")
+	_expect(int(boss_result.get("crystals_awarded", 0)) == 8, "first clear of a boss stage awards the curve amount plus the boss bonus")
 	var defeat_run := {"status": "defeat", "stage_id": "stage_002", "stage_number": 2, "kills": 4, "coins": 6, "xp": 5, "wall_percent": 0, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
 	var defeat_result: Dictionary = honor_service.apply_result({"stats": {}, "honors": {}, "crystals": 0, "best_results": {}}, defeat_run, source_config)
 	_expect(int(defeat_result.get("crystals_awarded", 0)) == 0, "a failed run pays no crystals")
@@ -825,7 +837,7 @@ func _test_progression_and_battle_record(source_config: Dictionary) -> void:
 	after_defeat["best_results"] = {"stage_002": {"status": "defeat", "wall_percent": 0}}
 	var late_clear := {"status": "victory", "stage_id": "stage_002", "stage_number": 2, "kills": 5, "coins": 10, "xp": 20, "wall_percent": 80, "weapon_id": "basic_bow", "bosses_slain": 0, "spells_cast": 0}
 	var late_result: Dictionary = honor_service.apply_result(after_defeat, late_clear, source_config)
-	_expect(int(late_result.get("crystals_awarded", 0)) == 2, "a prior defeat record keeps the first-clear crystals")
+	_expect(int(late_result.get("crystals_awarded", 0)) == 3, "a prior defeat record keeps the first-clear crystals")
 
 
 func _test_honor_chains(source_config: Dictionary) -> void:
@@ -998,6 +1010,45 @@ func _find_upgrade(source_config: Dictionary, upgrade_id: String) -> Dictionary:
 		if upgrade is Dictionary and str(upgrade.get("id", "")) == upgrade_id:
 			return upgrade
 	return {}
+
+
+func _test_crystal_economy(source_config: Dictionary) -> void:
+	# The crystal economy must let a full clear afford every magic level
+	# without leaving a large surplus (design: income 177 vs cost 169).
+	var total_income := 0
+	var stages: Array = source_config.get("stages", [])
+	for stage in stages:
+		total_income += HonorService.first_clear_crystals(str(stage.get("id", "")), source_config)
+	var total_cost := 0
+	for upgrade in source_config.get("upgrades", []):
+		if not upgrade is Dictionary:
+			continue
+		if str(upgrade.get("page", "")) == "magic":
+			_expect(str(upgrade.get("currency", "")) == "crystals", "magic research node %s costs crystals" % str(upgrade.get("id", "")))
+		if str(upgrade.get("currency", "coins")) != "crystals":
+			continue
+		for level in range(int(upgrade.get("max_level", 0))):
+			total_cost += UpgradeService.price_for_level(upgrade, level)
+	_expect(total_income == 177, "first-clear crystal income totals 177 across 30 stages (got %d)" % total_income)
+	_expect(total_cost == 169, "magic research crystal cost totals 169 (got %d)" % total_cost)
+	_expect(total_cost <= total_income, "crystal income covers the full magic tree")
+	_expect(total_income - total_cost <= maxi(10, int(ceil(float(total_cost) * 0.25))), "crystal income avoids a large surplus")
+	# Legacy saves cleared stages under the old flat payout; reconcile credits
+	# the curve difference exactly once so magic research stays affordable.
+	var honor_service := HonorService.new()
+	var legacy_best := {}
+	for stage in stages:
+		legacy_best[str(stage.get("id", ""))] = {"status": "victory"}
+	var legacy := {"crystals": 63, "best_results": legacy_best, "stats": {"crystals_earned": 63}, "honors": {}, "honor_reward_ledger": []}
+	var topped: Dictionary = honor_service.reconcile(legacy, source_config)
+	_expect(int(topped.get("crystal_topup", -1)) == 114, "legacy full-clear save receives the 114-crystal curve difference")
+	var topped_profile: Dictionary = topped.get("profile", {})
+	_expect(int(topped_profile.get("crystals", 0)) == 177 and bool(topped_profile.get("crystal_topup_v1", false)), "top-up credits crystals and marks the profile")
+	_expect(int(topped_profile.get("stats", {}).get("crystals_earned", 0)) == 177, "top-up feeds the lifetime crystals stat")
+	var second: Dictionary = honor_service.reconcile(topped_profile, source_config)
+	_expect(int(second.get("crystal_topup", -1)) == 0 and int(second.get("profile", {}).get("crystals", 0)) == 177, "the crystal top-up pays exactly once")
+	var fresh: Dictionary = honor_service.reconcile({"crystals": 0, "best_results": {}, "stats": {}}, source_config)
+	_expect(int(fresh.get("crystal_topup", -1)) == 0, "a fresh profile has nothing to top up")
 
 
 func _test_event_position_anchor_contract(source_config: Dictionary) -> void:

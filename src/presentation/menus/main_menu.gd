@@ -8,6 +8,7 @@ const SkillCatalog = preload("res://src/core/rules/skill_catalog.gd")
 const SkillText = preload("res://src/presentation/skill_text.gd")
 const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
 const AttackText = preload("res://src/presentation/attack_text.gd")
+const Art = preload("res://src/presentation/art/game_art.gd")
 
 var _content_panel: PanelContainer
 var _identity_panel: PanelContainer
@@ -111,6 +112,7 @@ func _build_layout() -> void:
 	_identity_panel = identity
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	identity.custom_minimum_size.x = 620
+	identity.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(0.02, 0.04, 0.07, 0.12), Color(0.6, 0.75, 0.9, 0.18)))
 	body.add_child(identity)
 	var identity_margin := MarginContainer.new()
 	identity_margin.add_theme_constant_override("margin_left", 46)
@@ -119,13 +121,13 @@ func _build_layout() -> void:
 	identity_margin.add_theme_constant_override("margin_bottom", 48)
 	identity.add_child(identity_margin)
 	var identity_stack := VBoxContainer.new()
-	identity_stack.alignment = BoxContainer.ALIGNMENT_CENTER
+	identity_stack.alignment = BoxContainer.ALIGNMENT_END
 	identity_stack.add_theme_constant_override("separation", 18)
 	identity_margin.add_child(identity_stack)
 	var crest := Label.new()
-	crest.text = "♜  ✦  ♜"
+	crest.text = "◆"
 	crest.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	crest.add_theme_font_size_override("font_size", 72)
+	crest.add_theme_font_size_override("font_size", 28)
 	crest.add_theme_color_override("font_color", Color("e9b44c"))
 	identity_stack.add_child(crest)
 	var heading := Label.new()
@@ -133,6 +135,8 @@ func _build_layout() -> void:
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 64)
 	heading.add_theme_color_override("font_color", Color("ffe2a8"))
+	heading.add_theme_color_override("font_outline_color", Color("111b28"))
+	heading.add_theme_constant_override("outline_size", 8)
 	identity_stack.add_child(heading)
 	var subtitle := Label.new()
 	subtitle.text = GameApp.text("app.subtitle")
@@ -152,6 +156,7 @@ func _build_layout() -> void:
 	_content_panel = PanelContainer.new()
 	_content_panel.custom_minimum_size.x = 600
 	_content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_content_panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(0.025, 0.045, 0.075, 0.88), Color(0.45, 0.57, 0.7, 0.8)))
 	body.add_child(_content_panel)
 	_content_margin = MarginContainer.new()
 	_content_margin.add_theme_constant_override("margin_left", 28)
@@ -375,11 +380,14 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			prerequisite_text
 		]
 		var price := GameApp.upgrade_service.price_for_level(definition, level)
+		var currency := str(definition.get("currency", "coins"))
 		var weapon_ref := str(definition.get("weapon_ref", ""))
 		var already_unlocked: bool = not weapon_ref.is_empty() and GameApp.profile.get("unlocked_weapons", []).has(weapon_ref)
-		detail_price.text = GameApp.text("common.max") if level >= max_level else ("✦" if already_unlocked else "◆ %d" % price)
+		var price_glyph := "✦" if currency == "crystals" else "◆"
+		detail_price.text = GameApp.text("common.max") if level >= max_level else ("✦" if already_unlocked else "%s %d" % [price_glyph, price])
+		detail_price.add_theme_color_override("font_color", Color("8fd3ff") if currency == "crystals" else Color("ffd166"))
 		detail_button.text = GameApp.text("research.unlocked") if already_unlocked else (GameApp.text("common.upgrade") if level < max_level else GameApp.text("common.max"))
-		detail_button.disabled = level >= max_level or already_unlocked or int(GameApp.profile.get("coins", 0)) < price or not prerequisites_met
+		detail_button.disabled = level >= max_level or already_unlocked or int(GameApp.profile.get(currency, 0)) < price or not prerequisites_met
 		# Weapons page: show the referenced bow's stats and offer equipping it.
 		if not weapon_ref.is_empty():
 			var weapon_definition: Dictionary = GameApp.content.find_by_id("weapons", weapon_ref)
@@ -436,13 +444,20 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 		var upgrade_id := tree.selected()
 		var purchase_result := GameApp.purchase_upgrade(upgrade_id)
 		if not bool(purchase_result.get("ok", false)):
-			operation_error.text = GameApp.text("feedback.save_failed")
+			var error_code := str(purchase_result.get("error_code", ""))
+			if error_code == "insufficient_crystals":
+				operation_error.text = GameApp.text("feedback.insufficient_crystals")
+			elif error_code == "insufficient_coins":
+				operation_error.text = GameApp.text("feedback.insufficient_coins")
+			else:
+				operation_error.text = GameApp.text("feedback.save_failed")
 			operation_error.visible = true
 			return
+		operation_error.visible = false
 		_refresh_header()
 		_show_research_page(page_id, upgrade_id, scroll.scroll_vertical)
 	)
-	tree.build(page_definitions, upgrades, int(GameApp.profile.get("coins", 0)), selected_id)
+	tree.build(page_definitions, upgrades, {"coins": int(GameApp.profile.get("coins", 0)), "crystals": int(GameApp.profile.get("crystals", 0))}, selected_id)
 	refresh_detail.call()
 	_add_back_button(stack)
 	if saved_scroll > 0:
@@ -902,7 +917,10 @@ func _rebuild_loadout() -> void:
 	var slot := MenuButton.new()
 	slot.name = "BowSelector"
 	slot.flat = false
-	slot.text = "%s %s" % [str(WEAPON_GLYPHS.get(current_id, "🏹")), GameApp.text("loadout.dropdown_hint")]
+	slot.text = GameApp.text("loadout.dropdown_hint")
+	slot.icon = Art.texture(current_id)
+	slot.expand_icon = true
+	slot.add_theme_constant_override("icon_max_width", 48)
 	slot.custom_minimum_size = Vector2(120, 56)
 	slot.add_theme_font_size_override("font_size", 27)
 	slot.clip_text = true
@@ -935,6 +953,8 @@ func _rebuild_loadout() -> void:
 				bow_menu.add_item("🔒  %s" % weapon_name, item_index)
 			index_by_item[item_index] = "unlock_" + weapon_id
 		bow_menu.set_item_tooltip(item_index, weapon_name + "  ·  " + _weapon_summary(definition))
+		bow_menu.set_item_icon(item_index, Art.texture(weapon_id))
+		bow_menu.set_item_icon_max_width(item_index, 42)
 		item_index += 1
 	bow_menu.index_pressed.connect(func(item_index: int) -> void:
 		bow_menu.hide()
