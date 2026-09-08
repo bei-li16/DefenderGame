@@ -29,9 +29,9 @@ func _run() -> void:
 	var button_count := 0
 	var spell_count := 0
 	for child in row.get_children():
-		if child is Button:
+		if child.name == "BowSelector":
 			button_count += 1
-		if child is Label:
+		if child is MenuButton and str(child.name).begins_with("SkillSelector_"):
 			spell_count += 1
 	_expect(button_count == 1 and spell_count == 3, "header has one bow selector and three spell icons")
 	_expect(_popup().item_count == 4, "dropdown retains all four bows")

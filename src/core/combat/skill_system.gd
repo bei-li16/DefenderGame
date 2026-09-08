@@ -53,8 +53,12 @@ static func cast(model, skill_id: String, target_x: int, target_y: int, events: 
 	})
 	var impacts: Array[Dictionary] = []
 	var offsets := launch_offsets(model._spell_rng, int(skill["impact_count"]), int(skill["barrage_duration_ticks"]))
-	for offset in offsets:
-		var point := landing_point(model, skill, target_x, target_y)
+	var screen_points: Array[Vector2i] = []
+	if screen:
+		screen_points = screen_landing_points(model._spell_rng, world, skill)
+	for index in range(offsets.size()):
+		var offset := offsets[index]
+		var point := screen_points[index] if screen else landing_point(model, skill, target_x, target_y)
 		impacts.append({"x_milli": point.x, "y_milli": point.y, "launch_tick": model.tick + offset, "impact_tick": model.tick + offset + int(skill["fall_ticks"])})
 	model.active_spells.append({"skill": skill, "impacts": impacts, "launch_cursor": 0, "impact_cursor": 0})
 
@@ -90,6 +94,55 @@ static func launch_offsets(rng, count: int, duration: int) -> Array[int]:
 	return result
 
 
+static func screen_landing_points(rng, world: Dictionary, skill: Dictionary) -> Array[Vector2i]:
+	var left := int(world["castle_x_milli"])
+	var width := int(world["width_milli"]) - left
+	var height := int(world["height_milli"])
+	# A fresh opening per cast, not a permanent safe lane or damage mask.
+	# Keep actual splash disks outside it even after radius research. Every hit
+	# still uses the normal distance/falloff rule, including moving enemies.
+	var gap := Vector2i(left + rng.range_exclusive(width * 35 / 100, width * 65 / 100), rng.range_exclusive(height * 40 / 100, height * 60 / 100))
+	# Leave more breathing room: target 80–95% cumulative damage coverage.
+	# Vary the opening's radius as well as its position; counts/timing stay fixed.
+	var gap_radius: int = mini(width, height) * rng.range_exclusive(180, 251) / 1000
+	var clearance := int(skill["splash_radius_milli"]) + gap_radius
+	var candidates: Array[Vector2i] = []
+	var distances: Array[float] = []
+	# Jittered candidates + farthest-point sampling distribute the rainfall;
+	# unlike independent uniform rolls, they cannot all cluster in one corner.
+	for row in range(16):
+		for column in range(24):
+			var point := Vector2i(left + (column * width + rng.range_exclusive(width / 10, width * 9 / 10)) / 24, (row * height + rng.range_exclusive(height / 10, height * 9 / 10)) / 16)
+			if Vector2(point).distance_squared_to(Vector2(gap)) >= float(clearance) * clearance:
+				candidates.append(point)
+				distances.append(INF)
+	var result: Array[Vector2i] = []
+	# Defensive fallback for custom rules whose radius dwarfs the battlefield:
+	# a geometric opening is then impossible, but casting must not crash.
+	if candidates.is_empty():
+		for index in range(int(skill["impact_count"])):
+			result.append(Vector2i(left + rng.range_exclusive(0, width + 1), rng.range_exclusive(0, height + 1)))
+		return result
+	var chosen: int = rng.range_exclusive(0, candidates.size())
+	for index in range(int(skill["impact_count"])):
+		var point := candidates[chosen]
+		result.append(point)
+		var farthest := -1.0
+		for candidate in range(candidates.size()):
+			distances[candidate] = minf(distances[candidate], Vector2(candidates[candidate]).distance_squared_to(Vector2(point)))
+			if distances[candidate] > farthest:
+				farthest = distances[candidate]
+				chosen = candidate
+	# Spatial distribution and launch order are independent; no visible raster
+	# scan or regular sweeping wave. Use only the replay-owned spell RNG.
+	for index in range(result.size() - 1, 0, -1):
+		var other: int = rng.range_exclusive(0, index + 1)
+		var point := result[index]
+		result[index] = result[other]
+		result[other] = point
+	return result
+
+
 static func landing_point(model, skill: Dictionary, x: int, y: int) -> Vector2i:
 	var mode := str(skill["target_mode"])
 	if mode == "point":
@@ -98,8 +151,6 @@ static func landing_point(model, skill: Dictionary, x: int, y: int) -> Vector2i:
 	var left := int(world["castle_x_milli"])
 	var right := int(world["width_milli"])
 	var bottom := int(world["height_milli"])
-	if mode == "screen":
-		return Vector2i(model._spell_rng.range_exclusive(left, right + 1), model._spell_rng.range_exclusive(0, bottom + 1))
 	var radius := int(skill["area_radius_milli"])
 	# Rejection-sample the disk intersected with the battlefield, instead of
 	# clamping off-screen points into conspicuous lines along screen edges.

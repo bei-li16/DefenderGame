@@ -23,7 +23,7 @@ git switch windows-godot
 
 - 无尽关卡：前 30 关保留既有编排，第 31 关起按曲线生成数量、波次、出怪时长和六类普通怪组合；每 10 关恰好一位 Boss，余烬督军→霜痕巨人→风暴女王循环，普通关无 Boss。详见 [无尽关卡规则](docs/endless-stages.md)。
 - 4 把武器:守望长弓、震击长弓(强化击退)、飓风长弓(三连射)、幻影长弓(穿透)。守望长弓初始可用,其余在武器研究中花费金币解锁;顶部弓箭图标展开下拉框切换已解锁弓箭,研究详情也可点击“装备”。两处选择同步保存,并用于随后进入的关卡战斗。
-- 火、冰、雷各三级共九个技能,带独立研究、装备、递增 Mana 消耗、多轮轰击/冰封/多目标雷击;五页研究树(攻击/魔法/防御/武器/后勤)。技能数值、来源与兼容规则见 [三级技能链说明](docs/skill-chains-reimplementation.md)。
+- 火、冰、雷各三级共九个技能，支持主页下拉装备、独立研究和递增 Mana 消耗；选中后显示元素魔法光标。三阶在 3 秒内分散倾泻 56/52/60 发，保留少量随机空隙；五页研究树（攻击/魔法/防御/武器/后勤）。技能数值、来源与兼容规则见 [三级技能链说明](docs/skill-chains-reimplementation.md)。
 - 攻击研究恢复力量、敏捷、击退、毒箭、暴击、多重箭、高级猎人七节点；共享真实属性预览、依赖等级、独立箭矢与百分比经验加成，旧精通一次性退款。原版证据与项目平衡值见 [攻击研究说明](docs/attack-research-reimplementation.md)。
 - 无尽科技：力量、九技能伤害、魔力上限、城墙生命、设施伤害和三弓锻造共 17 项持续升级；其余科技保留等级上限，技能范围/状态时长在研究 20 级封顶。旧价格区间保留，后续费用改用多项式增长，见 [无尽研究说明](docs/endless-research.md)。
 - 防御设施:熔岩护城河(范围灼烧)与魔法塔(自动狙击),由防御页研究解锁;霜痕巨人的冰霜新星会暂时冻结玩家防御。
@@ -59,4 +59,4 @@ git switch windows-godot
 & .\tools\build_windows.ps1 -Configuration Release
 ```
 
-当前源码版本以 `project.godot` 为准；无尽关卡与研究规则为 config v9。无尽关卡专项 166 项、无尽研究专项 286 项通过，原 30 关及 9 个生成关卡自动通关全胜，额外覆盖高研究等级下的第 1000/10000 关；未重新导出发行包。正式构建会在被 Git 忽略的 `Builds/` 下生成 Windows x86_64 EXE/PCK 和便携 ZIP；项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。完整证据见 [`docs/implementation-status.md`](docs/implementation-status.md)，开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。
+当前源码版本以 `project.godot` 为准；规则为 config v10（密集倾泻及技能交互，保留无尽关卡与研究）。无尽关卡专项 166 项、无尽研究专项 286 项通过，原 30 关及 9 个生成关卡自动通关全胜，额外覆盖高研究等级下的第 1000/10000 关；本次改动尚未重新导出发行包。正式构建会在被 Git 忽略的 `Builds/` 下生成 Windows x86_64 EXE/PCK 和便携 ZIP；项目采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。完整证据见 [`docs/implementation-status.md`](docs/implementation-status.md)，开发与构建命令见 [`docs/development-guide.md`](docs/development-guide.md)。

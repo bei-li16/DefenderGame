@@ -549,12 +549,9 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			_equip_weapon(weapon_ref)
 		var skill_ref := str(definition.get("skill_ref", ""))
 		if not skill_ref.is_empty():
-			var result := GameApp.select_skill(skill_ref)
-			operation_error.text = "" if bool(result.get("ok", false)) else GameApp.text("feedback.save_failed")
-			operation_error.visible = not bool(result.get("ok", false))
-			if bool(result.get("ok", false)):
-				_refresh_header()
-				refresh_detail.call()
+			operation_error.text = ""
+			operation_error.visible = false
+			_equip_skill(skill_ref)
 	)
 	detail_button.pressed.connect(func() -> void:
 		var upgrade_id := tree.selected()
@@ -1167,13 +1164,45 @@ func _rebuild_loadout() -> void:
 	var loadout := SkillCatalog.loadout(GameApp.content.rules, GameApp.profile)
 	for spell_definition in [["🔥", "fire"], ["❄", "ice"], ["⚡", "lightning"]]:
 		var skill := SkillCatalog.effective(GameApp.content.rules, GameApp.profile, str(loadout.get(spell_definition[1], "")))
-		var spell := Label.new()
-		spell.text = "%s%s" % [str(spell_definition[0]), ["Ⅰ", "Ⅱ", "Ⅲ"][int(skill.get("tier", 1)) - 1]]
-		spell.custom_minimum_size = Vector2(56, 56)
-		spell.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		spell.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		var spell := MenuButton.new()
+		spell.name = "SkillSelector_" + str(spell_definition[1])
+		spell.flat = false
+		spell.text = "%s%s ▾" % [str(spell_definition[0]), ["Ⅰ", "Ⅱ", "Ⅲ"][int(skill.get("tier", 1)) - 1]]
+		spell.custom_minimum_size = Vector2(92, 56)
+		spell.add_theme_font_size_override("font_size", 23)
 		spell.add_theme_stylebox_override("normal", _loadout_frame(false))
+		spell.add_theme_stylebox_override("hover", _loadout_frame(true))
+		spell.add_theme_stylebox_override("pressed", _loadout_frame(true))
+		spell.add_theme_stylebox_override("hover_pressed", _loadout_frame(true))
 		spell.tooltip_text = GameApp.text(str(skill.get("name_key", ""))) + "\n" + SkillText.summary(skill, GameApp.text, int(GameApp.content.rules.get("simulation_tick_rate", 30)))
+		var popup := spell.get_popup()
+		popup.add_theme_stylebox_override("panel", UiTheme.panel_box())
+		popup.add_theme_font_size_override("font_size", 24)
+		popup.add_theme_color_override("font_disabled_color", Color("d9be78"))
+		popup.add_theme_stylebox_override("hover", _loadout_frame(true))
+		popup.add_theme_constant_override("v_separation", 12)
+		var choices: Array[Dictionary] = []
+		for definition in GameApp.content.rules.get("skills", []):
+			if str(definition["element"]) != str(spell_definition[1]):
+				continue
+			var id := str(definition["id"])
+			var available := SkillCatalog.available(GameApp.content.rules, GameApp.profile, id)
+			var equipped := id == str(skill["id"])
+			var index := choices.size()
+			choices.append(definition)
+			popup.add_item("%s %s %s  ·  ◈ %d" % ["✓" if equipped else ("  " if available else "🔒"), ["Ⅰ", "Ⅱ", "Ⅲ"][int(definition["tier"]) - 1], GameApp.text(str(definition["name_key"])), int(definition["mana_cost"])], index)
+			popup.set_item_disabled(index, equipped)
+			popup.set_item_tooltip(index, SkillText.summary(SkillCatalog.effective(GameApp.content.rules, GameApp.profile, id), GameApp.text, int(GameApp.content.rules.get("simulation_tick_rate", 30))))
+		popup.index_pressed.connect(func(index: int) -> void:
+			popup.hide()
+			if index < 0 or index >= choices.size():
+				return
+			var definition := choices[index]
+			if SkillCatalog.available(GameApp.content.rules, GameApp.profile, str(definition["id"])):
+				_equip_skill(str(definition["id"]))
+			else:
+				_show_research_page("magic", str(definition["upgrade_id"]))
+		)
 		_loadout_row.add_child(spell)
 
 
@@ -1191,12 +1220,28 @@ func _equip_weapon(weapon_id: String) -> void:
 		_research_detail_refresh.call()
 
 
+func _equip_skill(skill_id: String) -> void:
+	var saved := bool(GameApp.select_skill(skill_id).get("ok", false))
+	_loadout_error.text = "" if saved else GameApp.text("feedback.save_failed")
+	_loadout_error.visible = not saved
+	if saved:
+		_refresh_header()
+		if _research_detail_refresh.is_valid():
+			_research_detail_refresh.call()
+
+
 func _loadout_frame(highlighted: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("16263c")
 	style.border_color = Color("ffd166") if highlighted else Color("33465e")
 	style.set_border_width_all(2 if highlighted else 1)
 	style.set_corner_radius_all(10)
+	# Identical compact margins in normal/hover/pressed states prevent the
+	# tier and dropdown arrow being clipped when MenuButton opens its popup.
+	style.content_margin_left = 6.0
+	style.content_margin_right = 6.0
+	style.content_margin_top = 6.0
+	style.content_margin_bottom = 6.0
 	return style
 
 

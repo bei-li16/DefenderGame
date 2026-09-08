@@ -10,6 +10,7 @@ const Art = preload("res://src/presentation/art/game_art.gd")
 const CreatureVisuals = preload("res://src/presentation/art/creature_visuals.gd")
 const CastleView = preload("res://src/presentation/art/castle_view.gd")
 const CourtyardView = preload("res://src/presentation/art/courtyard_view.gd")
+const MagicCursor = preload("res://src/presentation/gameplay/magic_cursor.gd")
 
 var _creatures := CreatureVisuals.new()
 var _bow_recoil := 0.0
@@ -37,6 +38,8 @@ var _auto_firing: bool = false
 # Drag-cast state (FR-023): left button held while a skill is selected; the cast
 # commits on release, releasing over UI cancels the spell.
 var _cast_dragging: bool = false
+var _owns_hidden_cursor := false
+var _pointer_inside_window := true
 # Last known battlefield position per entity id. The snapshot is one tick older
 # than the event stream, so same-tick spawn hits and just-died enemies would
 # otherwise fall back to a screen-center position for their floating texts.
@@ -45,6 +48,16 @@ var _last_known_positions: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	get_window().mouse_entered.connect(func() -> void: _pointer_inside_window = true)
+	get_window().mouse_exited.connect(func() -> void:
+		_pointer_inside_window = false
+		_sync_pointer_cursor()
+	)
+	get_window().focus_exited.connect(func() -> void:
+		_pointer_inside_window = false
+		_sync_pointer_cursor()
+	)
+	get_window().focus_entered.connect(func() -> void: _pointer_inside_window = true)
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	for key in Art.FILES:
 		Art.texture(key)
@@ -107,6 +120,7 @@ func _process(delta: float) -> void:
 	if _cast_dragging and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_finish_cast_drag()
 	_update_fire_source()
+	_sync_pointer_cursor()
 	queue_redraw()
 
 
@@ -739,9 +753,11 @@ func _draw() -> void:
 		var color: Color = text_data["color"]
 		color.a = alpha
 		draw_string(ThemeDB.fallback_font, Vector2(float(text_data["x"]), float(text_data["y"])), str(text_data["text"]), HORIZONTAL_ALIGNMENT_CENTER, 180, int(text_data["font_size"]), color)
-	_draw_crosshair()
-	_draw_cast_drag_indicator()
 	draw_set_transform(Vector2.ZERO)
+	# Aiming overlays belong to the pointer, never to the screen shake.
+	if not _pointer_cursor_kind().is_empty():
+		_draw_cast_drag_indicator()
+		_draw_crosshair()
 
 
 func _draw_background() -> void:
@@ -930,29 +946,49 @@ func _draw_ice_prison(position: Vector2, radius: float, opacity: float) -> void:
 	draw_line(points[2], position + Vector2(0, radius * 0.6), Color(0.9, 1, 1, opacity), 2)
 
 
-func _draw_crosshair() -> void:
-	var mouse := get_global_mouse_position()
+func _pointer_cursor_kind() -> String:
+	if not _pointer_inside_window or not _pointer_in_battlefield() or get_tree().paused or _result_overlay != null or str(snapshot.get("status", "")) != "running":
+		return ""
+	if get_viewport().gui_get_hovered_control() != null:
+		return ""
 	var selected := str(snapshot.get("selected_skill", ""))
-	if str(snapshot.get("skill_definitions", {}).get(selected, {}).get("target_mode", "")) == "screen":
+	if selected.is_empty():
+		return "crosshair"
+	return str(snapshot.get("skill_definitions", {}).get(selected, {}).get("element", ""))
+
+
+func _sync_pointer_cursor() -> void:
+	if not _pointer_cursor_kind().is_empty():
+		if Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
+			Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
+			_owns_hidden_cursor = true
+	elif _owns_hidden_cursor:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_owns_hidden_cursor = false
+
+
+func _exit_tree() -> void:
+	if _owns_hidden_cursor:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _draw_crosshair() -> void:
+	var kind := _pointer_cursor_kind()
+	if kind.is_empty():
+		return
+	var mouse := get_global_mouse_position()
+	if kind != "crosshair":
+		var skill: Dictionary = snapshot.get("skill_definitions", {}).get(str(snapshot.get("selected_skill", "")), {})
+		MagicCursor.draw(self, mouse, kind, int(skill.get("tier", 1)), _cast_target_valid(skill, mouse), _elapsed_visual)
 		return
 	var color := Color("f4ead5")
 	var radius := 22.0
-	var element := str(snapshot.get("skill_definitions", {}).get(selected, {}).get("element", ""))
-	if element == "fire":
-		color = Color("ff7b3d")
-		radius = 48.0
-	elif element == "ice":
-		color = Color("69d6ff")
-		radius = 52.0
-	elif element == "lightning":
-		color = Color("d9b8ff")
-		radius = 58.0
 	draw_arc(mouse, radius, 0, TAU, 28, color, 3)
 	draw_line(mouse + Vector2(-radius - 10, 0), mouse + Vector2(-radius + 8, 0), color, 3)
 	draw_line(mouse + Vector2(radius - 8, 0), mouse + Vector2(radius + 10, 0), color, 3)
 	draw_line(mouse + Vector2(0, -radius - 10), mouse + Vector2(0, -radius + 8), color, 3)
 	draw_line(mouse + Vector2(0, radius - 8), mouse + Vector2(0, radius + 10), color, 3)
-	if bool(GameApp.settings.get("aim_assist", true)) and selected.is_empty():
+	if bool(GameApp.settings.get("aim_assist", true)):
 		var target := _nearest_enemy(mouse, 130.0)
 		if target != Vector2.INF:
 			draw_line(mouse, target, Color(1.0, 0.84, 0.36, 0.28), 2)
