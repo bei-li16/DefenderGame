@@ -51,6 +51,8 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 
 ```powershell
 & $GodotConsole --headless --path . --script res://tests/stage_autoplay.gd
+& $GodotConsole --headless --path . --script res://tests/endless_stages_acceptance.gd
+& $GodotConsole --headless --path . --script res://tests/endless_research_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/tutorial_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/settings_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/application_transaction_acceptance.gd
@@ -60,9 +62,12 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 & $GodotConsole --headless --path . --script res://tests/skill_chains_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/attack_research_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/materials_acceptance.gd
+& $GodotConsole --headless --path . --script res://tests/castle_layout_acceptance.gd
 ```
 
 弓箭选择验收覆盖顶部单一入口、四把弓的切换、锁定弓跳转研究、解锁后装备、研究页同步、存档失败与重试，以及实际战斗使用所选弓箭。测试使用隔离存档，不修改玩家存档。移除 `--headless` 还会验证原生/嵌入式下拉框在三档 UI 缩放下的位置；追加 `-- --capture` 可将界面截图保存到被 Git 忽略的 `Builds/weapon-selection-review/`。
+
+无尽关卡验收覆盖前 600 关的 Boss/普通关隔离、曲线、百万关有限生成、存活上限延后出怪、确定性、旧 30 关存档衔接、首通和保存失败、分页与定位。移除 `--headless` 并追加 `-- --capture` 可将中英文选关和下一关界面保存到 `Builds/endless-stages-review/`。`stage_autoplay.gd` 自动通关原 30 关与 9 个无尽段样例；高关卡生成测试不等同于证明满级角色可通关所有关卡。详见 [无尽关卡规则](endless-stages.md)。脚本共享隔离测试档，应串行运行，不操作真实玩家存档。
 
 素材动画验收覆盖 19 张纹理导入、弓箭映射、弩塔 UV 裁切、快照隔离、冻结/眩晕/减速/暂停、真实事件触发动作、死亡回收和共享网格。移除 `--headless` 并追加 `-- --capture` 可进行 100 动画怪物＋200 箭的真实渲染检查，并保存菜单/研究/战场截图到 `Builds/materials-review/`。接入规则与现有立绘动画的限制见 [素材接入说明](materials-integration.md)。
 
@@ -98,15 +103,18 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 
 ## 4. 内容编辑
 
-规则真源是 `content/config/game_rules.json`，当前为 config version 5 / ruleset `aegis-windows-attack-tree-v1`，包括：
+规则真源是 `content/config/game_rules.json`，当前为 config version 9 / ruleset `aegis-windows-endless-research-v1`，回退包同步使用 `aegis-windows-fallback-endless-research-v1`，包括：
 
 - 世界、城墙、Mana 和基础弓参数。
 - 火、冰、雷三系九技能及装备、升级链。
 - 6 类普通敌人和 3 个 Boss，包括状态/元素/击退抗性与 Boss 特殊行为。
 - 七项攻击科技、多重箭逐级属性、研究价格/门槛/上限；防御、武器与后勤研究。
-- 30 个 Stage 的生成组、奖励和有上限的难度倍率。
+- 17 项无尽研究的 `endless`、`endless_cost` 与技能 `secondary_max_level`；原 `max_level` 对无尽节点表示原价格区间边界。不能用旧等级上限直接截断存档或判定满级。
+- 前 30 关的既有生成组与倍率，以及 `endless_stages` 中的无限后续关卡曲线、普通怪权重、三 Boss 轮换、波间喘息和存活数量预算。
 
 可见文本位于 `content/catalogs/localization.json`。修改后先运行内容校验和 `run_all.gd`，再运行 Stage 自动通关，避免引入无解关卡、坏引用、缺失翻译或越界数值。
+
+`endless_research_acceptance.gd` 检查高等级购买、费用、实际效果、存档和中英文研究页，以及第 1000/10000 关的正常自动战斗。移除 `--headless` 并追加 `-- --capture` 可在 `Builds/endless-research-review/` 生成截图。`resolution_layout.gd` 另检查双语 × 三分辨率的百万级研究详情。规则与参数见 [无尽研究说明](endless-research.md)，该专项也已加入 Windows 导出门禁。
 
 ## 5. 存档与诊断
 
@@ -157,7 +165,7 @@ diagnostics/
 & .\tools\build_windows.ps1 -Configuration Release
 ```
 
-脚本要求 Git 工作树干净，并依次执行内容校验、核心测试、10 Stage 自动通关、Godot 声明一致性、PCK 预检、项目许可、清单和匹配模板检查。导出后还会检查实际 PCK，使用非管理员进程和隔离 `%APPDATA%` 启动实际 EXE，并确认 `profile.json`、`settings.json` 写入用户数据目录。Release 成功后才会生成包含 EXE/PCK、`README.txt`、`GAME_LICENSE.txt`、`GODOT_COPYRIGHT.txt` 的便携 ZIP。
+脚本要求 Git 工作树干净，并依次执行内容校验、核心测试、无尽关卡专项、30 编排关 + 9 生成关自动通关、存档槽位、Godot 声明一致性、PCK 预检、项目许可、清单和匹配模板检查。导出后还会检查实际 PCK，使用非管理员进程和隔离 `%APPDATA%` 启动实际 EXE，并确认 `profile.json`、`settings.json` 写入用户数据目录。Release 成功后才会生成包含 EXE/PCK、`README.txt`、`GAME_LICENSE.txt`、`GODOT_COPYRIGHT.txt` 的便携 ZIP。
 
 项目当前采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。需要为后续项目有意更换许可时，可任选一条命令生成待审阅文件：
 

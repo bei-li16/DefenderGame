@@ -1,6 +1,8 @@
 class_name DefenderDefenseSystem
 extends RefCounted
 
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
+
 # Lava Moat and Magic Tower updates, extracted from RunModel (architecture
 # §6.1 DefenseSystem).  Functions receive the RunModel facade as `model`;
 # code is behaviour-preserving.
@@ -29,7 +31,7 @@ static func update(model, events: Array[Dictionary]) -> void:
 				return int(a["entity_id"]) < int(b["entity_id"])
 			return int(a["x_milli"]) < int(b["x_milli"])
 		)
-		var damage := int(definition.get("damage", 0)) + maxi(0, level - 1) * int(definition.get("damage_per_level", 0))
+		var damage := ResearchCatalog.add_scaled(int(definition.get("damage", 0)), int(definition.get("damage_per_level", 0)), maxi(0, level - 1))
 		if defense_id == "lava_moat":
 			for enemy in target_enemies:
 				model._apply_enemy_damage(enemy, damage, "lava_moat", events)

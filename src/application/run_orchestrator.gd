@@ -1,9 +1,10 @@
 class_name DefenderRunOrchestrator
 extends RefCounted
 
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
 
 func prepare(config: Dictionary, stage_id: String, seed: int, profile: Dictionary) -> Dictionary:
-	var stage := _find_by_id(config.get("stages", []), stage_id)
+	var stage := StageCatalog.describe(config, StageCatalog.number_from_id(stage_id))
 	if stage.is_empty():
 		return {"ok": false, "error_code": "unknown_stage", "field_path": "stage_id"}
 	if int(stage.get("number", 1)) > int(profile.get("highest_unlocked_stage", 1)):
@@ -15,11 +16,3 @@ func prepare(config: Dictionary, stage_id: String, seed: int, profile: Dictionar
 		"seed": seed,
 		"profile_snapshot": profile.duplicate(true)
 	}
-
-
-static func _find_by_id(items: Array, item_id: String) -> Dictionary:
-	for item in items:
-		if item is Dictionary and str(item.get("id", "")) == item_id:
-			return item
-	return {}
-

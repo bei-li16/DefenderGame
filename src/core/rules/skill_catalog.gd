@@ -1,6 +1,8 @@
 class_name DefenderSkillCatalog
 extends RefCounted
 
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
+
 # One rule source for research previews, loadouts, HUD and combat. Legacy
 # *_mastery levels remain the first-tier research nodes, without losing XP.
 const ELEMENTS := ["fire", "ice", "lightning"]
@@ -38,10 +40,12 @@ static func effective(config: Dictionary, profile: Dictionary, skill_id: String)
 	var skill := find(config, skill_id).duplicate(true)
 	if skill.is_empty():
 		return skill
-	var upgrades: Dictionary = profile.get("upgrades", {})
 	var upgrade_id := str(skill.get("upgrade_id", ""))
-	var level := maxi(0, int(upgrades.get(upgrade_id, 0)))
+	var node := ResearchCatalog.find(config, upgrade_id)
+	var level := ResearchCatalog.level(config, profile, upgrade_id)
 	var points := level if int(skill.get("tier", 1)) == 1 else maxi(0, level - 1)
+	var secondary_level := mini(level, int(node.get("secondary_max_level", node.get("max_level", 0))))
+	var secondary_points := secondary_level if int(skill.get("tier", 1)) == 1 else maxi(0, secondary_level - 1)
 	var effect := 0
 	var radius_bonus := 0
 	var cooldown_bonus := 0
@@ -51,18 +55,25 @@ static func effective(config: Dictionary, profile: Dictionary, skill_id: String)
 		if id == upgrade_id:
 			effect = amount
 		elif id == "spell_radius":
-			radius_bonus = int(upgrades.get(id, 0)) * amount
+			radius_bonus = ResearchCatalog.bonus(config, profile, id)
 		elif id == "cooldown_mastery":
-			cooldown_bonus = int(upgrades.get(id, 0)) * amount
+			cooldown_bonus = ResearchCatalog.bonus(config, profile, id)
 	var damage_bonus := 0
 	for honor in config.get("honors", []):
 		if str(honor.get("bonus_type", "")) == str(skill.get("element", "")) + "_damage_pct":
 			damage_bonus = clampi(int(profile.get("honors", {}).get(str(honor.get("id", "")), 0)), 0, 3) * int(honor.get("bonus_per_level", 0)) * 10
 	skill["research_level"] = level
-	skill["damage"] = (int(skill.get("damage", 0)) + points * effect) * (1000 + damage_bonus) / 1000
-	skill["radius_milli"] = maxi(1, int(skill.get("radius_milli", 1)) * (1000 + radius_bonus) / 1000)
-	skill["cooldown_ticks"] = maxi(1, int(skill.get("cooldown_ticks", 1)) - cooldown_bonus)
-	for field in ["burn_duration_ticks", "freeze_ticks", "stun_ticks"]:
+	skill["damage"] = ResearchCatalog.multiply_ratio(ResearchCatalog.add_scaled(int(skill.get("damage", 0)), effect, points), 1000 + damage_bonus)
+	# Research changes one impact, never the barrage footprint/count/schedule.
+	for field in ["radius_milli", "splash_radius_milli"]:
+		skill[field] = maxi(1, (int(skill.get(field, 1)) + secondary_points * int(skill.get(field + "_per_level", 0))) * (1000 + radius_bonus) / 1000)
+	for field in ["splash_damage", "burn_damage"]:
 		if skill.has(field):
-			skill[field] = int(skill[field]) + points * int(skill.get(field + "_per_level", 0))
+			skill[field] = ResearchCatalog.multiply_ratio(ResearchCatalog.add_scaled(int(skill[field]), int(skill.get(field + "_per_level", 0)), points), 1000 + damage_bonus)
+	skill["cooldown_ticks"] = maxi(1, int(skill.get("cooldown_ticks", 1)) - cooldown_bonus)
+	for field in ["burn_duration_ticks", "freeze_ticks", "stun_ticks", "slow_duration_ticks"]:
+		if skill.has(field):
+			skill[field] = int(skill[field]) + secondary_points * int(skill.get(field + "_per_level", 0))
+	if skill.has("slow_permille"):
+		skill["slow_permille"] = clampi(int(skill["slow_permille"]) + secondary_points * int(skill.get("slow_permille_per_level", 0)), 100, 1000)
 	return skill

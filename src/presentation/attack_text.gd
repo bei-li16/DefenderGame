@@ -2,6 +2,7 @@ class_name DefenderAttackText
 extends RefCounted
 
 const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
 
 
 static func summary(id: String, stats: Dictionary, translate: Callable, tick_rate: int) -> String:
@@ -28,7 +29,7 @@ static func detail(config: Dictionary, profile: Dictionary, weapon: Dictionary, 
 	var current := AttackCatalog.effective(config, profile, weapon)
 	var rate := int(config.get("simulation_tick_rate", 30))
 	var text := str(translate.call("skill.current")) + summary(id, current, translate, rate)
-	if AttackCatalog.level(config, profile, id) < int(definition.get("max_level", 0)):
+	if ResearchCatalog.can_upgrade(definition, AttackCatalog.level(config, profile, id)):
 		var next_profile := profile.duplicate(true)
 		next_profile["upgrades"][id] = AttackCatalog.level(config, profile, id) + 1
 		text += "\n" + str(translate.call("skill.next")) + summary(id, AttackCatalog.effective(config, next_profile, weapon), translate, rate)

@@ -2,8 +2,13 @@ class_name DefenderContentValidator
 extends RefCounted
 
 const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
 
 const REQUIRED_UI_KEYS: Array[String] = [
+	"research.endless_growth", "research.endless_damage", "research.finite_growth", "research.defense_stats", "research.endless_short", "research.secondary_cap",
+	"stage.endless", "stage.previous_page", "stage.next_page", "stage.page_range", "stage.jump", "stage.jump_hint", "stage.endless_hint", "stage.plan_stats", "hud.wave_progress", "hud.spawn_window",
+	"skill.hit_stats", "skill.point_stats", "skill.area_stats", "skill.screen_stats", "skill.screen_target",
 	"attack.damage", "attack.rate", "attack.power", "attack.poison", "attack.fatal", "attack.volley", "attack.xp", "attack.rules", "attack.refunded",
 	"skill.stats", "skill.burn_stats", "skill.freeze_stats", "skill.stun_stats", "skill.current", "skill.next", "feedback.skill_locked",
 	"app.title", "app.subtitle", "controls.hint", "common.stage", "common.xp",
@@ -100,7 +105,7 @@ static func _validate_attack_tree(config: Dictionary, errors: Array[Dictionary])
 
 
 # Magic research is the only crystal sink.  The crystal economy must let a
-# player who first-clears every stage afford every crystal-priced level
+# player who first-clears the authored opening afford every crystal-priced level
 # without a large leftover: total income >= total cost, and the surplus stays
 # within 25% of the cost.
 static func _validate_crystal_economy(config: Dictionary, errors: Array[Dictionary]) -> void:
@@ -116,7 +121,7 @@ static func _validate_crystal_economy(config: Dictionary, errors: Array[Dictiona
 			continue
 		var price := int(definition.get("base_cost", 0))
 		var growth := int(definition.get("cost_growth_permille", 1000))
-		for ignored in range(int(definition.get("max_level", 0))):
+		for ignored in range(clampi(int(definition.get("max_level", 0)), 0, 100)):
 			total_cost += price
 			if growth > 1000:
 				price = maxi(price + 1, int(round(float(price) * float(growth) / 1000.0)))
@@ -190,13 +195,14 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 		_add_error(errors, "weapons", "empty_collection")
 	if skill_ids.size() < 3:
 		_add_error(errors, "skills", "requires_three_mvp_skills")
-	if stage_ids.size() < 30:
-		_add_error(errors, "stages", "requires_thirty_windows_stages")
+	if stage_ids.is_empty():
+		_add_error(errors, "stages", "requires_authored_opening")
 	var normal_enemy_count := enemy_ids.size() - boss_enemy_ids.size()
 	if normal_enemy_count < 6:
 		_add_error(errors, "enemies", "requires_six_windows_normal_enemies")
 	if boss_enemy_ids.size() < 3:
 		_add_error(errors, "enemies", "requires_three_windows_bosses")
+	_validate_endless(config, enemy_ids, boss_enemy_ids, errors)
 
 	for index in range(enemies.size()):
 		var enemy: Dictionary = _as_dictionary(enemies[index])
@@ -277,6 +283,7 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 				_add_error(errors, "upgrades[%d].prerequisites" % index, "unknown_reference")
 	if _has_dependency_cycle(upgrade_dependencies):
 		_add_error(errors, "upgrades", "dependency_cycle")
+	_validate_research(upgrades, errors)
 	_validate_skill_chains(skills, upgrades, errors)
 	_validate_attack_tree(config, errors)
 	_validate_crystal_economy(config, errors)
@@ -344,6 +351,8 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 		var stage: Dictionary = _as_dictionary(stages[index])
 		_require_positive_int(stage, "number", errors, "stages[%d]." % index)
 		var stage_number := int(stage.get("number", 0))
+		if str(stage.get("id", "")) != StageCatalog.id_for(stage_number):
+			_add_error(errors, "stages[%d].id" % index, "noncanonical_stage_id")
 		if stage_numbers.has(stage_number):
 			_add_error(errors, "stages[%d].number" % index, "duplicate_stage_number")
 		else:
@@ -362,6 +371,15 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 			contains_boss = contains_boss or boss_enemy_ids.has(str(group.get("enemy_id", "")))
 		if bool(stage.get("boss", false)) != contains_boss:
 			_add_error(errors, "stages[%d].boss" % index, "boss_flag_mismatch")
+		var rotation := _as_array(_as_dictionary(config.get("endless_stages", {})).get("boss_rotation", []))
+		var boss_count := 0
+		for group in groups:
+			if boss_enemy_ids.has(str(group.get("enemy_id", ""))):
+				boss_count += int(group.get("count", 0))
+				if stage_number % 10 != 0 or (not rotation.is_empty() and str(group.get("enemy_id", "")) != str(rotation[(stage_number / 10 - 1) % rotation.size()])):
+					_add_error(errors, "stages[%d].boss" % index, "boss_outside_ten_stage_rotation")
+		if boss_count != (1 if stage_number % 10 == 0 else 0):
+			_add_error(errors, "stages[%d].boss" % index, "requires_one_boss_every_ten_stages")
 		var reward: Dictionary = _as_dictionary(stage.get("clear_reward", {}))
 		_require_non_negative_int(reward, "coins", errors, "stages[%d].clear_reward." % index)
 		_require_non_negative_int(reward, "xp", errors, "stages[%d].clear_reward." % index)
@@ -377,6 +395,62 @@ static func validate(config: Dictionary) -> Array[Dictionary]:
 			_add_error(errors, "stages[%d].number" % number_index, "stage_numbers_not_contiguous")
 			break
 	return errors
+
+
+static func _validate_endless(config: Dictionary, enemy_ids: Array[String], boss_ids: Array[String], errors: Array[Dictionary]) -> void:
+	var rules := _as_dictionary(config.get("endless_stages", {}))
+	for field in ["authored_stage_count", "boss_interval", "pressure_stage_span", "wave_gap_ticks", "max_active_enemies", "composition_pressure_limit"]:
+		_require_positive_int(rules, field, errors, "endless_stages.")
+	if int(rules.get("authored_stage_count", 0)) != _as_array(config.get("stages", [])).size():
+		_add_error(errors, "endless_stages.authored_stage_count", "must_match_authored_prefix")
+	if int(rules.get("boss_interval", 0)) != 10:
+		_add_error(errors, "endless_stages.boss_interval", "boss_interval_must_be_ten")
+	if int(rules.get("max_active_enemies", 0)) > 128:
+		_add_error(errors, "endless_stages.max_active_enemies", "exceeds_runtime_budget")
+	var rotation := _as_array(rules.get("boss_rotation", []))
+	var seen: Array = []
+	for id in rotation:
+		if not boss_ids.has(str(id)) or seen.has(id):
+			_add_error(errors, "endless_stages.boss_rotation", "invalid_or_duplicate_boss")
+		seen.append(id)
+	if rotation.size() != boss_ids.size():
+		_add_error(errors, "endless_stages.boss_rotation", "must_include_every_boss_once")
+	var limits := {"enemy_count": 1000, "wave_count": 32, "spawn_duration_ticks": 18000}
+	for field in limits:
+		var curve := _as_dictionary(rules.get(field, {}))
+		for component in ["base", "per_pressure", "limit"]:
+			_require_positive_int(curve, component, errors, "endless_stages." + field + ".")
+		if int(curve.get("base", 0)) > int(curve.get("limit", 0)) or int(curve.get("limit", 0)) > int(limits[field]):
+			_add_error(errors, "endless_stages." + field, "invalid_curve_budget")
+	var count := _as_dictionary(rules.get("enemy_count", {}))
+	var waves := _as_dictionary(rules.get("wave_count", {}))
+	var duration := _as_dictionary(rules.get("spawn_duration_ticks", {}))
+	if int(count.get("base", 0)) < 2 * int(waves.get("limit", 0)) or int(duration.get("base", 0)) <= int(waves.get("limit", 0)) * int(rules.get("wave_gap_ticks", 0)):
+		_add_error(errors, "endless_stages.wave_count", "waves_need_enemies_and_positive_spawn_time")
+	seen.clear()
+	for entry in _as_array(rules.get("normal_pool", [])):
+		var row := _as_dictionary(entry)
+		var id := str(row.get("enemy_id", ""))
+		if not enemy_ids.has(id) or boss_ids.has(id) or seen.has(id):
+			_add_error(errors, "endless_stages.normal_pool", "invalid_normal_enemy_reference")
+		seen.append(id)
+		_require_positive_int(row, "base_weight", errors, "endless_stages.normal_pool.")
+		if int(row.get("base_weight", 0)) + int(rules.get("composition_pressure_limit", 0)) * int(row.get("weight_per_pressure", 0)) < 1:
+			_add_error(errors, "endless_stages.normal_pool", "non_positive_late_weight")
+	if seen.size() != enemy_ids.size() - boss_ids.size():
+		_add_error(errors, "endless_stages.normal_pool", "must_include_every_normal_type")
+	var scaling := _as_dictionary(rules.get("enemy_scaling", {}))
+	for field in ["hp_per_pressure", "hp_per_power", "damage_per_pressure", "damage_per_power", "speed_per_pressure", "max_speed_permille", "reward_per_pressure", "xp_per_pressure"]:
+		_require_positive_int(scaling, field, errors, "endless_stages.enemy_scaling.")
+	for field in ["hp_power", "damage_power"]:
+		var power := float(scaling.get(field, 0.0))
+		if not is_finite(power) or power <= 0 or power > 0.75:
+			_add_error(errors, "endless_stages.enemy_scaling." + field, "unsafe_growth_exponent")
+	if int(scaling.get("hp_per_power", 0)) > 100 or int(scaling.get("damage_per_power", 0)) > 100 or int(scaling.get("max_speed_permille", 0)) > 2000:
+		_add_error(errors, "endless_stages.enemy_scaling", "excessive_growth")
+	var reward := _as_dictionary(rules.get("clear_reward", {}))
+	for field in ["coins_base", "coins_per_pressure", "xp_base", "xp_per_pressure", "boss_coins", "boss_xp"]:
+		_require_non_negative_int(reward, field, errors, "endless_stages.clear_reward.")
 
 
 static func validate_localization(localization: Dictionary, config: Dictionary) -> Array[Dictionary]:
@@ -420,6 +494,31 @@ static func validate_localization(localization: Dictionary, config: Dictionary) 
 	return errors
 
 
+static func _validate_research(upgrades: Array, errors: Array[Dictionary]) -> void:
+	for value in upgrades:
+		var node := _as_dictionary(value)
+		var path := "upgrades." + str(node.get("id", "")) + "."
+		var opening := int(node.get("max_level", 0))
+		if opening > 100:
+			_add_error(errors, path + "max_level", "opening_must_be_bounded")
+		if node.has("endless") and not node["endless"] is bool:
+			_add_error(errors, path + "endless", "expected_boolean")
+		if ResearchCatalog.is_endless(node):
+			if not ResearchCatalog.ENDLESS_IDS.has(str(node.get("id", ""))):
+				_add_error(errors, path + "endless", "unsafe_unbounded_attribute")
+			var curve := _as_dictionary(node.get("endless_cost", {}))
+			_require_positive_int(curve, "step", errors, path + "endless_cost.")
+			var power := float(curve.get("power", 0.0))
+			if not is_finite(power) or power < 1 or power > 2:
+				_add_error(errors, path + "endless_cost.power", "invalid_polynomial_growth")
+			if node.has("skill_ref"):
+				var secondary := int(node.get("secondary_max_level", 0))
+				if secondary < opening or secondary > 30:
+					_add_error(errors, path + "secondary_max_level", "skill_secondary_stats_need_safe_cap")
+		elif node.has("endless_cost") or node.has("secondary_max_level"):
+			_add_error(errors, path + "endless", "unexpected_endless_fields")
+
+
 static func _validate_skill_chains(skills: Array, upgrades: Array, errors: Array[Dictionary]) -> void:
 	var nodes := {}
 	for value in upgrades:
@@ -443,21 +542,50 @@ static func _validate_skill_chains(skills: Array, upgrades: Array, errors: Array
 		if chains[element].has(tier):
 			_add_error(errors, path + "tier", "duplicate_element_tier")
 		chains[element][tier] = skill
-		for field in ["pulse_count", "pulse_interval_ticks", "mana_cost", "radius_milli"]:
+		for field in ["impact_count", "fall_ticks", "mana_cost", "radius_milli", "splash_radius_milli", "splash_damage"]:
 			_require_positive_int(skill, field, errors, path)
-		if int(skill.get("pulse_count", 0)) > 16:
-			_add_error(errors, path + "pulse_count", "excessive_pulses")
+		for field in ["barrage_duration_ticks", "area_radius_milli"]:
+			_require_non_negative_int(skill, field, errors, path)
+		var expected_mode: String = ["point", "area", "screen"][tier - 1]
+		if str(skill.get("target_mode", "")) != expected_mode:
+			_add_error(errors, path + "target_mode", "invalid_tier_delivery")
+		var count := int(skill.get("impact_count", 0))
+		var duration := int(skill.get("barrage_duration_ticks", 0))
+		if count > 64 or int(skill.get("fall_ticks", 0)) > 90 or duration > 600:
+			_add_error(errors, path + "impact_count", "excessive_barrage")
+		if tier == 1 and (count != 1 or duration != 0):
+			_add_error(errors, path + "impact_count", "single_impact_required")
+		if tier > 1 and (count < 3 or duration <= count):
+			_add_error(errors, path + "barrage_duration_ticks", "insufficient_random_launch_window")
+		if (tier == 2 and int(skill.get("area_radius_milli", 0)) <= 0) or (tier != 2 and int(skill.get("area_radius_milli", 0)) != 0):
+			_add_error(errors, path + "area_radius_milli", "invalid_delivery_radius")
+		if int(skill.get("splash_radius_milli", 0)) <= int(skill.get("radius_milli", 0)) or int(skill.get("splash_damage", 0)) > int(skill.get("damage", 0)):
+			_add_error(errors, path + "splash_radius_milli", "invalid_splash_falloff")
 		var node: Dictionary = nodes.get(str(skill.get("upgrade_id", "")), {})
 		if str(node.get("skill_ref", "")) != str(skill.get("id", "")) or str(node.get("page", "")) != "magic":
 			_add_error(errors, path + "upgrade_id", "invalid_skill_research_reference")
-		var fields: Array = ["burn_damage", "burn_interval_ticks", "burn_duration_ticks"] if element == "fire" else (["freeze_ticks", "slow_duration_ticks", "slow_permille"] if element == "ice" else ["stun_ticks", "max_targets"])
+		var fields: Array = ["burn_damage", "burn_interval_ticks", "burn_duration_ticks"] if element == "fire" else (["freeze_ticks", "slow_duration_ticks", "slow_permille"] if element == "ice" else ["stun_ticks"])
 		for field in fields:
 			_require_positive_int(skill, str(field), errors, path)
-		for field in ["burn_duration_ticks_per_level", "freeze_ticks_per_level", "stun_ticks_per_level"]:
+		for field in ["radius_milli_per_level", "splash_radius_milli_per_level", "splash_damage_per_level", "burn_damage_per_level", "burn_duration_ticks_per_level", "freeze_ticks_per_level", "stun_ticks_per_level", "slow_duration_ticks_per_level"]:
 			if skill.has(field):
 				_require_non_negative_int(skill, field, errors, path)
+		for field in ["impact_count_per_level", "barrage_duration_ticks_per_level", "area_radius_milli_per_level", "fall_ticks_per_level"]:
+			if skill.has(field):
+				_add_error(errors, path + field, "delivery_does_not_scale_with_research")
 		if element == "ice" and int(skill.get("slow_permille", 0)) > 1000:
 			_add_error(errors, path + "slow_permille", "out_of_range")
+		if int(skill.get("slow_permille_per_level", 0)) > 0:
+			_add_error(errors, path + "slow_permille_per_level", "research_must_not_weaken_slow")
+		var points := maxi(0, int(node.get("secondary_max_level", node.get("max_level", 0))) - (1 if tier > 1 else 0))
+		var max_inner := int(skill.get("radius_milli", 0)) + points * int(skill.get("radius_milli_per_level", 0))
+		var max_outer := int(skill.get("splash_radius_milli", 0)) + points * int(skill.get("splash_radius_milli_per_level", 0))
+		var max_direct := int(skill.get("damage", 0)) + points * int(node.get("effect_per_level", 0))
+		var max_splash := int(skill.get("splash_damage", 0)) + points * int(skill.get("splash_damage_per_level", 0))
+		if max_outer <= max_inner or max_splash > max_direct:
+			_add_error(errors, path + "splash_radius_milli_per_level", "invalid_upgraded_splash_falloff")
+		if ResearchCatalog.is_endless(node) and int(skill.get("splash_damage_per_level", 0)) > int(node.get("effect_per_level", 0)):
+			_add_error(errors, path + "splash_damage_per_level", "splash_must_not_outgrow_direct_damage")
 	for element in chains:
 		var chain: Dictionary = chains[element]
 		if chain.size() != 3:

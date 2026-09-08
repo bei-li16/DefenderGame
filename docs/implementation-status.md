@@ -1,12 +1,12 @@
 # Windows / Godot 实施状态
 
-版本：1.3.0-windows（以 `project.godot` 的 `application/config/version` 为准）
+版本：1.4.0-windows（以 `project.godot` 的 `application/config/version` 为准）
 
-文档日期：2026-09-07
+文档日期：2026-09-08
 
 分支：`windows-godot`
 
-> 文档口径：标为“历史快照”的章节保留当时的原始验收证据；当前源代码、配置、工作树和发布门禁状态以 §7 的复核为准。
+> 文档口径：历史章节保留当时的原始验收证据；无尽关卡改动见 §8，当前无尽研究和回归状态以 §9 为准。旧发行包不会自动包含未重新导出的源码改动。
 
 2026-09-04 参照 `参考/` 目录 Defender II 官方与实机截图完成一轮界面迭代：战斗 HUD 顶部新增关卡进度条(⚔→💀,按出怪进度填充),城墙(红)与魔力(蓝)双条移至左下角并带图标,技能按钮改为右下角圆形金环按钮(冷却弧形扫面 + 魔力不足红色提示);研究页从列表卡片改为经典树形布局(前置连线箭头 + 节点等级 + 底部详情面板:名称/描述/当前→下级效果/升级按钮)。
 
@@ -181,7 +181,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 清洁工作树且当前回归全部通过后，下一步是进行外部兼容性抽检：在另一台未安装 Godot、接近最低目标配置的 Windows 10/11 x64 电脑上直接解压 ZIP，复核冷启动、输入、Compatibility 渲染、存档权限和 60 分钟稳定性。若准备公开发布，还应补充图标、签名与发行渠道元数据；这些不影响源码功能闭环，但会影响公开发行门禁。
 
-## 7. 当前工作树复核（2026-09-07，第三轮）
+## 7. 历史工作树复核（2026-09-07，第三轮）
 
 第一轮复核发现的 Hurricane 齐射箭速断言失败已修复：`_fire_arrow` 由逐箭 max 范数归一化改为逐箭欧几里得归一化，三支箭实测速度偏差 ≤ 0.24（断言容差 2.0）。本轮修复同时合入工作树中另一会话遗留的加固集：旧档无 hash 迁移与损坏副本唯一命名、城墙归零后同 tick 不再产生后续伤害事件、未解锁武器回退基础弓（空列表不再视为全解锁）、`start_stage` 应用层关卡锁校验、悬停射击限定可见视口、skill_rejected 新增 invalid_target 反馈、校验器类型防护与显示键检查、ProgressBar 全局可读轨道主题。
 
@@ -189,18 +189,42 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 | 项目 | 当前结果 | 依据 |
 |---|---|---|
-| 应用/规则版本 | `1.3.0-windows` / config v6 / `aegis-windows-crystal-magic-v1` | `project.godot`、`content/config/game_rules.json` |
-| 内容规模 | 30 Stage（3 Boss）、6 类普通敌人、4 武器、9 技能（3 系×3 阶）、攻击/魔法/防御/武器/后勤 5 研究页、8 Honors；魔法页水晶经济（收入 177 / 成本 169） | `content/config/game_rules.json` 解析 |
-| 内容校验 | 通过（含水晶经济守恒断言） | `tools/validate_content.gd`（本轮运行） |
+| 应用/规则版本 | `1.4.0-windows` / config v9 / `aegis-windows-endless-research-v1` | `project.godot`、`content/config/game_rules.json` |
+| 内容规模 | 前 30 Stage（3 Boss）+ 第 31 关起无尽生成、6 类普通敌人、4 武器、9 技能（3 系×3 阶）、攻击/魔法/防御/武器/后勤 5 研究页 + 17 项无尽研究、8 Honors；魔法页水晶经济（收入 177 / 成本 169） | `content/config/game_rules.json` 解析 |
+| 内容校验 | 通过（含水晶经济守恒、无尽关卡与研究上限断言） | `tools/validate_content.gd`（本轮运行） |
 | 核心回归 | **162 passed / 0 failed** | `tests/run_all.gd`（本轮运行，含水晶经济/迁移/双币种用例） |
-| 技能链专项 | **177 passed / 0 failed** | `tests/skill_chains_acceptance.gd`（本轮运行） |
+| 技能链专项 | **309 passed / 0 failed** | `tests/skill_chains_acceptance.gd`（本轮运行） |
 | 攻击研究专项 | **196 passed / 0 failed** | `tests/attack_research_acceptance.gd`（本轮运行） |
 | 弓箭选择专项 | **30 passed / 0 failed** | `tests/weapon_selection_acceptance.gd`（本轮运行） |
 | 菜单选择 | **12 passed / 0 failed** | `tests/menu_selection_acceptance.gd`（本轮运行，含管理员控制台用例） |
-| Stage 自动通关 | 30/30 victory；Boss 10/20/30 各 1 次 | `tests/stage_autoplay.gd`（本轮运行） |
+| 无尽关卡专项 | **166 passed / 0 failed** | `tests/endless_stages_acceptance.gd`（本轮运行） |
+| 无尽研究专项 | **286 passed / 0 failed** | `tests/endless_research_acceptance.gd`（本轮运行） |
+| 城堡布局专项 | **34 passed / 0 failed** | `tests/castle_layout_acceptance.gd`（本轮运行） |
+| 素材专项 | **69 passed / 0 failed** | `tests/materials_acceptance.gd`（本轮运行） |
+| Stage 自动通关 | 30 authored + 9 generated 全部胜利 | `tests/stage_autoplay.gd`（本轮运行） |
 | 存档槽位 | **18 passed / 0 failed** | `tests/save_slot_acceptance.gd`（本轮运行） |
-| 分辨率布局 | 2 语言×3 分辨率 0 失败 | `tests/resolution_layout.gd`（本轮运行） |
-| 压力/浸泡 | p95 1.376 ms；60 逻辑分钟内存平稳 | `tests/performance_stress.gd`、`tests/long_soak.gd`（本轮运行） |
+| 分辨率布局 | 2 语言×3 分辨率 0 失败（含百万关选关、百万级研究） | `tests/resolution_layout.gd`（本轮运行） |
+| 压力/浸泡 | p95 1.631 ms；100 敌人/200 投射物 | `tests/performance_stress.gd`（本轮运行） |
 | 发布清单 | 重建后 manifest 指向当前 HEAD | `content/build/build-manifest.json`（构建时刷新） |
 
-当前发布候选为 `Aegis-of-Ember-1.3.0-Windows-x64.zip`；已发布的 v1.0.3～v1.2.0 不包含管理员控制台，不应继续分发。
+当前发布候选为 `Aegis-of-Ember-1.4.0-Windows-x64.zip`；已发布的 v1.0.3～v1.3.0 不包含无尽关卡与无尽研究，不应继续分发。
+
+## 8. 无尽关卡完成（2026-09-08，源码工作树）
+
+规则升级至 config v8 / `aegis-windows-endless-v1`，同步回退包。前 30 关保留既有编排，第 31 关起按曲线生成怪物总数、混合波次、出怪时长、普通怪组成和属性；每 10 关恰好一位 Boss，余烬督军→霜痕巨人→风暴女王循环，其余关卡无 Boss。
+
+新增纯规则 `StageCatalog`，菜单改为 20 关分页并支持定位；进入关卡、首通奖励、存档归一化、结算解锁和下一关按钮统一移除 30 关上限。旧档第 30 关胜利可衔接第 31 关，保存失败不提前提交进度；生成计划和场上数量有性能预算，不预生成整个历史关卡列表。
+
+本轮无尽专项 **166/166**、核心 **162/162**、技能 **309/309**、攻击研究 **196/196**、事务 **4/4**、存档槽 **18/18**、菜单 **12/12**、弓箭 **30/30**；原 30 关及 9 个无尽样例真实自动战斗全部胜利。双语 × 三分辨率布局 headless/真实渲染均 0 失败，含百万关选关；素材 **69/69**、城墙 **34/34** 真实渲染通过。压力逻辑 p95 **1.446 ms**（100 敌人、200 投射物）。
+
+前 600 关十关 Boss 规则、百万关生成/存档与技术编号边界另有覆盖，但不宣称所有后期关卡已完成人工平衡。现有研究上限与荣誉门槛保留。详细公式、预算、奖励和验证范围见 [无尽关卡规则](endless-stages.md)。
+
+## 9. 无尽研究完成（2026-09-08，源码工作树）
+
+config v9 / `aegis-windows-endless-research-v1` 开放 17 项持续研究，15 项敏感属性/一次性节点保留上限。九技能的伤害与附属参数点数拆分：伤害持续成长，范围和状态持续时间在研究 20 级封顶。旧价格保持，超出原上限后的费用采用多项式曲线。新增 `ResearchCatalog` 统一购买、等级读取、价格、存档与安全成长；修复已解锁武器的锻造按钮被误禁用，研究页显示 ∞、有效属性预览及范围/状态上限。
+
+本轮无尽研究专项 **286/286**，覆盖百万级研究读写、金币/水晶扣费、前置、旧级别保留、有限属性限制、保存失败回滚和双语 UI；headless 与真实渲染均通过且无脚本错误。研究等级 75 的第 1000 关、研究等级 200 的第 10000 关均正常战斗胜利，无强制清怪。原 30 关 + 9 个生成关回归仍全部胜利。
+
+其余回归：核心 **162/162**、攻击 **196/196**、技能 **309/309**、无尽关卡 **166/166**、事务 **4/4**、存档槽 **18/18**、菜单 **12/12**、弓箭 **30/30**；双语 × 三分辨率布局（含百万级研究）headless/真实渲染均 0 失败；素材 **69/69**、城墙 **34/34** 真实渲染通过。100 敌人/200 投射物逻辑压力 p95 **1.631 ms**。
+
+正式导出脚本已加入无尽研究专项。详细参数、技术数值边界和验收范围见 [无尽研究说明](endless-research.md)。

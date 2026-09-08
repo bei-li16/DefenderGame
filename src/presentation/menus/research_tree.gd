@@ -2,6 +2,8 @@ class_name DefenderResearchTree
 extends Control
 
 const Art = preload("res://src/presentation/art/game_art.gd")
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
+const ResearchText = preload("res://src/presentation/research_text.gd")
 
 signal node_selected(upgrade_id: String)
 
@@ -53,13 +55,16 @@ func build(definitions: Array, levels: Dictionary, balances: Dictionary, selecte
 		depths[upgrade_id] = _depth_of(upgrade_id, by_id, depths)
 	var column_rows := {}
 	var max_depth := 0
+	# Richer spell comparisons need a little more vertical room (especially
+	# English descriptions); retain all three primary rows without scrolling.
+	var row_gap := 110.0 if not _definitions.is_empty() and str(_definitions[0].get("page", "")) == "magic" else ROW_GAP
 	for definition in _definitions:
 		var upgrade_id := str(definition.get("id", ""))
 		var depth: int = int(definition.get("tree_column", depths[upgrade_id]))
 		max_depth = maxi(max_depth, depth)
 		var row := int(definition.get("tree_row", column_rows.get(depth, 0)))
 		column_rows[depth] = maxi(int(column_rows.get(depth, 0)), row + 1)
-		_node_rects[upgrade_id] = Rect2(ORIGIN + Vector2(depth * COLUMN_GAP, row * ROW_GAP), NODE_SIZE)
+		_node_rects[upgrade_id] = Rect2(ORIGIN + Vector2(depth * COLUMN_GAP, row * row_gap), NODE_SIZE)
 		for prerequisite in definition.get("prerequisites", []):
 			if by_id.has(str(prerequisite)):
 				_edges.append([str(prerequisite), upgrade_id])
@@ -79,7 +84,7 @@ func build(definitions: Array, levels: Dictionary, balances: Dictionary, selecte
 	var rows_total := 0
 	for depth in column_rows.keys():
 		rows_total = maxi(rows_total, int(column_rows[depth]))
-	custom_minimum_size = Vector2((max_depth + 1) * COLUMN_GAP + 60, rows_total * ROW_GAP + 80)
+	custom_minimum_size = Vector2((max_depth + 1) * COLUMN_GAP + 60, rows_total * row_gap + 80)
 	_selected_id = ""
 	select(selected_id if _node_buttons.has(selected_id) else (str(_definitions[0].get("id", "")) if not _definitions.is_empty() else ""))
 
@@ -88,8 +93,7 @@ func build(definitions: Array, levels: Dictionary, balances: Dictionary, selecte
 # the display name; children ignore the mouse so the Button keeps ownership.
 func _populate_node(button: Button, definition: Dictionary) -> void:
 	var upgrade_id := str(definition.get("id", ""))
-	var level := int(_levels.get(upgrade_id, 0))
-	var max_level := int(definition.get("max_level", 0))
+	var level := ResearchCatalog.normalize_level(definition, int(_levels.get(upgrade_id, 0)))
 	var icon_origin := Vector2(14, 14)
 	var icon := ColorRect.new()
 	icon.position = icon_origin
@@ -116,12 +120,15 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 		illustration.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon.add_child(illustration)
 	var level_badge := Label.new()
-	level_badge.text = "Lv %d" % level
+	level_badge.name = "ResearchLevel"
+	level_badge.text = "Lv %s" % ResearchText.compact(level)
 	if definition.has("skill_ref"):
 		var skill := GameApp.content.find_by_id("skills", str(definition["skill_ref"]))
-		level_badge.text = "%s · %d" % [["Ⅰ", "Ⅱ", "Ⅲ"][clampi(int(skill.get("tier", 1)), 1, 3) - 1], level]
-	level_badge.position = icon_origin + Vector2(ICON_SIZE - 44.0, -6.0)
-	level_badge.size = Vector2(50, 18)
+		level_badge.text = "%s · %s" % [["Ⅰ", "Ⅱ", "Ⅲ"][clampi(int(skill.get("tier", 1)), 1, 3) - 1], ResearchText.compact(level)]
+	if ResearchCatalog.is_endless(definition):
+		level_badge.text += " ∞"
+	level_badge.position = icon_origin + Vector2(-6, -6)
+	level_badge.size = Vector2(84, 18)
 	level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	level_badge.add_theme_font_size_override("font_size", 13)
 	level_badge.add_theme_color_override("font_color", Color("8ce99a"))
@@ -130,7 +137,8 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 	level_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(level_badge)
 	var price_badge := Label.new()
-	if level >= max_level:
+	price_badge.name = "ResearchPrice"
+	if not ResearchCatalog.can_upgrade(definition, level):
 		price_badge.text = GameApp.text("common.max")
 		price_badge.add_theme_color_override("font_color", Color("9fb2c8"))
 	else:
@@ -138,10 +146,11 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 		var currency := str(definition.get("currency", "coins"))
 		var glyph_symbol := "✦" if currency == "crystals" else "◆"
 		var affordable_color := Color("8fd3ff") if currency == "crystals" else Color("ffd166")
-		price_badge.text = "%s %d" % [glyph_symbol, price]
+		price_badge.text = "%s %s" % [glyph_symbol, ResearchText.compact(price)]
+		button.tooltip_text = "Lv.%d · %s %d" % [level, glyph_symbol, price]
 		price_badge.add_theme_color_override("font_color", affordable_color if int(_balances.get(currency, 0)) >= price else Color("8693a6"))
 	price_badge.position = icon_origin + Vector2(-2.0, ICON_SIZE - 4.0)
-	price_badge.size = Vector2(72, 18)
+	price_badge.size = Vector2(84, 18)
 	price_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	price_badge.add_theme_font_size_override("font_size", 13)
 	price_badge.add_theme_color_override("font_outline_color", Color("101d2d"))

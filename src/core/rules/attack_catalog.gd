@@ -1,6 +1,8 @@
 class_name DefenderAttackCatalog
 extends RefCounted
 
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
+
 # Single source for attack research previews and projectile snapshots.
 const IDS := ["strength", "agility", "power_shot", "poisoned_arrow", "fatal_blow", "multiple_arrows", "senior_hunter"]
 const REVISION := 1
@@ -44,11 +46,11 @@ static func find(config: Dictionary, id: String) -> Dictionary:
 
 
 static func level(config: Dictionary, profile: Dictionary, id: String) -> int:
-	return clampi(int(profile.get("upgrades", {}).get(id, 0)), 0, int(find(config, id).get("max_level", 0)))
+	return ResearchCatalog.level(config, profile, id)
 
 
 static func bonus(config: Dictionary, profile: Dictionary, id: String) -> int:
-	return level(config, profile, id) * int(find(config, id).get("effect_per_level", 0))
+	return ResearchCatalog.bonus(config, profile, id)
 
 
 static func honor_bonus(config: Dictionary, profile: Dictionary, kind: String) -> int:
@@ -60,8 +62,8 @@ static func honor_bonus(config: Dictionary, profile: Dictionary, kind: String) -
 
 static func effective(config: Dictionary, profile: Dictionary, weapon: Dictionary) -> Dictionary:
 	var result := weapon.duplicate(true)
-	var base_damage := (int(weapon.get("damage", 1)) + bonus(config, profile, "strength")) * (1000 + honor_bonus(config, profile, "weapon_damage_pct")) / 1000
-	base_damage = base_damage * (1000 + bonus(config, profile, str(weapon.get("forge_upgrade_id", ""))) * 10) / 1000
+	var base_damage := ResearchCatalog.multiply_ratio(int(weapon.get("damage", 1)) + bonus(config, profile, "strength"), 1000 + honor_bonus(config, profile, "weapon_damage_pct"))
+	base_damage = ResearchCatalog.multiply_ratio(base_damage, 1000 + bonus(config, profile, str(weapon.get("forge_upgrade_id", ""))) * 10)
 	result["base_damage"] = base_damage
 	result["interval_ticks"] = maxi(int(weapon.get("min_interval_ticks", 1)), int(weapon.get("interval_ticks", 10)) - bonus(config, profile, "agility"))
 	result["fatal_chance_per_10000"] = clampi(int(weapon.get("fatal_chance_per_10000", 0)) + bonus(config, profile, "fatal_blow"), 0, 10000)
@@ -80,7 +82,7 @@ static func effective(config: Dictionary, profile: Dictionary, weapon: Dictionar
 	var ratio := innate_count * researched_count * int(volley["damage_permille"]) / count
 	result["projectile_count"] = count
 	result["damage_permille"] = ratio
-	result["damage"] = maxi(1, base_damage * ratio / 1000)
+	result["damage"] = maxi(1, ResearchCatalog.multiply_ratio(base_damage, ratio))
 	result["spread_milli"] = maxi(int(weapon.get("spread_milli", 0)), int(multi.get("spread_milli", 0)) if multi_level > 0 else 0)
 	result["pierce"] = maxi(0, int(weapon.get("pierce", 0)))
 	var poison := find(config, "poisoned_arrow")

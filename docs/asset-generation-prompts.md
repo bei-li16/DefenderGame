@@ -230,3 +230,62 @@ A game menu background texture: deep indigo-blue surface with a large faint glow
 ---
 
 原第 6 节工程应用建议同样适用于本批素材；图标类统一 256×256 或 128×128，VFX 单帧 512×512、序列帧按行排列后切帧。
+
+## 15. 双堡垒城墙重绘（2026-09-08，优先于旧 3.1）
+
+当前视角是横屏战场，城防沿屏幕左侧上下延伸，敌人从右向左。两端城垛指**上端远处堡垒、下端近处堡垒**，不是两座横排塔楼。现有素材能拆分复用，但它是斜向单塔立绘，并非可无缝拼接的城墙模块；不建议继续靠放大或上下翻转改善透视。
+
+推荐先生成**一张完整城防建筑**，统一透视、砖块尺度、连接处、光照；弩机继续使用独立素材，由游戏旋转和发射，不能画死在城墙图里。
+
+### 15.1 可直接使用的完整城墙提示词
+
+```text
+Create one complete, production-ready transparent castle-defense sprite for a landscape 2D tower-defense game. Use the supplied blue-grey castle illustration only as a material, color and ornament reference; redesign its composition and camera projection.
+
+The fortress belongs along the LEFT edge of the gameplay screen. Its defensive line runs vertically from the TOP of the image to the BOTTOM; the open battlefield and all attackers are to its RIGHT. Use a coherent elevated orthographic three-quarter game view: show the stone coping and a narrow walkable rampart surface, together with the outward-facing masonry. Keep the battlefield-facing silhouette almost vertical. No horizon, no dramatic perspective convergence.
+
+EXACTLY TWO matching upright stone bastions: one at the upper/far end and one at the lower/near end. Join them with ONE continuous substantial stone curtain wall. The connection must read as a single constructed fortress, with visible masonry between the bastions, not two disconnected tower stickers and not stacked floors of a building. Use identical masonry scale, architectural height, ornament style and one consistent upper-left light source throughout. All tower roofs point UP and all foundations face DOWN; never vertically mirror or invert a tower. The nearer bastion may naturally occlude only the end of the connecting rampart.
+
+At the vertical midpoint of the connecting wall, reserve a clear EMPTY mounting seat for a separately animated ballista. The mount faces RIGHT into the battlefield. Its firing line must be unobstructed: no tower, merlon, roof, banner or bridge across the muzzle path. Do NOT include the ballista, bow, loaded arrow or projectile in this image. Do not add a third tall central tower.
+
+Grey-blue dressed stone, readable large stone courses, silver-blue metal trim, restrained cyan crystal lanterns on both bastions, small royal-blue banners, subtle moss at foundations. Crisp dark outlines, hand-painted soft cel shading, coherent stylized mobile tower-defense art, matching the supplied monsters and cool stone battlefield. Strong readable silhouette at small gameplay scale; no enormous spire dominating the whole image.
+
+One isolated architectural asset only, complete and uncropped, true transparent alpha background, no colored backdrop, no ground rectangle, no terrain, no lava, no moat, no characters, no UI, no letters, no logo, no watermark. A tall narrow overall silhouette about 1:3 in width-to-height; center it with transparent padding on a 1024x1536 canvas. Leave every roof, foundation and outer contour fully inside the canvas.
+```
+
+负面约束（工具支持负面提示词时可单独粘贴）：
+
+```text
+upside-down tower, vertically flipped architecture, horizontal row of towers, three towers, isolated disconnected towers, stacked building stories, floating turret, giant single spire, tiny towers beside giant bricks, stretched textures, repeated checkerboard masonry, inconsistent scale, inconsistent vanishing points, opposite lighting on copied towers, cropped roofs, cropped foundations, baked-in ballista, blocked firing line, landscape backdrop, opaque background, fake checkerboard transparency, ground tile, lava stripe, text, watermark
+```
+
+落地检查：放到 1920×1080 战场左侧后，建筑主体应约占 300–330 像素宽、850–950 像素高；中央安装位对齐现有发射点 `(245, 555)`，不能为了对齐贴图去移动核心射击坐标。现已接入用户提供的 `主城墙new.png`，旧图保留但不再用于战场城墙。城内铺地单独绘制，不能把建筑 PNG 的全部透明区域直接当作墙外地面。
+
+### 15.2 地面素材的配对规则
+
+当前代码按护城河等级在 `战斗场地背景.png` 与 `熔岩沟场景变体.png` 之间整图切换，不再叠加窄条。若以后重绘，先生成一张 **1920×1080 横屏**普通石板地面，再以这张图为参考生成熔岩版本，锁定摄像机、地形大小、岩石位置和光照，只改变城墙外侧的护城河区域。两个版本都必须是完整的场景背景，不能各生成半幅再拼接。
+
+熔岩版修改提示词：
+
+```text
+Using the supplied 1920x1080 normal battlefield as the exact base composition, create its lava-moat upgrade variant. Preserve the camera, framing, scale, right-hand battlefield, stone placement and lighting direction. Replace only the narrow area immediately outside the LEFT-side castle boundary with a continuous north-south molten-orange moat, with irregular natural rocky banks and subtle warm reflected light blending into the adjacent stones. Keep the center and right side open and readable. Deliver the entire finished landscape background, not a cropped strip, not a split-screen comparison, and not a collage. No new buildings, characters, UI, text, watermark, or visible vertical compositing seam.
+```
+
+## 16. 城内石板地面（2026-09-08）
+
+内置 imagegen 生成，唯一输入 `Gamematerials/主城墙new.png` 仅作石材、配色和手绘风格参考；不修改原城墙。最终素材保存为 `Gamematerials/城内石板地面.png`，Godot 导入上限 512，启用 mipmap。
+
+用途：绘制城墙后方（屏幕左侧）的不透明内院，让外部普通／岩浆背景无法透进城内。贴图不自带城墙、UI 或地形边框；由 `courtyard_view.gd` 做俯视地面投影、沿墙身裁切、同边反射连续采样、墙基和阴影。反射只针对铺地，不针对城墙建筑。
+
+最终生成提示词：
+
+```text
+Use case: stylized-concept.
+Asset type: seamless tileable opaque castle courtyard paving texture for a 2D tower-defense game, square 1024x1024 PNG.
+Input image 1: STYLE AND MATERIAL REFERENCE ONLY, blue-grey castle masonry illustration. Do not draw the reference castle, towers, crystal lanterns or banners.
+Primary request: a fully opaque, edge-to-edge patch of walkable royal castle interior flagstone paving. This material will cover the defended interior behind the castle wall, hiding the exterior lava terrain. The game applies camera projection and clipping in code; provide a true straight-down orthographic surface texture, no horizon, no tilted perspective.
+Materials: substantial broad irregularly rectangular grey-blue slate flagstones, a varied interlocking pattern of large square and rectangular slabs rather than uniform rows of narrow bricks. Shallow thin dark mortar joints, lightly chipped softened bevels, delicate natural stone grain, subdued broad hand-painted value variation, a very small amount of dark desaturated moss in a few joints. All slabs are flat and walkable. About 4 to 5 large flagstones across the image.
+Style: coherent stylized hand-painted mobile tower-defense art, crisp but restrained dark seams, soft cel-shaded material detail matching the reference's blue-grey masonry; muted medium grey-blue, NOT bright cyan, NOT modern glossy tile. Quiet background material, less contrast than the fortress.
+Lighting: evenly distributed diffuse cool daylight, delicate upper-left bevel highlights only. No large baked shadows, no vignette, no glowing seams.
+Constraints: exact seamless continuous repeat on all four edges, no border or trim, no framing, no focal ornament, no castle, wall, tower, steps, crates, weapons, characters, vegetation tufts, water, lava, cracks glowing with magic, UI, text, logos or watermark. Full opaque RGB surface covering every pixel; NO transparent areas.
+```

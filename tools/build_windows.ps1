@@ -24,7 +24,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Content validation failed; Windows export was not attempted.'
 }
 
-foreach ($testScript in @('res://tests/run_all.gd', 'res://tests/stage_autoplay.gd', 'res://tests/save_slot_acceptance.gd')) {
+foreach ($testScript in @('res://tests/run_all.gd', 'res://tests/endless_stages_acceptance.gd', 'res://tests/endless_research_acceptance.gd', 'res://tests/stage_autoplay.gd', 'res://tests/save_slot_acceptance.gd')) {
     & $GodotConsole --headless --path $repository --script $testScript
     if ($LASTEXITCODE -ne 0) {
         throw "Required headless test failed: $testScript"
@@ -95,7 +95,7 @@ if ($Configuration -eq 'Release') {
     Copy-Item -LiteralPath $releaseReadme -Destination $packagedReadme -Force
     Copy-Item -LiteralPath $gameLicense -Destination $packagedGameLicense -Force
     Copy-Item -LiteralPath $godotCopyright -Destination $packagedGodotCopyright -Force
-    $archivePath = Join-Path $repository 'Builds\Aegis-of-Ember-1.3.0-Windows-x64.zip'
+    $archivePath = Join-Path $repository 'Builds\Aegis-of-Ember-1.4.0-Windows-x64.zip'
     if (Test-Path -LiteralPath $archivePath -PathType Leaf) {
         Remove-Item -LiteralPath $archivePath -Force
     }

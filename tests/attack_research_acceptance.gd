@@ -87,7 +87,8 @@ func _check_dependencies() -> void:
 		var result := service.purchase(profile, config, id)
 		_expect(result.get("ok", false) and int(result["profile"]["upgrades"][id]) == 1 and int(result["profile"]["coins"]) == int(profile["coins"]) - int(definition["base_cost"]), str(id) + " purchases atomically at configured price")
 		profile["upgrades"][id] = int(definition["max_level"])
-		_expect(service.purchase(profile, config, id).get("error_code", "") == "max_level", str(id) + " rejects beyond its cap")
+		var after_opening := service.purchase(profile, config, id)
+		_expect(bool(after_opening.get("ok", false)) if bool(definition.get("endless", false)) else after_opening.get("error_code", "") == "max_level", str(id) + " follows its endless or finite level policy")
 	_expect(service.purchase(_profile(), config, "power_mastery").get("error_code", "") == "unknown_upgrade", "retired mastery cannot be repurchased")
 	var poor := _profile()
 	poor["coins"] = 0

@@ -4,6 +4,9 @@ const UiTheme = preload("res://src/presentation/ui_theme.gd")
 const MenuBackdrop = preload("res://src/presentation/menus/menu_backdrop.gd")
 const ResearchTree = preload("res://src/presentation/menus/research_tree.gd")
 const Progression = preload("res://src/core/rules/progression.gd")
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
+const ResearchText = preload("res://src/presentation/research_text.gd")
 const SkillCatalog = preload("res://src/core/rules/skill_catalog.gd")
 const SkillText = preload("res://src/presentation/skill_text.gd")
 const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
@@ -191,25 +194,80 @@ func _show_main_navigation() -> void:
 	stack.add_child(quit_button)
 
 
-func _show_stage_select() -> void:
+func _show_stage_select(page_index: int = -1, focus_stage: int = 0) -> void:
+	_refresh_header()
 	var stack := _new_content_stack(GameApp.text("menu.stage"))
+	_identity_panel.visible = false
+	var unlocked := clampi(int(GameApp.profile.get("highest_unlocked_stage", 1)), 1, StageCatalog.MAX_STAGE_NUMBER)
+	if page_index < 0:
+		focus_stage = unlocked
+	var preview_end := mini(StageCatalog.MAX_STAGE_NUMBER, unlocked + StageCatalog.PAGE_SIZE)
+	var last_page := (preview_end - 1) / StageCatalog.PAGE_SIZE
+	var page := clampi((unlocked - 1) / StageCatalog.PAGE_SIZE if page_index < 0 else page_index, 0, last_page)
+	var first := page * StageCatalog.PAGE_SIZE + 1
+	var last := mini(StageCatalog.MAX_STAGE_NUMBER, first + StageCatalog.PAGE_SIZE - 1)
+	var navigation := HBoxContainer.new()
+	navigation.add_theme_constant_override("separation", 14)
+	stack.add_child(navigation)
+	var previous := _button(GameApp.text("stage.previous_page"), 48)
+	previous.name = "StagePreviousPage"
+	previous.disabled = page == 0
+	previous.pressed.connect(func() -> void: _show_stage_select(page - 1))
+	navigation.add_child(previous)
+	var range_label := Label.new()
+	range_label.name = "StagePageRange"
+	range_label.text = GameApp.text("stage.page_range") % [first, last]
+	range_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	range_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	range_label.add_theme_font_size_override("font_size", 22)
+	navigation.add_child(range_label)
+	var following := _button(GameApp.text("stage.next_page"), 48)
+	following.name = "StageNextPage"
+	following.disabled = page >= last_page
+	following.pressed.connect(func() -> void: _show_stage_select(page + 1))
+	navigation.add_child(following)
+	var jump := SpinBox.new()
+	jump.name = "StageJumpNumber"
+	jump.min_value = 1
+	jump.max_value = unlocked
+	jump.value = focus_stage if focus_stage > 0 else unlocked
+	jump.step = 1
+	jump.custom_minimum_size.x = 180
+	jump.tooltip_text = GameApp.text("stage.jump_hint")
+	navigation.add_child(jump)
+	var jump_button := _button(GameApp.text("stage.jump"), 48)
+	jump_button.name = "StageJumpButton"
+	jump_button.pressed.connect(func() -> void: _show_stage_select((int(jump.value) - 1) / StageCatalog.PAGE_SIZE, int(jump.value)))
+	navigation.add_child(jump_button)
+	var note := Label.new()
+	note.text = GameApp.text("stage.endless_hint")
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_font_size_override("font_size", 18)
+	stack.add_child(note)
 	var scroll := ScrollContainer.new()
+	scroll.name = "StageScroll"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(scroll)
 	var grid := GridContainer.new()
+	grid.name = "StageGrid"
 	grid.columns = 2
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
 	scroll.add_child(grid)
-	var unlocked := int(GameApp.profile.get("highest_unlocked_stage", 1))
 	var best_results: Dictionary = GameApp.profile.get("best_results", {})
-	for stage in GameApp.content.rules.get("stages", []):
-		var number := int(stage.get("number", 0))
-		var stage_id := str(stage.get("id", ""))
+	var tick_rate := int(GameApp.content.rules.get("simulation_tick_rate", 30))
+	for number in range(first, last + 1):
+		var stage := StageCatalog.describe(GameApp.content.rules, number)
+		if stage.is_empty():
+			continue
+		var stage_id := str(stage["id"])
 		var label := "%s %02d  ·  %s" % [GameApp.text("common.stage"), number, GameApp.text(str(stage.get("name_key", "")))]
 		if bool(stage.get("boss", false)):
 			label += "  ⚠ " + GameApp.text("common.boss")
+			if not str(stage.get("boss_id", "")).is_empty():
+				label += " · " + GameApp.text(str(GameApp.content.find_by_id("enemies", str(stage["boss_id"])).get("name_key", "")))
+		label += "\n" + GameApp.text("stage.plan_stats") % [int(stage["enemy_count"]), int(stage["wave_count"]), float(stage["spawn_duration_ticks"]) / tick_rate]
 		var best: Dictionary = best_results.get(stage_id, {})
 		if not best.is_empty():
 			label += "\n★ %d%%  ·  %s %d" % [int(best.get("wall_percent", 0)), GameApp.text("result.kills"), int(best.get("kills", 0))]
@@ -217,12 +275,26 @@ func _show_stage_select() -> void:
 			label += "\n🔒 " + GameApp.text("menu.locked")
 		var reward: Dictionary = stage.get("clear_reward", {})
 		label += "\n◆ %d   %s %d" % [int(reward.get("coins", 0)), GameApp.text("common.xp"), int(reward.get("xp", 0))]
-		var stage_button := _button(label, 96)
+		var stage_button := _button(label, 132)
+		stage_button.name = "Stage_" + str(number)
+		stage_button.add_theme_font_size_override("font_size", 21)
+		stage_button.clip_text = true
+		stage_button.tooltip_text = label
 		stage_button.disabled = number > unlocked
 		stage_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		stage_button.pressed.connect(func() -> void: GameApp.start_stage(stage_id))
 		grid.add_child(stage_button)
+		if number == focus_stage:
+			_focus_stage_card(scroll, stage_button)
 	_add_back_button(stack)
+
+
+func _focus_stage_card(scroll: ScrollContainer, card: Control) -> void:
+	# Containers need their layout pass before the target's scroll offset exists.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if is_instance_valid(scroll) and is_instance_valid(card) and scroll.is_inside_tree():
+		scroll.ensure_control_visible(card)
 
 
 func _show_upgrades() -> void:
@@ -307,8 +379,11 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	detail.add_child(detail_row)
 	var detail_info := VBoxContainer.new()
 	detail_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if page_id == "magic":
+		detail_info.add_theme_constant_override("separation", 2)
 	detail_row.add_child(detail_info)
 	var detail_name := Label.new()
+	detail_name.name = "ResearchDetailName"
 	detail_name.add_theme_font_size_override("font_size", 26)
 	detail_info.add_child(detail_name)
 	var detail_body := Label.new()
@@ -316,11 +391,32 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	detail_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail_body.add_theme_font_size_override("font_size", 18)
 	detail_info.add_child(detail_body)
+	# Keep richer single-impact stats readable without hiding the three chains
+	# above: compare current/next side by side instead of stacking eight lines.
+	var skill_columns := HBoxContainer.new()
+	skill_columns.name = "ResearchSkillComparison"
+	skill_columns.add_theme_constant_override("separation", 18)
+	skill_columns.visible = false
+	detail_info.add_child(skill_columns)
+	var skill_current := Label.new()
+	skill_current.name = "ResearchSkillCurrent"
+	var skill_next := Label.new()
+	skill_next.name = "ResearchSkillNext"
+	for stats in [skill_current, skill_next]:
+		stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		stats.add_theme_font_size_override("font_size", 17)
+		skill_columns.add_child(stats)
 	# Bottom-right purchase block (参考 detail panel): price above the button.
 	var detail_right := VBoxContainer.new()
 	detail_right.alignment = BoxContainer.ALIGNMENT_CENTER
 	detail_right.add_theme_constant_override("separation", 4)
 	detail_row.add_child(detail_right)
+	var growth_label := Label.new()
+	growth_label.name = "ResearchGrowthPolicy"
+	growth_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	growth_label.add_theme_font_size_override("font_size", 14)
+	detail_right.add_child(growth_label)
 	var detail_price := Label.new()
 	detail_price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	detail_price.add_theme_font_size_override("font_size", 22)
@@ -334,6 +430,7 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	var detail_equip := _button(GameApp.text("research.equip"), 64)
 	detail_equip.name = "ResearchEquipButton"
 	detail_equip.custom_minimum_size = Vector2(150, 64)
+	detail_equip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	detail_equip.visible = false
 	detail_row.add_child(detail_equip)
 
@@ -355,13 +452,13 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 		var definition: Dictionary = definitions_by_id.get(upgrade_id, {})
 		if definition.is_empty():
 			return
-		var level := int(upgrades.get(upgrade_id, 0))
-		var max_level := int(definition.get("max_level", 0))
+		var level := ResearchCatalog.normalize_level(definition, int(upgrades.get(upgrade_id, 0)))
+		var can_upgrade := ResearchCatalog.can_upgrade(definition, level)
 		var effect_per_level := int(definition.get("effect_per_level", 0))
-		var current_effect := level * effect_per_level
+		var current_effect := ResearchCatalog.add_scaled(0, effect_per_level, level)
 		var effect_text := GameApp.text("upgrade.effect_current") % current_effect
-		if level < max_level:
-			effect_text = GameApp.text("upgrade.effect_next") % [current_effect, (level + 1) * effect_per_level]
+		if can_upgrade:
+			effect_text = GameApp.text("upgrade.effect_next") % [current_effect, ResearchCatalog.add_scaled(0, effect_per_level, level + 1)]
 		var prerequisite_names: Array[String] = []
 		var prerequisites_met := true
 		for prerequisite in definition.get("prerequisites", []):
@@ -371,7 +468,9 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			if int(upgrades.get(prerequisite_id, 0)) < required:
 				prerequisites_met = false
 		var prerequisite_text := GameApp.text("upgrade.none") if prerequisite_names.is_empty() else ", ".join(prerequisite_names)
-		detail_name.text = "%s   %s%d / %d" % [GameApp.text(str(definition.get("name_key", upgrade_id))), GameApp.text("common.level"), level, max_level]
+		var limit_text := "∞" if ResearchCatalog.is_endless(definition) else str(definition.get("max_level", 0))
+		detail_name.text = "%s   %s%s / %s" % [GameApp.text(str(definition.get("name_key", upgrade_id))), GameApp.text("common.level"), ResearchText.compact(level), limit_text]
+		detail_name.tooltip_text = "Lv.%d / %s" % [level, limit_text]
 		detail_name.add_theme_color_override("font_color", _upgrade_color(upgrade_id))
 		detail_body.text = "%s\n%s  ·  %s: %s" % [
 			GameApp.text(str(definition.get("description_key", ""))),
@@ -382,12 +481,13 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 		var price := GameApp.upgrade_service.price_for_level(definition, level)
 		var currency := str(definition.get("currency", "coins"))
 		var weapon_ref := str(definition.get("weapon_ref", ""))
-		var already_unlocked: bool = not weapon_ref.is_empty() and GameApp.profile.get("unlocked_weapons", []).has(weapon_ref)
+		var already_unlocked: bool = upgrade_id == "unlock_" + weapon_ref and GameApp.profile.get("unlocked_weapons", []).has(weapon_ref)
 		var price_glyph := "✦" if currency == "crystals" else "◆"
-		detail_price.text = GameApp.text("common.max") if level >= max_level else ("✦" if already_unlocked else "%s %d" % [price_glyph, price])
+		detail_price.text = GameApp.text("common.max") if not can_upgrade else ("✦" if already_unlocked else "%s %s" % [price_glyph, ResearchText.compact(price)])
+		detail_price.tooltip_text = "%s %d" % [price_glyph, price]
 		detail_price.add_theme_color_override("font_color", Color("8fd3ff") if currency == "crystals" else Color("ffd166"))
-		detail_button.text = GameApp.text("research.unlocked") if already_unlocked else (GameApp.text("common.upgrade") if level < max_level else GameApp.text("common.max"))
-		detail_button.disabled = level >= max_level or already_unlocked or int(GameApp.profile.get(currency, 0)) < price or not prerequisites_met
+		detail_button.text = GameApp.text("research.unlocked") if already_unlocked else (GameApp.text("common.upgrade") if can_upgrade else GameApp.text("common.max"))
+		detail_button.disabled = not can_upgrade or already_unlocked or int(GameApp.profile.get(currency, 0)) < price or not prerequisites_met
 		# Weapons page: show the referenced bow's stats and offer equipping it.
 		if not weapon_ref.is_empty():
 			var weapon_definition: Dictionary = GameApp.content.find_by_id("weapons", weapon_ref)
@@ -407,21 +507,37 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			detail_body.text += AttackText.detail(GameApp.content.rules, GameApp.profile, equipped_weapon, upgrade_id, GameApp.text)
 			detail_body.text += "\n" + GameApp.text("upgrade.prerequisites") + ": " + prerequisite_text
 		var skill_ref := str(definition.get("skill_ref", ""))
+		skill_columns.visible = not skill_ref.is_empty()
+		detail_body.add_theme_font_size_override("font_size", 17 if not skill_ref.is_empty() else 18)
 		if not skill_ref.is_empty():
 			var current := SkillCatalog.effective(GameApp.content.rules, GameApp.profile, skill_ref)
 			var next_profile: Dictionary = GameApp.profile.duplicate(true)
-			next_profile["upgrades"][upgrade_id] = mini(max_level, level + 1)
+			next_profile["upgrades"][upgrade_id] = level + 1 if can_upgrade else level
 			var next := SkillCatalog.effective(GameApp.content.rules, next_profile, skill_ref)
 			var rate := int(GameApp.content.rules.get("simulation_tick_rate", 30))
-			detail_body.text = GameApp.text(str(definition["description_key"])) + "\n" + GameApp.text("skill.current") + SkillText.summary(current, GameApp.text, rate)
-			if level < max_level:
-				detail_body.text += "\n" + GameApp.text("skill.next") + SkillText.summary(next, GameApp.text, rate)
-			detail_body.text += "\n" + GameApp.text("upgrade.prerequisites") + ": " + prerequisite_text
+			detail_body.text = GameApp.text(str(definition["description_key"])) + "  ·  " + GameApp.text("upgrade.prerequisites") + ": " + prerequisite_text
+			skill_current.text = GameApp.text("skill.current") + SkillText.summary(current, GameApp.text, rate)
+			skill_next.visible = can_upgrade
+			skill_next.text = GameApp.text("skill.next") + SkillText.summary(next, GameApp.text, rate)
 			var available := SkillCatalog.available(GameApp.content.rules, GameApp.profile, skill_ref)
 			var equipped := SkillCatalog.loadout(GameApp.content.rules, GameApp.profile).values().has(skill_ref)
 			detail_equip.visible = available
 			detail_equip.disabled = equipped
 			detail_equip.text = GameApp.text("menu.selected" if equipped else "research.equip")
+
+		var specialized := ResearchText.specialized(GameApp.content.rules, GameApp.profile, upgrade_id, GameApp.text)
+		if not specialized.is_empty():
+			detail_body.text = GameApp.text(str(definition["description_key"])) + "\n" + specialized
+			detail_body.text += "\n" + GameApp.text("upgrade.prerequisites") + ": " + prerequisite_text
+		if ResearchCatalog.is_endless(definition):
+			var growth_note := GameApp.text("research.endless_damage") % int(definition["secondary_max_level"]) if definition.has("skill_ref") else GameApp.text("research.endless_growth")
+			detail_name.tooltip_text += "\n" + growth_note
+			growth_label.text = GameApp.text("research.endless_short")
+			if definition.has("skill_ref"):
+				growth_label.text += "\n" + GameApp.text("research.secondary_cap") % int(definition["secondary_max_level"])
+		else:
+			growth_label.text = ""
+			detail_name.tooltip_text += "\n" + GameApp.text("research.finite_growth") % int(definition.get("max_level", 0))
 
 	tree.node_selected.connect(func(_upgrade_id: String) -> void: refresh_detail.call())
 	_research_detail_refresh = refresh_detail

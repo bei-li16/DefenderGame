@@ -2,6 +2,7 @@ extends SceneTree
 
 const ContentService = preload("res://src/application/content_service.gd")
 const RunModel = preload("res://src/core/combat/run_model.gd")
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
 
 var failures: Array[String] = []
 
@@ -40,9 +41,16 @@ func _run() -> void:
 			failures.append("%s did not reach victory" % stage["id"])
 		if bool(stage.get("boss", false)) and int(outcome["boss_deaths"]) != 1:
 			failures.append("%s expected exactly one boss death" % stage["id"])
+	# Real combat, including each returning boss, across the generated boundary.
+	for number in [31, 39, 40, 49, 50, 59, 60, 90, 100]:
+		var stage := StageCatalog.describe(content.rules, number)
+		var outcome := _autoplay_stage(content.rules, stage["id"], number, profile)
+		print("[STAGE ENDLESS] %s status=%s ticks=%d kills=%d wall=%d%% boss_deaths=%d" % [stage["id"], outcome["status"], outcome["tick"], outcome["kills"], outcome["wall_percent"], outcome["boss_deaths"]])
+		if outcome["status"] != "victory" or int(outcome["boss_deaths"]) != (1 if bool(stage["boss"]) else 0):
+			failures.append("%s did not complete with its expected boss count" % stage["id"])
 	for failure in failures:
 		push_error("[FAIL] " + failure)
-	print("[STAGE] 30-stage autoplay complete; failures=%d" % failures.size())
+	print("[STAGE] 30 authored + 9 generated stages autoplay complete; failures=%d" % failures.size())
 	quit(failures.size())
 
 

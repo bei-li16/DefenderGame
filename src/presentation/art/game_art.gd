@@ -4,7 +4,8 @@ extends RefCounted
 
 const FILES := {
 	"menu": "主菜单背景", "battle": "战斗场地背景", "lava": "熔岩沟场景变体",
-	"wall": "主城墙", "turret": "弩塔", "arrow": "箭矢投射物",
+	"wall": "主城墙new", "turret": "弩塔", "arrow": "箭矢投射物",
+	"courtyard": "城内石板地面",
 	"snail": "红蜗牛龟", "fist": "红拳石怪", "tentacle": "粉色触手怪",
 	"spike": "刺猬球怪", "mage": "法师怪", "bat": "飞行怪",
 	"dragon": "红龙Boss", "giant": "岩石巨人Boss", "matron": "巨型触手领主Boss",

@@ -138,6 +138,7 @@ docs/
 
 - `RunModel`：本局状态和固定 tick 入口。
 - `StageSystem`：Stage 目标、进度、Boss 周期和胜负候选。
+- `StageCatalog`：无状态的关卡解析与无尽计划生成。`describe(number)` 为分页 UI、首通奖励返回轻量摘要，`resolve(id)` 仅为当前关卡展开有界出怪计划；规范 ID 为 `stage_%03d`，拒绝同一关卡的别名，避免重复奖励。前 30 关保留编排，后续由 `endless_stages` 统一控制曲线、混合波次、Boss 轮换与性能预算，不缓存无限列表。
 - `SpawnSystem`：模板、seed、顺序、位置和间隔。
 - `EntityStore`：敌人、投射物、效果和设施的纯数据生命周期。
 - `CombatSystem`：命中、护甲、伤害、Fatal Blow、击退和死亡。
@@ -145,6 +146,7 @@ docs/
 - `SkillSystem`：Mana、冷却、范围效果、状态和打断。
 - `SkillCatalog`：三系技能可用性、装备归一化与有效属性的纯规则查询；研究预览、HUD、指示器和战斗共用，避免升级后显示与实际效果不一致。
 - `AttackCatalog`：攻击研究的共享有效属性、战斗经验倍率和旧研究退款纯函数。RunModel 在关卡开始计算 `attack_stats`；菜单详情与武器摘要使用同一查询，不重复维护公式。
+- `ResearchCatalog`：共享研究等级政策、常量时间深等级报价、等级读取和安全成长算术。`endless: true` 时 `max_level` 只表示原价格区间边界，购买和 UI 必须调用 `can_upgrade`，不能自行比较旧上限；`SkillCatalog` 将无限伤害点数与最多 20 级的附属属性点数分开。研究预览、购买、存档归一化与战斗快照共用规则，见 [无尽研究说明](endless-research.md)。
 - `DefenseSystem`：城墙，以及版本 1 的 Lava Moat/Magic Tower。
 - `ProgressionSystem`：金币、XP、升级和装备快照。
 - `DeterministicRng`：自有整数 RNG，按 stream 隔离生成、暴击和掉落。
@@ -183,7 +185,7 @@ func snapshot() -> RunSnapshot:
 
 表现层可以使用 Godot signal，但规则顺序不能由 signal 连接顺序决定。Application 每 tick 收集 core 返回的有序事件，再分发给视图。
 
-三级技能链中，`skill_cast` 表示一次扣费/施法，`skill_pulse` 表示实际一轮命中。多轮火雨与雷暴保存在 `RunModel.active_spells`，由固定 tick 调度并在 Run 结束时清空；表现层仅根据事件中的元素、阶位、半径与命中位置绘制。Profile 的 `equipped_skills` 经 Application 原子保存，每系固定一槽，随后进入的关卡使用不可变装备快照。配置和规则细节见 [`skill-chains-reimplementation.md`](skill-chains-reimplementation.md)。
+三级技能链中，`skill_cast` 表示一次扣费/施法，`skill_launch` 表示一颗开始下落，`skill_pulse` 表示一颗实际落地。三系统一为单发定点、圆盘内随机倾泻、全战场随机倾泻；独立 `_spell_rng` 生成互不重复且不等间隔的发射 tick 和落点。`RunModel.active_spells` 保存每颗的发射/落地 tick 和有效属性，落地才按当时敌人位置独立结算直击、衰减溅射和状态。`falling_spells` 快照提供在途轨迹，表现层只能插值，爆炸/冰击/落雷与音效由落地事件驱动。Run 结束清空队列，暂停不推进。Profile 的 `equipped_skills` 经 Application 原子保存，每系固定一槽，随后进入的关卡使用不可变装备快照。配置和规则细节见 [`skill-chains-reimplementation.md`](skill-chains-reimplementation.md)。
 
 攻击研究中，Projectile 快照包含实际箭伤、暴击、击退距离和毒伤/时长/间隔。命中系统只使用该快照；敌人保存独立毒计时，固定 tick 跳伤，刷新不重置倒计时。高级猎人的击杀、通关经验经同一纯函数写入事件与结算，沿用永久奖励幂等账本。来源、等级表与边界约定见 [`attack-research-reimplementation.md`](attack-research-reimplementation.md)。
 
@@ -244,20 +246,22 @@ Gameplay (Node2D)
 
 所有 Local Stage 共用同一个 `gameplay.tscn`，Stage 差异来自配置。不得复制场景形成 `stage_001.tscn`、`stage_002.tscn`。
 
+无尽关卡不再用 `config.stages.size()` 作为解锁、存档归一化、奖励或下一关入口的上限。Application 和 Core 共用 `StageCatalog`；`SpawnSystem` 对生成关使用明确的 `at_tick`/`wave` 字段，不能再次套用旧数量倍率。满员暂停消费出怪队列，空位出现后继续，胜利仍要求队列耗尽且存活敌人清零。HUD 使用 `wave_count`，不能把每只敌人的生成条目数误当作波数。生成计划使用关卡专属 RNG，出怪坐标继续使用运行 seed，技能与战斗随机流互不干扰。公式和边界见 [无尽关卡规则](endless-stages.md)。
+
 ## 8. 固定步长、坐标与随机
 
 Project Settings 将 physics tick 配置为 30。`GameSession._physics_process()` 每次只向 core 推进一个整数 tick；渲染可以在 60 FPS 对上一/当前快照插值。
 
 固定更新顺序：
 
-1. 按 `tick, sequence` 消费命令。
-2. 更新 Stage 和生成。
-3. 更新敌人移动、攻击和状态。
-4. 更新防御设施。
-5. 更新投射物、技能和碰撞。
-6. 结算伤害、控制、死亡、金币和 Mana。
+1. tick 增加，更新冷却，生成到期敌人。
+2. 按命令顺序处理输入，包括技能校验/扣费/创建投放计划。
+3. 推进到期技能发射与落地，结算独立伤害/控制；恢复 Mana。
+4. 更新敌人持续状态、移动、攻击与特殊技能。
+5. 更新防御设施、箭矢与碰撞伤害。
+6. 结算死亡、击杀金币与经验。
 7. 处理城墙、胜负和奖励。
-8. 输出有序事件和快照。
+8. 排序输出事件和只读快照。
 
 事件顺序：
 
@@ -304,7 +308,7 @@ PauseRequested
 交互模型（1.0，对应 FR-022/FR-023）：
 
 - **悬停自动射击**：光标位于战场且未悬停任何阻断射击的 HUD 控件（`gui_get_hovered_control()` 为 null 或悬停对象为技能按钮——技能按钮是施法快捷键，不中断射击）时，表现层向 core 发出一次 `fire_started`；光标移入 UI、打开暂停/结算/设置覆盖层、选中法术或处于拖拽施法中时发出一次 `fire_stopped`。开火状态按边沿驱动（状态变化才发命令），不逐帧重复。`settings.auto_fire=false` 时回退为按住左键开火、松手停止的经典模式。
-- **拖拽施法**：选中技能后按下左键开始拖拽，`CanvasItem._draw()` 在光标处绘制技能范围圈（合法性实时着色：目标边界、Mana、冷却任一不满足即红色），松开左键在释放点发出 `cast_skill`；释放在 UI 控件上视为取消（发出 `cancel_skill`）；右键/Esc 取消并中断拖拽。释放检测以轮询鼠标按键状态为准，覆盖释放事件被 UI 消耗的路径。
+- **拖拽施法**：选中技能后按下左键开始拖拽，`CanvasItem._draw()` 对一阶绘制直击/溅射圈，对二阶绘制随机落点圆盘，对三阶高亮全战场且不显示鼠标准星。合法性实时着色：Mana、冷却任一不满足即红色，一/二阶还检查目标边界，三阶忽略坐标。松开左键发出 `cast_skill`；释放在 UI 控件上视为取消（发出 `cancel_skill`）；右键/Esc 取消并中断拖拽。释放检测以轮询鼠标按键状态为准，覆盖释放事件被 UI 消耗的路径。
 - 法术选中与拖拽期间自动射击暂停，避免瞄准冲突；施法完成或取消后悬停射击自动恢复。
 
 设计视口为 1920×1080，stretch 保持宽高适配。HUD 使用 Control anchors/containers，战场 Camera2D 使用可配置逻辑边界。窗口变化只改变显示映射，不改变领域单位和攻击范围。
@@ -367,6 +371,7 @@ user://logs/                          # 限量轮转
 - 首次启动迁移：slot 1 缺失而旧 `profile.json` 存在时，旧档被槽位 1 采纳并落盘为 `slot_1.json`（旧文件保留不删）。
 - 切换存档：先冲刷当前槽位的游戏时长，再加载目标槽位（空槽位立即生成新档），设置写入成功后才切换内存 Profile；任何一步失败都保持原槽位。
 - 游戏时长（`stats.playtime_seconds`）由 `GameApp` 缓冲，满 30 秒、结算、返回主菜单或窗口关闭时落盘。
+- 无尽段复用原 Profile schema，最高解锁与首通记录保存真实关卡编号，不再截断到 30。归一化时从已有胜利记录恢复下一关，包括旧档第 30 关已通关但最高解锁仍为 30 的情况；不会凭迁移重复发奖。结算仍先原子保存，成功后提交内存状态并启用“下一关”，失败时保持可重试且不开放未保存的解锁。首通水晶对账遍历已有胜利记录，而非有限的前 30 关配置数组。
 - 存档管理页读取 `read_slot_summary`（只读摘要：通关数/杀敌数/金币/水晶/时长/最后保存时间），荣誉堂展示同一份统计。
 
 存档信封：

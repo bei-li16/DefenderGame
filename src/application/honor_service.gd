@@ -1,6 +1,7 @@
 class_name DefenderHonorService
 extends RefCounted
 
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
 # Honor chains in the original Defender II style: each honor has three
 # milestone levels, every newly reached level pays coin/xp rewards once
 # (ledger keys "id:level") and grants a permanent passive bonus that the run
@@ -91,19 +92,12 @@ static func first_clear_crystals(stage_id: String, config: Dictionary) -> int:
 	var step_stages := maxi(1, int(rewards.get("first_clear_step_stages", 5)))
 	var step_bonus := int(rewards.get("first_clear_step_bonus", 0))
 	var boss_bonus := int(rewards.get("boss_bonus", 1))
-	var stage_number := 0
-	var is_boss := false
-	var stages: Array = config.get("stages", [])
-	for index in range(stages.size()):
-		var candidate: Variant = stages[index]
-		if candidate is Dictionary and str(candidate.get("id", "")) == stage_id:
-			stage_number = index + 1
-			is_boss = bool(candidate.get("boss", false))
-			break
-	if stage_number <= 0:
+	var stage_number := StageCatalog.number_from_id(stage_id)
+	var stage := StageCatalog.describe(config, stage_number)
+	if stage.is_empty():
 		return 0
 	var amount := base + ((stage_number - 1) / step_stages) * step_bonus
-	if is_boss:
+	if bool(stage.get("boss", false)):
 		amount += boss_bonus
 	return amount
 
@@ -113,13 +107,10 @@ static func first_clear_crystals(stage_id: String, config: Dictionary) -> int:
 static func expected_crystal_income(profile: Dictionary, config: Dictionary) -> int:
 	var total := 0
 	var best: Dictionary = profile.get("best_results", {})
-	for stage in config.get("stages", []):
-		if not stage is Dictionary:
-			continue
-		var stage_id := str(stage.get("id", ""))
+	for stage_id in best:
 		var record: Variant = best.get(stage_id, {})
 		if record is Dictionary and str(record.get("status", "")) == "victory":
-			total += first_clear_crystals(stage_id, config)
+			total += first_clear_crystals(str(stage_id), config)
 	return total
 
 

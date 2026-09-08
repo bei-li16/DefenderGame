@@ -4,13 +4,17 @@ const GameSession = preload("res://src/application/game_session.gd")
 const RunOrchestrator = preload("res://src/application/run_orchestrator.gd")
 const UiTheme = preload("res://src/presentation/ui_theme.gd")
 const Progression = preload("res://src/core/rules/progression.gd")
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
 const GameplayHud = preload("res://src/presentation/gameplay/gameplay_hud.gd")
 const Art = preload("res://src/presentation/art/game_art.gd")
 const CreatureVisuals = preload("res://src/presentation/art/creature_visuals.gd")
+const CastleView = preload("res://src/presentation/art/castle_view.gd")
+const CourtyardView = preload("res://src/presentation/art/courtyard_view.gd")
 
 var _creatures := CreatureVisuals.new()
 var _bow_recoil := 0.0
 var _aim_visual_angle := 0.0
+var _snapshot_blend := 0.0
 
 var session: DefenderGameSession
 var snapshot: Dictionary = {}
@@ -79,8 +83,9 @@ func _process(delta: float) -> void:
 	if get_tree().paused:
 		delta = 0.0
 	else:
-		_aim_visual_angle = clampf((get_global_mouse_position() - Vector2(245, 555)).angle(), -1.15, 1.15)
+		_aim_visual_angle = (get_global_mouse_position() - CastleView.BOW_ORIGIN).angle()
 	_creatures.advance(delta)
+	_snapshot_blend = minf(1.0, _snapshot_blend + delta * float(Engine.physics_ticks_per_second))
 	_bow_recoil = maxf(0.0, _bow_recoil - delta * 7.0)
 	_elapsed_visual += delta
 	for index in range(effects.size() - 1, -1, -1):
@@ -205,6 +210,7 @@ func _cancel_cast_drag() -> void:
 
 func _on_snapshot(value: Dictionary) -> void:
 	snapshot = value
+	_snapshot_blend = 0.0
 	_creatures.sync(value.get("enemies", []))
 	if _hud == null:
 		return
@@ -229,10 +235,12 @@ func _on_events(events_value: Array) -> void:
 			"shot":
 				_bow_recoil = 1.0
 			"skill_cast":
-				_shake_strength = _quality_shake(10.0)
+				if str(event.get("target_mode", "")) == "screen":
+					_feedback(GameApp.text("skill.screen_target"), Color("ffd166"), 1.5)
 			"skill_pulse":
 				var position := Vector2(float(event.get("x_milli", 0)) / 1000.0, float(event.get("y_milli", 0)) / 1000.0)
-				_append_effect({"kind": "spell", "element": event.get("element", ""), "tier": event.get("tier", 1), "radius": float(event.get("radius_milli", 0)) / 1000.0, "hits": event.get("hits", []), "position": position, "age": 0.0, "duration": 0.72})
+				_shake_strength = maxf(_shake_strength, _quality_shake(4.0))
+				_append_effect({"kind": "spell", "element": event.get("element", ""), "tier": event.get("tier", 1), "radius": float(event.get("radius_milli", 0)) / 1000.0, "splash_radius": float(event.get("splash_radius_milli", 0)) / 1000.0, "hits": event.get("hits", []), "position": position, "age": 0.0, "duration": 0.6})
 			"hit":
 				var hit_position := _entity_position(int(event.get("entity_id", 0)))
 				_append_effect({"kind": "hit", "position": hit_position, "age": 0.0, "duration": 0.22})
@@ -245,10 +253,13 @@ func _on_events(events_value: Array) -> void:
 			"death":
 				_append_effect({"kind": "death", "position": _entity_position(int(event.get("entity_id", 0))), "age": 0.0, "duration": 0.55})
 			"wall_damage":
-				_shake_strength = _quality_shake(13.0)
 				var attacker := _entity_position(int(event.get("entity_id", 0)))
 				_append_effect({"kind": "enemy_attack", "position": attacker, "age": 0.0, "duration": 0.32})
-				_feedback("⚠  " + (GameApp.text("feedback.wall_damage") % int(event.get("amount", 0))), Color("ff7b6b"))
+				# Armor can absorb all damage. Keep the monster's attack action,
+				# but do not shake the screen or report a misleading HP loss of 0.
+				if int(event.get("amount", 0)) > 0:
+					_shake_strength = _quality_shake(13.0)
+					_feedback("⚠  " + (GameApp.text("feedback.wall_damage") % int(event.get("amount", 0))), Color("ff7b6b"))
 			"skill_rejected":
 				var reason := str(event.get("reason", ""))
 				var key := "feedback.no_mana" if reason == "no_mana" else ("feedback.cooldown" if reason == "cooldown" else "feedback.invalid_target")
@@ -513,8 +524,8 @@ func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> 
 		var retry_save := _overlay_button(GameApp.text("result.retry_save"))
 		retry_save.pressed.connect(func() -> void: _retry_settlement(result))
 		stack.add_child(retry_save)
-	var total_stages: int = GameApp.content.rules.get("stages", []).size()
-	if victory and int(result.get("stage_number", 0)) < total_stages:
+	var has_next := StageCatalog.has_next(GameApp.content.rules, int(result.get("stage_number", 0)))
+	if victory and has_next and bool(settlement.get("ok", false)):
 		var unlocked := Label.new()
 		unlocked.text = "✦  " + (GameApp.text("result.stage_unlocked") % (int(result.get("stage_number", 0)) + 1)) + "  ✦"
 		unlocked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -545,9 +556,11 @@ func _show_result(result: Dictionary, settlement: Dictionary = {"ok": true}) -> 
 		honors_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		honors_label.add_theme_color_override("font_color", Color("8ce99a"))
 		stack.add_child(honors_label)
-	if victory and int(result.get("stage_number", 0)) < total_stages:
+	if victory and has_next:
 		var next := _overlay_button(GameApp.text("result.next"))
+		next.name = "NextStageButton"
 		next.custom_minimum_size.x = 200
+		next.disabled = not bool(settlement.get("ok", false))
 		next.pressed.connect(func() -> void:
 			GameApp.start_stage("stage_%03d" % (int(result.get("stage_number", 0)) + 1))
 		)
@@ -708,14 +721,17 @@ func _draw() -> void:
 		offset = Vector2(sin(_elapsed_visual * 71.0), cos(_elapsed_visual * 83.0)) * _shake_strength
 	draw_set_transform(offset)
 	_draw_background()
-	_draw_castle()
 	_creatures.draw_retired(self)
 	var sorted_enemies: Array = snapshot.get("enemies", []).duplicate()
 	sorted_enemies.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["y_milli"]) < int(b["y_milli"]))
 	for enemy in sorted_enemies:
 		_draw_enemy(enemy)
+	# The complete fortress already contains its own architectural occlusion.
+	# Draw it once over contacting attackers, then its independently aimed bow.
+	_draw_castle()
 	for projectile in snapshot.get("projectiles", []):
 		_draw_projectile(projectile)
+	_draw_falling_spells()
 	for effect in effects:
 		_draw_effect(effect)
 	for text_data in floating_texts:
@@ -729,34 +745,23 @@ func _draw() -> void:
 
 
 func _draw_background() -> void:
-	Art.cover(self, "battle", Rect2(0, 0, 1920, 1080), Color(0.86, 0.9, 0.98))
-	if int(snapshot.get("defenses", {}).get("lava_moat_level", 0)) > 0:
-		# Crop the portrait plate's channel; right bank matches defense range.
-		var castle_x := float(GameApp.content.rules["world"]["castle_x_milli"]) / 1000.0
-		var reach := float(GameApp.content.rules["defenses"]["lava_moat"]["range_milli"]) / 1000.0
-		var lava := Art.region("lava", Rect2(0.08, 0.0, 0.25, 1.0))
-		draw_texture_rect(lava, Rect2(castle_x, 0, reach, 1080), false)
-		for spark in range(12):
-			var y := fmod(spark * 97.0 - _elapsed_visual * 25.0 + 10800.0, 1080.0)
-			draw_circle(Vector2(castle_x + reach * 0.55 + sin(spark * 7.0) * reach * 0.3, y), 2.5, Color(1, 0.64, 0.15, 0.6))
+	# These are complete alternate plates, not pieces of one tiled background.
+	Art.cover(self, CastleView.floor_key(snapshot), Rect2(0, 0, 1920, 1080), Color(0.86, 0.9, 0.98))
+	CourtyardView.draw(self)
 	draw_rect(Rect2(0, 0, 1920, 145), Color(0.02, 0.04, 0.07, 0.2))
 
+
 func _draw_castle() -> void:
-	var wall := Art.texture("wall")
-	var wall_height := 1120.0
-	var wall_width := wall_height * wall.get_width() / wall.get_height()
-	# Mirror the illustration so its tall crystal tower borders the battlefield,
-	# not the cropped-away left edge. The attack line remains x=350.
-	Art.draw_sprite(self, wall, Vector2(348.0 - wall_width * 0.5, 545), Vector2(-wall_width, wall_height))
-	var origin := Vector2(245, 555)
+	var tower_active := int(snapshot.get("defenses", {}).get("magic_tower_level", 0)) > 0
+	CastleView.draw_structure(self, tower_active, _elapsed_visual)
+	var origin := CastleView.BOW_ORIGIN
 	var aim_angle := _aim_visual_angle
-	var base := Art.region("turret", Rect2(0.10, 0.51, 0.81, 0.49))
+	# The new wall supplies the stone mounting platform. Only reuse the wooden
+	# pedestal, not the old turret's second circular stone tower below it.
+	var base := Art.region("turret", CastleView.PEDESTAL_UV)
 	var bow := Art.region("turret", Rect2(0.05, 0.0, 0.91, 0.55))
-	Art.draw_sprite(self, base, origin + Vector2(0, 94), Vector2(214, 97))
-	Art.draw_sprite(self, bow, origin - Vector2.RIGHT.rotated(aim_angle) * _bow_recoil * 12.0, Vector2(242, 110), aim_angle)
-	if int(snapshot.get("defenses", {}).get("magic_tower_level", 0)) > 0:
-		draw_circle(Vector2(150, 120), 38.0, Color(0.3, 0.75, 1.0, 0.2 + sin(_elapsed_visual * 3.0) * 0.06))
-		draw_arc(Vector2(150, 120), 29.0, 0, TAU, 32, Color(0.6, 0.9, 1.0, 0.75), 2.0)
+	Art.draw_sprite(self, base, CastleView.PEDESTAL_POSITION, CastleView.PEDESTAL_SIZE)
+	Art.draw_sprite(self, bow, origin - Vector2.RIGHT.rotated(aim_angle) * _bow_recoil * 12.0, CastleView.BOW_SIZE, aim_angle)
 
 func _draw_enemy(enemy: Dictionary) -> void:
 	var position: Vector2 = _creatures.actors.get(int(enemy["entity_id"]), {}).get("position", Vector2(float(enemy["x_milli"]), float(enemy["y_milli"])) / 1000.0)
@@ -799,7 +804,7 @@ func _draw_effect(effect: Dictionary) -> void:
 		return
 	match kind:
 		"enemy_attack":
-			var impact := Vector2(315, position.y)
+			var impact := CastleView.impact_position(position.y)
 			if position.x > 440.0:
 				var orb := position.lerp(impact, minf(1.0, progress * 2.0))
 				draw_line(orb + Vector2(25, 0), orb, Color(0.7, 0.35, 1.0, 1.0 - progress), 8.0)
@@ -808,8 +813,9 @@ func _draw_effect(effect: Dictionary) -> void:
 				draw_arc(impact, 18.0 + progress * 32.0, -1.1, 1.1, 12, Color(1.0, 0.75, 0.4, 1.0 - progress), 5.0)
 		"defense":
 			if str(effect.get("defense_id", "")) == "magic_tower":
-				draw_line(Vector2(150, 120), position, Color(0.25, 0.6, 1, (1.0 - progress) * 0.5), 12.0)
-				draw_line(Vector2(150, 120), position, Color(0.75, 0.95, 1, 1.0 - progress), 3.0)
+				var origin := CastleView.magic_origin()
+				draw_line(origin, position, Color(0.25, 0.6, 1, (1.0 - progress) * 0.5), 12.0)
+				draw_line(origin, position, Color(0.75, 0.95, 1, 1.0 - progress), 3.0)
 			else:
 				draw_circle(position, 22.0 + progress * 20.0, Color(1, 0.4, 0.05, (1.0 - progress) * 0.65))
 		"hit":
@@ -830,28 +836,65 @@ func _draw_effect(effect: Dictionary) -> void:
 			draw_arc(position, 80.0 + progress * 400.0, 0, TAU, maxi(16, int(round(48.0 * detail))), Color(tint, 1.0 - progress), 9)
 
 
+func _draw_falling_spells() -> void:
+	# Render only projectiles that the core has launched but not yet resolved.
+	# No visual timer can create an impact or move its authoritative target.
+	for falling in snapshot.get("falling_spells", []):
+		var target := Vector2(float(falling["x_milli"]), float(falling["y_milli"])) / 1000.0
+		var duration := maxf(1.0, int(falling["impact_tick"]) - int(falling["launch_tick"]))
+		var progress := clampf((float(snapshot.get("tick", 0)) + _snapshot_blend - int(falling["launch_tick"])) / duration, 0, 1)
+		var element := str(falling["element"])
+		var origin := Vector2(target.x - 155.0, -85.0)
+		if element == "lightning":
+			origin.x = target.x
+		var position := origin.lerp(target, progress * progress)
+		var direction := (target - origin).normalized()
+		var size := 17.0 + int(falling["tier"]) * 3.0
+		var tint := Color("ff7b25") if element == "fire" else (Color("87dfff") if element == "ice" else Color("d6a5ff"))
+		# A restrained landing marker communicates the actual falling point.
+		draw_arc(target, 10.0 + progress * 15.0, 0, TAU, 24, Color(tint, 0.12 + progress * 0.25), 1.5)
+		if element == "fire":
+			for tail in range(7, 0, -1):
+				draw_circle(position - direction * tail * 13.0, size * (1.0 - tail * 0.1), Color(1, 0.25 + tail * 0.035, 0.02, 0.65 - tail * 0.075))
+			draw_circle(position, size, Color("ff6127"))
+			draw_circle(position - direction * 3.0, size * 0.7, Color("ffd45a"))
+			draw_circle(position + direction * 3.0, size * 0.35, Color("fff2bd"))
+		elif element == "ice":
+			var side := direction.orthogonal() * size * 0.6
+			var tip := position + direction * size * 1.7
+			var back := position - direction * size * 1.5
+			draw_line(back - direction * 80.0, back, Color(0.5, 0.8, 1, 0.35), 8.0)
+			draw_colored_polygon(PackedVector2Array([tip, position + side, back, position - side]), Color("7ecfff"))
+			draw_colored_polygon(PackedVector2Array([tip, back, position - side]), Color("e4fbff"))
+		else:
+			var points := PackedVector2Array()
+			for segment in range(10):
+				var point := origin.lerp(position, float(segment) / 9.0)
+				if segment > 0 and segment < 9:
+					point.x += sin(float(segment * 17 + int(falling["launch_tick"]))) * 18.0
+				points.append(point)
+			draw_polyline(points, Color(0.65, 0.38, 1, 0.4), 9.0, true)
+			draw_polyline(points, Color("eee2ff"), 3.0, true)
+			draw_circle(position, size * 0.4, Color("ffffff"))
+
+
 func _draw_spell_effect(effect: Dictionary, progress: float, detail: float) -> void:
 	var center: Vector2 = effect.get("position", Vector2.ZERO)
 	var radius := float(effect.get("radius", 180.0))
+	var splash := float(effect.get("splash_radius", radius))
 	var tier := int(effect.get("tier", 1))
 	var fade := 1.0 - progress
 	var element := str(effect.get("element", ""))
 	var tint := Color("ff9a36") if element == "fire" else (Color("8ee7ff") if element == "ice" else Color("d9a4ff"))
-	draw_circle(center, radius, Color(tint, fade * 0.07))
-	draw_arc(center, radius * (0.55 + progress * 0.45), 0, TAU, 48, Color(tint, fade * 0.6), 3.0 + tier)
+	draw_circle(center, splash, Color(tint, fade * 0.045))
+	draw_circle(center, radius, Color(tint, fade * 0.13))
+	draw_arc(center, lerpf(radius, splash, progress), 0, TAU, 48, Color(tint, fade * 0.5), 2.0 + tier)
 	if element == "fire":
-		var impacts := 1 if tier == 1 else 2 * tier + 1
-		for index in range(impacts):
-			var angle := float(index) * TAU / impacts + 0.4
-			var impact := center if index == 0 else center + Vector2(cos(angle), sin(angle)) * radius * 0.56
-			var blast := radius * (0.2 if tier > 1 else 0.65) * (0.6 + progress)
-			if tier > 1:
-				var trail := Vector2(-120, -230) * (1.0 - progress)
-				draw_line(impact + trail, impact, Color(1.0, 0.3, 0.04, fade * 0.8), 20.0 * detail + 5.0)
-				draw_line(impact + trail * 0.7, impact, Color(1.0, 0.87, 0.45, fade), 7.0)
-			draw_circle(impact, blast, Color(1.0, 0.25, 0.025, fade * 0.5))
-			draw_circle(impact + Vector2(0, -blast * 0.15), blast * 0.56, Color(1.0, 0.76, 0.17, fade * 0.85))
-			draw_arc(impact, blast, 0, TAU, 24, Color(1.0, 0.87, 0.38, fade), 5)
+		# Exactly one explosion per actual landing event, regardless of tier.
+		var blast := radius * (0.45 + progress * 0.6)
+		draw_circle(center, blast, Color(1.0, 0.25, 0.025, fade * 0.5))
+		draw_circle(center + Vector2(0, -blast * 0.15), blast * 0.56, Color(1.0, 0.76, 0.17, fade * 0.85))
+		draw_arc(center, blast, 0, TAU, 24, Color(1.0, 0.87, 0.38, fade), 4)
 	elif element == "ice":
 		for hit in effect.get("hits", []):
 			var position := Vector2(float(hit["x_milli"]) / 1000.0, float(hit["y_milli"]) / 1000.0)
@@ -865,18 +908,18 @@ func _draw_spell_effect(effect: Dictionary, progress: float, detail: float) -> v
 				var snow := center + direction * radius * 0.75 + Vector2(0, progress * 70)
 				draw_line(snow, snow + Vector2(-5, 14), Color(0.86, 0.97, 1, fade * 0.8), 2)
 	elif element == "lightning":
-		var targets: Array = effect.get("hits", []).duplicate()
-		if targets.is_empty():
-			targets.append({"x_milli": center.x * 1000, "y_milli": center.y * 1000})
-		for index in range(targets.size()):
-			var target := Vector2(float(targets[index]["x_milli"]) / 1000.0, float(targets[index]["y_milli"]) / 1000.0)
-			var points := PackedVector2Array()
-			for segment in range(8):
-				var amount := float(segment) / 7.0
-				var jitter := sin(float(segment * 13 + index * 7)) * 26.0 if segment < 7 else 0.0
-				points.append(Vector2(target.x + jitter, lerpf(maxf(150.0, target.y - 400.0), target.y, amount)))
-			draw_polyline(points, Color(0.68, 0.3, 1.0, fade * 0.45), 10 + tier * 2, true)
-			draw_polyline(points, Color(0.95, 0.87, 1.0, fade), 2 + tier, true)
+		# One sky bolt reaches the scheduled point. Short ground arcs show its
+		# splash hits, not extra sky strikes at unscheduled enemy positions.
+		var points := PackedVector2Array()
+		for segment in range(10):
+			var jitter := sin(float(segment * 13)) * 26.0 if segment < 9 else 0.0
+			points.append(Vector2(center.x + jitter, lerpf(-85.0, center.y, float(segment) / 9.0)))
+		draw_polyline(points, Color(0.68, 0.3, 1.0, fade * 0.45), 10 + tier * 2, true)
+		draw_polyline(points, Color(0.95, 0.87, 1.0, fade), 2 + tier, true)
+		for hit in effect.get("hits", []):
+			var target := Vector2(float(hit["x_milli"]), float(hit["y_milli"])) / 1000.0
+			var middle := center.lerp(target, 0.5) + Vector2(12, -15)
+			draw_polyline(PackedVector2Array([center, middle, target]), Color(tint, fade * 0.7), 2.0, true)
 			draw_arc(target, 24.0 + 25.0 * progress, 0, TAU, 24, Color(tint, fade), 4)
 
 
@@ -890,6 +933,8 @@ func _draw_ice_prison(position: Vector2, radius: float, opacity: float) -> void:
 func _draw_crosshair() -> void:
 	var mouse := get_global_mouse_position()
 	var selected := str(snapshot.get("selected_skill", ""))
+	if str(snapshot.get("skill_definitions", {}).get(selected, {}).get("target_mode", "")) == "screen":
+		return
 	var color := Color("f4ead5")
 	var radius := 22.0
 	var element := str(snapshot.get("skill_definitions", {}).get(selected, {}).get("element", ""))
@@ -921,11 +966,21 @@ func _draw_cast_drag_indicator() -> void:
 	if skill.is_empty():
 		return
 	var mouse := get_global_mouse_position()
-	var radius := float(skill.get("radius_milli", 0)) / 1000.0
 	var valid := _cast_target_valid(skill, mouse)
 	var color := Color(0.44, 0.91, 0.63, 0.85) if valid else Color(1.0, 0.48, 0.42, 0.85)
+	var mode := str(skill.get("target_mode", "point"))
+	if mode == "screen":
+		var world: Dictionary = GameApp.content.rules["world"]
+		var left := float(world["castle_x_milli"]) / 1000.0
+		var rect := Rect2(left, 0, float(world["width_milli"]) / 1000.0 - left, float(world["height_milli"]) / 1000.0)
+		draw_rect(rect, Color(color, 0.035))
+		draw_rect(rect.grow(-3), color, false, 3)
+		draw_string(ThemeDB.fallback_font, Vector2(750, 180), GameApp.text("skill.screen_target"), HORIZONTAL_ALIGNMENT_CENTER, 480, 26, color)
+		return
+	var radius := float(skill.get("area_radius_milli", 0) if mode == "area" else skill.get("splash_radius_milli", 0)) / 1000.0
 	draw_arc(mouse, maxf(14.0, radius), 0.0, TAU, 48, color, 4.0)
-	draw_arc(mouse, maxf(10.0, radius * 0.55), 0.0, TAU, 36, Color(color, 0.4), 2.0)
+	if mode == "point":
+		draw_arc(mouse, maxf(10.0, float(skill.get("radius_milli", 0)) / 1000.0), 0.0, TAU, 36, Color(color, 0.4), 2.0)
 	draw_circle(mouse, 5.0, color)
 	if not valid:
 		var cross := 12.0
@@ -940,6 +995,8 @@ func _cast_target_valid(skill: Dictionary, position: Vector2) -> bool:
 		return false
 	if int(snapshot.get("mana", 0)) < int(skill.get("mana_cost", 0)):
 		return false
+	if str(skill.get("target_mode", "")) == "screen":
+		return true
 	var world: Dictionary = GameApp.content.rules.get("world", {})
 	var x_milli := position.x * 1000.0
 	var y_milli := position.y * 1000.0

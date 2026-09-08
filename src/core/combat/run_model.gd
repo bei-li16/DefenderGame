@@ -2,6 +2,8 @@ class_name DefenderRunModel
 extends RefCounted
 
 const DeterministicRng = preload("res://src/core/rules/deterministic_rng.gd")
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
 const SpawnSystem = preload("res://src/core/combat/spawn_system.gd")
 const ProjectileSystem = preload("res://src/core/combat/projectile_system.gd")
 const SkillSystem = preload("res://src/core/combat/skill_system.gd")
@@ -19,6 +21,7 @@ const EVENT_ORDER := {
 	"shot": 21,
 	"skill_cast": 22,
 	"skill_rejected": 23,
+	"skill_launch": 24,
 	"skill_pulse": 25,
 	"defense_attack": 24,
 	"hit": 30,
@@ -72,6 +75,7 @@ var seed: int = 1
 
 var _spawn_rng: DefenderDeterministicRng
 var _combat_rng: DefenderDeterministicRng
+var _spell_rng: DefenderDeterministicRng
 var _event_sequence: int = 0
 var _boss_rewarded: bool = false
 var bosses_slain: int = 0
@@ -79,7 +83,7 @@ var bosses_slain: int = 0
 
 func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_profile: Dictionary, run_instance_id: String = "") -> Dictionary:
 	config = game_config.duplicate(true)
-	stage = _find_by_id(config.get("stages", []), stage_id)
+	stage = StageCatalog.resolve(config, stage_id)
 	if stage.is_empty():
 		return {"ok": false, "error_code": "unknown_stage", "field_path": "stage_id"}
 	profile_snapshot = player_profile.duplicate(true)
@@ -105,11 +109,12 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	run_id = run_instance_id if not run_instance_id.is_empty() else "%s-%d-%d" % [stage_id, seed, int(config.get("config_version", 0))]
 	_spawn_rng = DeterministicRng.new(seed ^ 0x4f1bbcdc)
 	_combat_rng = DeterministicRng.new(seed ^ 0x2c9277b5)
+	_spell_rng = DeterministicRng.new(seed ^ 0x61c88647)
 	tick = 0
 	status = STATUS_RUNNING
 	var player: Dictionary = config.get("player", {})
 	max_mana = int(player.get("max_mana", 100))
-	max_mana += _upgrade_level("mana_capacity") * _upgrade_effect_per_level("mana_capacity")
+	max_mana += _reward_bonus("mana_capacity")
 	mana = max_mana
 	coins_earned = 0
 	xp_earned = 0
@@ -133,7 +138,7 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	_event_sequence = 0
 	_boss_rewarded = false
 	bosses_slain = 0
-	wall_max_hp = int(player.get("wall_hp", 500)) + _upgrade_level("wall_repair") * _upgrade_effect_per_level("wall_repair")
+	wall_max_hp = int(player.get("wall_hp", 500)) + _reward_bonus("wall_repair")
 	wall_max_hp = _percent_boosted(wall_max_hp, "wall_hp_pct")
 	max_mana = _percent_boosted(max_mana, "max_mana_pct")
 	wall_hp = wall_max_hp
@@ -192,13 +197,15 @@ func snapshot() -> Dictionary:
 		"ice_casts": ice_casts,
 		"lightning_casts": lightning_casts,
 		"wave": current_wave,
-		"wave_total": stage.get("groups", []).size(),
+		"wave_total": int(stage.get("wave_count", stage.get("groups", []).size())),
+		"spawn_duration_ticks": int(stage.get("spawn_duration_ticks", 0)),
 		"spawned": spawn_cursor,
 		"spawn_total": spawn_queue.size(),
 		"selected_skill": selected_skill,
 	"skill_cooldowns": skill_cooldowns.duplicate(true),
 	"skill_loadout": skill_loadout.duplicate(true),
 	"skill_definitions": _equipped_skill_definitions.duplicate(true),
+	"falling_spells": SkillSystem.falling_snapshot(self),
 	"defenses": {
 		"lava_moat_level": _upgrade_level("lava_moat"),
 		"magic_tower_level": _upgrade_level("magic_tower")
@@ -226,7 +233,7 @@ func result() -> Dictionary:
 		"kills": kills,
 		"spells_cast": spells_cast,
 		"wave": current_wave,
-		"wave_total": stage.get("groups", []).size(),
+		"wave_total": int(stage.get("wave_count", stage.get("groups", []).size())),
 		"wall_percent": int(round(float(wall_hp) * 100.0 / maxf(1.0, float(wall_max_hp)))),
 		"boss_slain": _boss_rewarded,
 		"bosses_slain": bosses_slain,
@@ -492,8 +499,7 @@ func _tick_cooldowns() -> void:
 
 
 func _upgrade_level(upgrade_id: String) -> int:
-	var upgrades: Dictionary = profile_snapshot.get("upgrades", {})
-	return int(upgrades.get(upgrade_id, 0))
+	return ResearchCatalog.level(config, profile_snapshot, upgrade_id)
 
 
 func _upgrade_effect_per_level(upgrade_id: String) -> int:
@@ -524,7 +530,7 @@ func _percent_boosted(value: int, bonus_type: String) -> int:
 
 
 func _reward_bonus(upgrade_id: String) -> int:
-	return _upgrade_level(upgrade_id) * _upgrade_effect_per_level(upgrade_id)
+	return ResearchCatalog.bonus(config, profile_snapshot, upgrade_id)
 
 
 func _skill_radius(skill: Dictionary) -> int:

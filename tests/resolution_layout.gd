@@ -16,6 +16,10 @@ func _run() -> void:
 	var layout_profile := original_profile.duplicate(true)
 	layout_profile["tutorial_complete"] = true
 	layout_profile["highest_unlocked_stage"] = 10
+	# Learned spells show the equipment action, leaving less room for the
+	# richer current/next comparison than a locked-node-only fixture.
+	for skill in app.get("content").rules.get("skills", []):
+		layout_profile["upgrades"][skill["upgrade_id"]] = 3
 	app.set("profile", layout_profile)
 	for locale in ["zh_CN", "en_US"]:
 		var localized_settings := original_settings.duplicate(true)
@@ -65,7 +69,9 @@ func _check_scene(scene: PackedScene, scene_name: String, viewport_size: Vector2
 					if research_button != null:
 						research_button.pressed.emit()
 						await process_frame
+						await process_frame
 						_check_current_view(instance, scene_name + "-magic-" + str(skill["id"]), viewport_size)
+						_check_magic_chains(instance, scene_name + "-magic-" + str(skill["id"]))
 			if view[1] == "upgrades":
 				for definition in root.get_node("GameApp").get("content").rules.get("upgrades", []):
 					if str(definition.get("page", "")) == "attack":
@@ -74,6 +80,27 @@ func _check_scene(scene: PackedScene, scene_name: String, viewport_size: Vector2
 							research_button.pressed.emit()
 							await process_frame
 							_check_current_view(instance, scene_name + "-attack-" + str(definition["id"]), viewport_size)
+		var app := root.get_node("GameApp")
+		var previous_frontier := int(app.get("profile")["highest_unlocked_stage"])
+		for frontier in [59, 1000001]:
+			app.get("profile")["highest_unlocked_stage"] = frontier
+			instance.call("_show_stage_select")
+			await process_frame
+			await process_frame
+			await process_frame
+			_check_current_view(instance, scene_name + "-endless-" + str(frontier), viewport_size)
+		app.get("profile")["highest_unlocked_stage"] = previous_frontier
+		var original_levels: Dictionary = app.get("profile")["upgrades"].duplicate(true)
+		for node in app.get("content").rules["upgrades"]:
+			app.get("profile")["upgrades"][node["id"]] = 1000000 if bool(node.get("endless", false)) else int(node["max_level"])
+		for research_view in [["attack", "strength"], ["magic", "armageddon"], ["magic", "ice_age"], ["magic", "ragnarok"], ["weapons", "forge_phantom_bow"], ["defense", "magic_tower"]]:
+			instance.call("_show_research_page", research_view[0], research_view[1])
+			await process_frame
+			await process_frame
+			_check_current_view(instance, scene_name + "-deep-research-" + str(research_view[1]), viewport_size)
+			if research_view[0] == "magic":
+				_check_magic_chains(instance, scene_name + "-deep-research-" + str(research_view[1]))
+		app.get("profile")["upgrades"] = original_levels
 	else:
 		instance.call("_show_pause")
 		await process_frame
@@ -111,6 +138,13 @@ func _check_current_view(instance: Node, view_name: String, viewport_size: Vecto
 		failures.append("%s at %dx%d: %s" % [view_name, viewport_size.x, viewport_size.y, out_of_bounds])
 	else:
 		print("[LAYOUT PASS] %s %dx%d" % [view_name, viewport_size.x, viewport_size.y])
+
+
+func _check_magic_chains(instance: Node, view_name: String) -> void:
+	var scroll := instance.find_child("ResearchScroll", true, false) as ScrollContainer
+	for skill in root.get_node("GameApp").get("content").rules.get("skills", []):
+		var node := instance.find_child("Research_" + str(skill["upgrade_id"]), true, false) as Control
+		_expect(node != null and scroll.get_global_rect().encloses(node.get_global_rect()), "%s keeps %s visible above the detail panel" % [view_name, skill["id"]])
 
 
 func _check_result_actions(instance: Node, view_name: String, victory: bool) -> void:

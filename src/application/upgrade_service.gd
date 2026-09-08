@@ -1,13 +1,15 @@
 class_name DefenderUpgradeService
 extends RefCounted
 
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
+
 func purchase(profile: Dictionary, config: Dictionary, upgrade_id: String) -> Dictionary:
 	var definition := _find_upgrade(config.get("upgrades", []), upgrade_id)
 	if definition.is_empty():
 		return {"ok": false, "error_code": "unknown_upgrade", "profile": profile}
 	var current_upgrades: Dictionary = profile.get("upgrades", {})
-	var current_level := int(current_upgrades.get(upgrade_id, 0))
-	if current_level >= int(definition.get("max_level", 0)):
+	var current_level := ResearchCatalog.normalize_level(definition, int(current_upgrades.get(upgrade_id, 0)))
+	if not ResearchCatalog.can_upgrade(definition, current_level):
 		return {"ok": false, "error_code": "max_level", "profile": profile}
 	for prerequisite in definition.get("prerequisites", []):
 		if int(current_upgrades.get(str(prerequisite), 0)) < int(definition.get("prerequisite_levels", {}).get(str(prerequisite), 1)):
@@ -49,14 +51,7 @@ func apply_run_reward(profile: Dictionary, result: Dictionary) -> Dictionary:
 
 
 static func price_for_level(definition: Dictionary, current_level: int) -> int:
-	var price := int(definition.get("base_cost", 0))
-	var growth := int(definition.get("cost_growth_permille", 1000))
-	# Growth 1000 documents "no growth": the price stays flat at every level.
-	if growth <= 1000:
-		return price
-	for ignored in range(current_level):
-		price = maxi(price + 1, int(round(float(price) * float(growth) / 1000.0)))
-	return price
+	return ResearchCatalog.price_for_level(definition, current_level)
 
 
 static func _find_upgrade(upgrades: Array, upgrade_id: String) -> Dictionary:

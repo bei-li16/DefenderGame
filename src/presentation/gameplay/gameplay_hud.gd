@@ -226,9 +226,12 @@ func update_snapshot(snapshot: Dictionary) -> void:
 	_mana_value_label.text = "%s  %d / %d" % [GameApp.text("hud.mana"), int(snapshot.get("mana", 0)), int(snapshot.get("max_mana", 0))]
 	_stage_label.text = "%s  %02d" % [GameApp.text("common.stage"), int(snapshot.get("stage_number", 0))]
 	_enemy_label.text = "%s  %d / %d" % [GameApp.text("hud.wave"), int(snapshot.get("kills", 0)), int(snapshot.get("spawn_total", 0))]
+	_enemy_label.text += "\n" + GameApp.text("hud.wave_progress") % [int(snapshot.get("wave", 0)), int(snapshot.get("wave_total", 0))]
 	_progress_bar.max_value = maxi(1, int(snapshot.get("spawn_total", 1)))
 	_progress_bar.value = int(snapshot.get("spawned", 0))
 	_progress_bar.tooltip_text = "%s %d / %d" % [GameApp.text("hud.wave"), int(snapshot.get("spawned", 0)), int(snapshot.get("spawn_total", 0))]
+	var tick_rate := float(GameApp.content.rules.get("simulation_tick_rate", 30))
+	_progress_bar.tooltip_text += "\n" + GameApp.text("hud.spawn_window") % [float(snapshot.get("spawn_duration_ticks", 0)) / tick_rate, float(snapshot.get("tick", 0)) / tick_rate]
 	_coin_label.text = "◆  %d" % int(snapshot.get("coins_earned", 0))
 	_weapon_label.text = "%s: %s" % [GameApp.text("hud.weapon"), GameApp.text(str(snapshot.get("weapon_name_key", "weapon.basic_bow")))]
 	_weapon_icon.texture = Art.texture(str(snapshot.get("weapon_id", "basic_bow")))

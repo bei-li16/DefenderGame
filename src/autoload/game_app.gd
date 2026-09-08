@@ -1,5 +1,8 @@
 extends Node
 
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
+const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
+
 const SkillCatalog = preload("res://src/core/rules/skill_catalog.gd")
 const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
 
@@ -317,8 +320,8 @@ func settle_run(result: Dictionary) -> Dictionary:
 	updated = honor_result["profile"].duplicate(true)
 	var stage_number := int(result.get("stage_number", 1))
 	if str(result.get("status", "")) == "victory":
-		var stage_count := maxi(1, content.rules.get("stages", []).size())
-		updated["highest_unlocked_stage"] = mini(stage_count, maxi(int(updated.get("highest_unlocked_stage", 1)), stage_number + 1))
+		var unlocked_next := stage_number + 1 if StageCatalog.has_next(content.rules, stage_number) else stage_number
+		updated["highest_unlocked_stage"] = maxi(int(updated.get("highest_unlocked_stage", 1)), unlocked_next)
 	updated = _ensure_equipped_weapon_unlocked(updated)
 	var best_results: Dictionary = updated.get("best_results", {}).duplicate(true)
 	var stage_id := str(result.get("stage_id", ""))
@@ -542,12 +545,18 @@ func _normalize_profile(source: Dictionary) -> Dictionary:
 	for definition in content.rules.get("upgrades", []):
 		if definition is Dictionary:
 			var upgrade_id := str(definition.get("id", ""))
-			if not upgrades.has(upgrade_id):
-				upgrades[upgrade_id] = 0
+			upgrades[upgrade_id] = ResearchCatalog.normalize_level(definition, int(upgrades.get(upgrade_id, 0)))
 	normalized["upgrades"] = upgrades
 	normalized["equipped_skills"] = SkillCatalog.loadout(content.rules, normalized)
-	var stage_count := maxi(1, content.rules.get("stages", []).size())
-	normalized["highest_unlocked_stage"] = clampi(int(normalized.get("highest_unlocked_stage", 1)), 1, stage_count)
+	var highest := clampi(int(normalized.get("highest_unlocked_stage", 1)), 1, StageCatalog.MAX_STAGE_NUMBER)
+	# Old releases capped a completed stage-30 save at 30. Recover its next
+	# unlock from recorded victories, without inventing wins or paying rewards.
+	for stage_id in normalized.get("best_results", {}):
+		var record: Variant = normalized["best_results"][stage_id]
+		var number := StageCatalog.number_from_id(str(stage_id))
+		if record is Dictionary and str(record.get("status", "")) == "victory" and StageCatalog.has_next(content.rules, number) and number > 0:
+			highest = maxi(highest, number + 1)
+	normalized["highest_unlocked_stage"] = highest
 	normalized = _ensure_equipped_weapon_unlocked(normalized)
 	var stats: Dictionary = normalized.get("stats", {}).duplicate(true)
 	for stat_key in defaults["stats"].keys():

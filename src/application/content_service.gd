@@ -2,6 +2,7 @@ class_name DefenderContentService
 extends RefCounted
 
 const ContentValidator = preload("res://src/core/rules/content_validator.gd")
+const StageCatalog = preload("res://src/core/rules/stage_catalog.gd")
 
 var rules: Dictionary = {}
 var localization: Dictionary = {}
@@ -67,6 +68,8 @@ func text(key: String, locale: String = "zh_CN") -> String:
 
 
 func find_by_id(collection_name: String, item_id: String) -> Dictionary:
+	if collection_name == "stages":
+		return StageCatalog.resolve(rules, item_id)
 	for item in rules.get(collection_name, []):
 		if item is Dictionary and str(item.get("id", "")) == item_id:
 			return item.duplicate(true)

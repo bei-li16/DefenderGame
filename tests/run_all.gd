@@ -111,7 +111,7 @@ func _execute_tiny_victory(source_config: Dictionary, run_seed: int) -> Dictiona
 	var model := RunModel.new()
 	model.setup(config, "stage_001", run_seed, {"upgrades": {}})
 	var event_log: Array = []
-	for current_tick in range(1, 40):
+	for current_tick in range(1, 40 + int(config["skills"][0]["fall_ticks"])):
 		var commands: Array = []
 		if current_tick == 24:
 			commands = [
@@ -275,6 +275,8 @@ func _test_failure_keeps_kill_reward(source_config: Dictionary) -> void:
 				{"type": "cast_skill", "x_milli": 1880000, "y_milli": 500000}
 			]
 		model.step(commands)
+	for ignored in range(int(config["skills"][0]["fall_ticks"])):
+		model.step([])
 	model.debug_force_wall_damage(model.wall_max_hp)
 	model.step([])
 	var result := model.result()
@@ -356,11 +358,16 @@ func _burn_ticks_after_fire(config: Dictionary, resistance: int) -> int:
 	if model.enemies.is_empty():
 		return -1
 	model.enemies[0]["status_resistance_permille"] = resistance
+	model.enemies[0]["speed_milli_per_tick"] = 0
+	model.enemies[0]["hp"] = 10000
 	var ticks := -1
-	for event in model.step([
+	var events := model.step([
 		{"type": "select_skill", "skill_id": "fire_ball"},
 		{"type": "cast_skill", "x_milli": int(model.enemies[0]["x_milli"]), "y_milli": int(model.enemies[0]["y_milli"])}
-	]):
+	])
+	for ignored in range(int(config["skills"][0]["fall_ticks"])):
+		events.append_array(model.step([]))
+	for event in events:
 		if event["type"] == "status" and event.get("status", "") == "burn":
 			ticks = int(event.get("ticks", -1))
 	return ticks
@@ -389,7 +396,7 @@ func _test_reward_event_identity(source_config: Dictionary) -> void:
 	var model := RunModel.new()
 	model.setup(config, "stage_001", 1717, {"upgrades": {}})
 	var rewards: Array[Dictionary] = []
-	for current_tick in range(40):
+	for current_tick in range(40 + int(config["skills"][0]["fall_ticks"])):
 		var commands: Array = []
 		if current_tick == int(config["world"]["spawn_start_tick"]) - 1:
 			commands = [
@@ -751,6 +758,8 @@ func _test_extended_upgrade_effects(source_config: Dictionary) -> void:
 		{"type": "select_skill", "skill_id": "fire_ball"},
 		{"type": "cast_skill", "x_milli": int(radius_enemy["x_milli"]), "y_milli": offset_target_y}
 	])
+	for ignored in range(int(_find_skill(radius_config, "fire_ball")["fall_ticks"])):
+		radius_events.append_array(radius_model.step([]))
 	var fire_hit := false
 	for event in radius_events:
 		if str(event.get("type", "")) == "damage" and str(event.get("source", "")) == "fire" and int(event.get("entity_id", 0)) == int(radius_enemy["entity_id"]):
@@ -915,7 +924,10 @@ func _test_honor_bonuses(source_config: Dictionary) -> void:
 					break
 			model.step([{"type": "aim", "x_milli": 1500000, "y_milli": 540000}])
 		_expect(target_x > 0, "enemy in fire range for honor spell probe %d" % run_index)
+		model.enemies[0]["speed_milli_per_tick"] = 0
 		var damage_events: Array[Dictionary] = model.step([{"type": "select_skill", "skill_id": "fire_ball"}, {"type": "cast_skill", "x_milli": target_x, "y_milli": target_y}])
+		for ignored in range(int(_find_skill(source_config, "fire_ball")["fall_ticks"])):
+			damage_events.append_array(model.step([]))
 		for event in damage_events:
 			if str(event.get("type", "")) == "damage" and str(event.get("source", "")) == "fire":
 				if run_index == 0:

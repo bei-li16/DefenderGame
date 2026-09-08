@@ -14,6 +14,8 @@ func _initialize() -> void:
 func _run() -> void:
 	app = root.get_node("GameApp")
 	app.set_process(false)
+	if OS.get_cmdline_user_args().has("--verify-pack"):
+		_expect(not ResourceLoader.exists("res://tests/run_all.gd") and not DirAccess.dir_exists_absolute("res://参考"), "pack excludes original reference images and test scripts")
 	var profile: Dictionary = app.call("_default_profile")
 	profile["tutorial_complete"] = true
 	profile["upgrades"]["lava_moat"] = 1
@@ -26,6 +28,7 @@ func _run() -> void:
 		if texture != null and not key in ["menu", "battle", "lava"]:
 			_expect(maxi(texture.get_width(), texture.get_height()) <= 1024, "bounded texture " + key)
 	_expect(Art.FILES["power_bow"] == "武器图标4" and Art.FILES["hurricane_bow"] == "武器图标2", "weapon mapping follows actual colors")
+	_expect(Art.FILES["wall"] == "主城墙new", "runtime and exported pack select the new complete fortress")
 	var upper_uv := Rect2(0.05, 0, 0.91, 0.55)
 	var upper_vertices: PackedVector2Array = Art.quad(upper_uv).surface_get_arrays(0)[Mesh.ARRAY_TEX_UV]
 	_expect(upper_vertices[0].is_equal_approx(upper_uv.position) and upper_vertices[2].is_equal_approx(upper_uv.end), "turret mesh respects atlas region instead of duplicating the entire image")
@@ -73,6 +76,8 @@ func _run() -> void:
 	await _capture("03-bestiary")
 	var first: Dictionary = visuals.get("actors")[1]
 	var initial_clock := float(first["clock"])
+	game.call("_on_events", [{"type": "wall_damage", "entity_id": 1, "amount": 0}])
+	_expect(is_zero_approx(float(game.get("_shake_strength"))) and game.get("_hud").feedback_label.text.is_empty(), "fully armored hits animate without false HP-loss feedback")
 	first["enemy"]["freeze_ticks"] = 30
 	visuals.call("advance", 0.2)
 	_expect(is_equal_approx(initial_clock, float(first["clock"])), "freeze stops locomotion")
@@ -147,10 +152,70 @@ func _run() -> void:
 	_expect(visuals.get("actors").size() == 100 and visuals.get("retired").is_empty(), "stress population stays bounded")
 	await _capture("05-crowd")
 	game.free()
+	await _check_live_session()
 	print("[MATERIALS] %d passed, %d failed" % [passes, failures.size()])
 	for failure in failures:
 		printerr("[MATERIALS FAIL] " + failure)
 	quit(0 if failures.is_empty() else 1)
+
+
+func _check_live_session() -> void:
+	# Exercise the real GameSession event/snapshot path, not a hand-made pose.
+	var previous_profile: Dictionary = app.get("profile").duplicate(true)
+	var profile: Dictionary = app.call("_default_profile")
+	profile["tutorial_complete"] = true
+	profile["upgrades"]["wall_armor"] = 10
+	profile["upgrades"]["strength"] = 8
+	app.set("profile", profile)
+	var game := (load("res://scenes/gameplay.tscn") as PackedScene).instantiate()
+	root.add_child(game)
+	game.set_process(false)
+	game.set_physics_process(false)
+	var session: Node = game.get("session")
+	session.set_physics_process(false)
+	var counts := {"wall_damage": 0, "shot": 0, "death": 0}
+	session.connect("events_produced", func(events: Array) -> void:
+		for event in events:
+			var kind := str(event.get("type", ""))
+			if counts.has(kind):
+				counts[kind] += 1
+	)
+	for tick in range(1100):
+		var snapshot: Dictionary = session.call("current_snapshot")
+		if str(snapshot.get("status", "")) != "running":
+			break
+		if tick == 670:
+			session.call("queue_command", {"type": "fire_started"})
+		var enemies: Array = snapshot.get("enemies", [])
+		if not enemies.is_empty():
+			enemies.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["x_milli"]) < int(b["x_milli"]))
+			session.call("queue_command", {"type": "aim", "x_milli": enemies[0]["x_milli"], "y_milli": enemies[0]["y_milli"]})
+		session.call("_physics_process", 1.0 / 30.0)
+		game.call("_process", 1.0 / 60.0)
+		game.call("_process", 1.0 / 60.0)
+		if tick == 450:
+			var moving_snapshot: Dictionary = session.call("current_snapshot")
+			var moving_visuals: RefCounted = game.get("_creatures")
+			_expect(not moving_snapshot.get("enemies", []).is_empty(), "live interpolation check has actual moving enemies")
+			for enemy in moving_snapshot.get("enemies", []):
+				var position: Vector2 = moving_visuals.get("actors")[int(enemy["entity_id"])]["position"]
+				var target := Vector2(float(enemy["x_milli"]), float(enemy["y_milli"])) / 1000.0
+				_expect(position.distance_to(target) < 0.1, "live movement interpolates to authoritative position")
+		if tick == 650:
+			game.queue_redraw()
+			await _capture("06-live-stage")
+		if tick % 30 == 0:
+			await process_frame
+	var snapshot: Dictionary = session.call("current_snapshot")
+	_expect(int(counts["wall_damage"]) > 0, "live stage enemies reach the wall and attack")
+	_expect(int(counts["shot"]) > 0 and int(counts["death"]) > 0, "live stage arrows produce authoritative deaths")
+	var visuals: RefCounted = game.get("_creatures")
+	_expect(visuals.get("actors").size() == snapshot.get("enemies", []).size(), "live stage visual population matches the core")
+	print("[MATERIALS LIVE] %s tick=%d" % [counts, int(snapshot.get("tick", 0))])
+	game.queue_redraw()
+	await _frames(3)
+	game.free()
+	app.set("profile", previous_profile)
 
 
 func _expect(condition: bool, message: String) -> void:

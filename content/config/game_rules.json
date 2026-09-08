@@ -1,6 +1,6 @@
 {
-  "config_version": 6,
-  "ruleset_version": "aegis-windows-crystal-magic-v1",
+  "config_version": 9,
+  "ruleset_version": "aegis-windows-endless-research-v1",
   "source": "Windows offline 1.0 tuning derived from the Defender II requirements",
   "simulation_tick_rate": 30,
   "rules": {
@@ -37,6 +37,86 @@
     "max_speed_scale_permille": 1320,
     "max_count_scale_permille": 1450,
     "max_reward_scale_permille": 2800
+  },
+  "endless_stages": {
+    "authored_stage_count": 30,
+    "boss_interval": 10,
+    "boss_rotation": [
+      "ember_warlord",
+      "frost_titan",
+      "storm_matron"
+    ],
+    "pressure_stage_span": 30,
+    "enemy_count": {
+      "base": 70,
+      "per_pressure": 42,
+      "limit": 360
+    },
+    "wave_count": {
+      "base": 4,
+      "per_pressure": 2,
+      "limit": 12
+    },
+    "spawn_duration_ticks": {
+      "base": 1260,
+      "per_pressure": 660,
+      "limit": 5400
+    },
+    "wave_gap_ticks": 75,
+    "max_active_enemies": 96,
+    "composition_pressure_limit": 8,
+    "normal_pool": [
+      {
+        "enemy_id": "melee_basic",
+        "base_weight": 28,
+        "weight_per_pressure": -2
+      },
+      {
+        "enemy_id": "fast_raider",
+        "base_weight": 22,
+        "weight_per_pressure": -1
+      },
+      {
+        "enemy_id": "ranged_hexer",
+        "base_weight": 16,
+        "weight_per_pressure": 1
+      },
+      {
+        "enemy_id": "armored_guard",
+        "base_weight": 12,
+        "weight_per_pressure": 1
+      },
+      {
+        "enemy_id": "sky_harrier",
+        "base_weight": 12,
+        "weight_per_pressure": 1
+      },
+      {
+        "enemy_id": "ember_shaman",
+        "base_weight": 10,
+        "weight_per_pressure": 1
+      }
+    ],
+    "enemy_scaling": {
+      "hp_per_pressure": 900,
+      "hp_per_power": 18,
+      "hp_power": 0.72,
+      "damage_per_pressure": 450,
+      "damage_per_power": 10,
+      "damage_power": 0.62,
+      "speed_per_pressure": 60,
+      "max_speed_permille": 1600,
+      "reward_per_pressure": 350,
+      "xp_per_pressure": 180
+    },
+    "clear_reward": {
+      "coins_base": 1195,
+      "coins_per_pressure": 220,
+      "xp_base": 380,
+      "xp_per_pressure": 70,
+      "boss_coins": 300,
+      "boss_xp": 140
+    }
   },
   "weapons": [
     {
@@ -123,16 +203,25 @@
       "mana_cost": 30,
       "cooldown_ticks": 150,
       "damage": 72,
-      "radius_milli": 190000,
+      "radius_milli": 95000,
       "burn_damage": 9,
       "burn_interval_ticks": 15,
       "burn_duration_ticks": 75,
       "element": "fire",
       "tier": 1,
       "upgrade_id": "fire_mastery",
-      "pulse_count": 1,
-      "pulse_interval_ticks": 1,
-      "burn_duration_ticks_per_level": 3
+      "burn_duration_ticks_per_level": 6,
+      "splash_radius_milli": 190000,
+      "splash_damage": 46,
+      "target_mode": "point",
+      "impact_count": 1,
+      "barrage_duration_ticks": 0,
+      "area_radius_milli": 0,
+      "fall_ticks": 18,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 5,
+      "burn_damage_per_level": 2
     },
     {
       "id": "glacial_spike",
@@ -141,16 +230,26 @@
       "mana_cost": 25,
       "cooldown_ticks": 135,
       "damage": 46,
-      "radius_milli": 210000,
+      "radius_milli": 105000,
       "slow_permille": 450,
       "slow_duration_ticks": 120,
       "freeze_ticks": 24,
       "element": "ice",
       "tier": 1,
       "upgrade_id": "ice_mastery",
-      "pulse_count": 1,
-      "pulse_interval_ticks": 1,
-      "freeze_ticks_per_level": 3
+      "freeze_ticks_per_level": 3,
+      "splash_radius_milli": 210000,
+      "splash_damage": 30,
+      "target_mode": "point",
+      "impact_count": 1,
+      "barrage_duration_ticks": 0,
+      "area_radius_milli": 0,
+      "fall_ticks": 18,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 5,
+      "slow_duration_ticks_per_level": 6,
+      "slow_permille_per_level": -10
     },
     {
       "id": "lightning_strike",
@@ -159,15 +258,22 @@
       "mana_cost": 40,
       "cooldown_ticks": 195,
       "damage": 118,
-      "radius_milli": 280000,
-      "max_targets": 4,
+      "radius_milli": 100000,
       "stun_ticks": 36,
       "element": "lightning",
       "tier": 1,
       "upgrade_id": "lightning_mastery",
-      "pulse_count": 1,
-      "pulse_interval_ticks": 1,
-      "stun_ticks_per_level": 2
+      "stun_ticks_per_level": 2,
+      "splash_radius_milli": 200000,
+      "splash_damage": 78,
+      "target_mode": "point",
+      "impact_count": 1,
+      "barrage_duration_ticks": 0,
+      "area_radius_milli": 0,
+      "fall_ticks": 10,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 5
     },
     {
       "id": "meteor",
@@ -176,16 +282,25 @@
       "mana_cost": 60,
       "cooldown_ticks": 210,
       "damage": 110,
-      "radius_milli": 310000,
-      "pulse_count": 3,
-      "pulse_interval_ticks": 18,
+      "radius_milli": 115000,
       "burn_damage": 12,
       "burn_interval_ticks": 15,
       "burn_duration_ticks": 90,
-      "burn_duration_ticks_per_level": 3,
+      "burn_duration_ticks_per_level": 6,
       "name_key": "skill.meteor",
       "description_key": "skill.meteor.desc",
-      "upgrade_id": "meteor"
+      "upgrade_id": "meteor",
+      "splash_radius_milli": 225000,
+      "splash_damage": 72,
+      "target_mode": "area",
+      "impact_count": 8,
+      "barrage_duration_ticks": 90,
+      "area_radius_milli": 310000,
+      "fall_ticks": 18,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 8,
+      "burn_damage_per_level": 2
     },
     {
       "id": "armageddon",
@@ -194,16 +309,25 @@
       "mana_cost": 100,
       "cooldown_ticks": 300,
       "damage": 160,
-      "radius_milli": 500000,
-      "pulse_count": 5,
-      "pulse_interval_ticks": 18,
+      "radius_milli": 140000,
       "burn_damage": 16,
       "burn_interval_ticks": 15,
       "burn_duration_ticks": 120,
-      "burn_duration_ticks_per_level": 3,
+      "burn_duration_ticks_per_level": 6,
       "name_key": "skill.armageddon",
       "description_key": "skill.armageddon.desc",
-      "upgrade_id": "armageddon"
+      "upgrade_id": "armageddon",
+      "splash_radius_milli": 270000,
+      "splash_damage": 108,
+      "target_mode": "screen",
+      "impact_count": 28,
+      "barrage_duration_ticks": 150,
+      "area_radius_milli": 0,
+      "fall_ticks": 18,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 11,
+      "burn_damage_per_level": 2
     },
     {
       "id": "frost_nova",
@@ -212,16 +336,26 @@
       "mana_cost": 45,
       "cooldown_ticks": 195,
       "damage": 80,
-      "radius_milli": 350000,
-      "pulse_count": 1,
-      "pulse_interval_ticks": 1,
+      "radius_milli": 125000,
       "slow_permille": 350,
       "slow_duration_ticks": 180,
       "freeze_ticks": 60,
       "freeze_ticks_per_level": 3,
       "name_key": "skill.frost_nova",
       "description_key": "skill.frost_nova.desc",
-      "upgrade_id": "frost_nova"
+      "upgrade_id": "frost_nova",
+      "splash_radius_milli": 240000,
+      "splash_damage": 52,
+      "target_mode": "area",
+      "impact_count": 7,
+      "barrage_duration_ticks": 90,
+      "area_radius_milli": 350000,
+      "fall_ticks": 18,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 8,
+      "slow_duration_ticks_per_level": 6,
+      "slow_permille_per_level": -10
     },
     {
       "id": "ice_age",
@@ -230,16 +364,26 @@
       "mana_cost": 75,
       "cooldown_ticks": 270,
       "damage": 130,
-      "radius_milli": 530000,
-      "pulse_count": 1,
-      "pulse_interval_ticks": 1,
+      "radius_milli": 155000,
       "slow_permille": 250,
       "slow_duration_ticks": 240,
       "freeze_ticks": 105,
       "freeze_ticks_per_level": 3,
       "name_key": "skill.ice_age",
       "description_key": "skill.ice_age.desc",
-      "upgrade_id": "ice_age"
+      "upgrade_id": "ice_age",
+      "splash_radius_milli": 290000,
+      "splash_damage": 88,
+      "target_mode": "screen",
+      "impact_count": 24,
+      "barrage_duration_ticks": 150,
+      "area_radius_milli": 0,
+      "fall_ticks": 18,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 11,
+      "slow_duration_ticks_per_level": 6,
+      "slow_permille_per_level": -10
     },
     {
       "id": "thunder_storm",
@@ -248,15 +392,22 @@
       "mana_cost": 65,
       "cooldown_ticks": 240,
       "damage": 155,
-      "radius_milli": 400000,
-      "pulse_count": 2,
-      "pulse_interval_ticks": 15,
-      "max_targets": 7,
+      "radius_milli": 120000,
       "stun_ticks": 54,
       "stun_ticks_per_level": 2,
       "name_key": "skill.thunder_storm",
       "description_key": "skill.thunder_storm.desc",
-      "upgrade_id": "thunder_storm"
+      "upgrade_id": "thunder_storm",
+      "splash_radius_milli": 240000,
+      "splash_damage": 105,
+      "target_mode": "area",
+      "impact_count": 9,
+      "barrage_duration_ticks": 90,
+      "area_radius_milli": 400000,
+      "fall_ticks": 10,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 8
     },
     {
       "id": "ragnarok",
@@ -265,15 +416,22 @@
       "mana_cost": 90,
       "cooldown_ticks": 315,
       "damage": 205,
-      "radius_milli": 550000,
-      "pulse_count": 3,
-      "pulse_interval_ticks": 15,
-      "max_targets": 12,
+      "radius_milli": 145000,
       "stun_ticks": 78,
       "stun_ticks_per_level": 2,
       "name_key": "skill.ragnarok",
       "description_key": "skill.ragnarok.desc",
-      "upgrade_id": "ragnarok"
+      "upgrade_id": "ragnarok",
+      "splash_radius_milli": 285000,
+      "splash_damage": 140,
+      "target_mode": "screen",
+      "impact_count": 30,
+      "barrage_duration_ticks": 150,
+      "area_radius_milli": 0,
+      "fall_ticks": 10,
+      "radius_milli_per_level": 4000,
+      "splash_radius_milli_per_level": 6000,
+      "splash_damage_per_level": 11
     }
   ],
   "enemies": [
@@ -741,7 +899,12 @@
       "prerequisites": [],
       "prerequisite_levels": {},
       "tree_column": 0,
-      "tree_row": 0
+      "tree_row": 0,
+      "endless": true,
+      "endless_cost": {
+        "step": 90,
+        "power": 1.15
+      }
     },
     {
       "id": "agility",
@@ -909,7 +1072,12 @@
       "effect_per_level": 10,
       "prerequisites": [],
       "tree_column": 0,
-      "tree_row": 1
+      "tree_row": 1,
+      "endless": true,
+      "endless_cost": {
+        "step": 1,
+        "power": 1.15
+      }
     },
     {
       "id": "fire_mastery",
@@ -929,7 +1097,13 @@
         "mana_capacity": 1
       },
       "tree_column": 1,
-      "tree_row": 0
+      "tree_row": 0,
+      "endless": true,
+      "endless_cost": {
+        "step": 1,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "meteor",
@@ -949,7 +1123,13 @@
       },
       "skill_ref": "meteor",
       "tree_column": 2,
-      "tree_row": 0
+      "tree_row": 0,
+      "endless": true,
+      "endless_cost": {
+        "step": 2,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "armageddon",
@@ -969,7 +1149,13 @@
       },
       "skill_ref": "armageddon",
       "tree_column": 3,
-      "tree_row": 0
+      "tree_row": 0,
+      "endless": true,
+      "endless_cost": {
+        "step": 3,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "ice_mastery",
@@ -989,7 +1175,13 @@
         "mana_capacity": 1
       },
       "tree_column": 1,
-      "tree_row": 1
+      "tree_row": 1,
+      "endless": true,
+      "endless_cost": {
+        "step": 1,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "frost_nova",
@@ -1009,7 +1201,13 @@
       },
       "skill_ref": "frost_nova",
       "tree_column": 2,
-      "tree_row": 1
+      "tree_row": 1,
+      "endless": true,
+      "endless_cost": {
+        "step": 2,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "ice_age",
@@ -1029,7 +1227,13 @@
       },
       "skill_ref": "ice_age",
       "tree_column": 3,
-      "tree_row": 1
+      "tree_row": 1,
+      "endless": true,
+      "endless_cost": {
+        "step": 3,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "lightning_mastery",
@@ -1049,7 +1253,13 @@
         "mana_capacity": 1
       },
       "tree_column": 1,
-      "tree_row": 2
+      "tree_row": 2,
+      "endless": true,
+      "endless_cost": {
+        "step": 1,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "thunder_storm",
@@ -1069,7 +1279,13 @@
       },
       "skill_ref": "thunder_storm",
       "tree_column": 2,
-      "tree_row": 2
+      "tree_row": 2,
+      "endless": true,
+      "endless_cost": {
+        "step": 2,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "ragnarok",
@@ -1089,7 +1305,13 @@
       },
       "skill_ref": "ragnarok",
       "tree_column": 3,
-      "tree_row": 2
+      "tree_row": 2,
+      "endless": true,
+      "endless_cost": {
+        "step": 3,
+        "power": 1.15
+      },
+      "secondary_max_level": 20
     },
     {
       "id": "mana_regen",
@@ -1157,7 +1379,12 @@
       "base_cost": 140,
       "cost_growth_permille": 1500,
       "effect_per_level": 35,
-      "prerequisites": []
+      "prerequisites": [],
+      "endless": true,
+      "endless_cost": {
+        "step": 140,
+        "power": 1.15
+      }
     },
     {
       "id": "lava_moat",
@@ -1170,7 +1397,12 @@
       "effect_per_level": 1,
       "prerequisites": [
         "wall_armor"
-      ]
+      ],
+      "endless": true,
+      "endless_cost": {
+        "step": 220,
+        "power": 1.15
+      }
     },
     {
       "id": "magic_tower",
@@ -1183,7 +1415,12 @@
       "effect_per_level": 1,
       "prerequisites": [
         "wall_repair"
-      ]
+      ],
+      "endless": true,
+      "endless_cost": {
+        "step": 240,
+        "power": 1.15
+      }
     },
     {
       "id": "coin_bounty",
@@ -1231,7 +1468,12 @@
       "prerequisites": [
         "unlock_power_bow"
       ],
-      "weapon_ref": "power_bow"
+      "weapon_ref": "power_bow",
+      "endless": true,
+      "endless_cost": {
+        "step": 400,
+        "power": 1.15
+      }
     },
     {
       "id": "unlock_hurricane_bow",
@@ -1257,7 +1499,12 @@
       "prerequisites": [
         "unlock_hurricane_bow"
       ],
-      "weapon_ref": "hurricane_bow"
+      "weapon_ref": "hurricane_bow",
+      "endless": true,
+      "endless_cost": {
+        "step": 500,
+        "power": 1.15
+      }
     },
     {
       "id": "unlock_phantom_bow",
@@ -1283,7 +1530,12 @@
       "prerequisites": [
         "unlock_phantom_bow"
       ],
-      "weapon_ref": "phantom_bow"
+      "weapon_ref": "phantom_bow",
+      "endless": true,
+      "endless_cost": {
+        "step": 600,
+        "power": 1.15
+      }
     }
   ],
   "stages": [
