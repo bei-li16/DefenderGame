@@ -23,6 +23,7 @@ func _run() -> void:
 	app.get("settings")["screen_shake"] = false
 	config = app.get("content").rules
 	_check_rainfall()
+	_check_ranges()
 	await _check_dropdowns()
 	await _check_cursors_and_effects()
 	app.get("audio").stop_all()
@@ -51,52 +52,66 @@ func _check_rainfall() -> void:
 	for id in ["armageddon", "ice_age", "ragnarok"]:
 		var definition := SkillCatalog.find(config, id)
 		_expect(int(definition["barrage_duration_ticks"]) == 90 and int(definition["impact_count"]) >= 52, id + " delivers over fifty impacts in three seconds")
+		var baseline_plans := {}
 		for level in [1, 20, 200]:
 			var profile := _profile(3, level)
 			if level > 1:
 				profile["upgrades"]["spell_radius"] = 5
 			var skill := SkillCatalog.effective(config, profile, id)
-			var minimum := 1.0
-			var maximum := 0.0
-			var core_minimum := 1.0
+			var cells := {}
 			for seed_value in range(1, 13):
 				var model := RunModel.new()
 				model.setup(config, "stage_001", seed_value, profile)
 				model.step([{"type": "cast_skill", "skill_id": id, "x_milli": -100, "y_milli": -100}])
 				var plan: Array = model.active_spells[0]["impacts"]
-				var unique := {}
+				var reference := RunModel.new()
+				reference.setup(config, "stage_001", seed_value, profile)
+				var expected_offsets := SkillSystem.launch_offsets(reference._spell_rng, int(skill["impact_count"]), int(skill["barrage_duration_ticks"]))
+				var uniform := true
 				var valid := plan.size() == int(skill["impact_count"])
 				var last_tick := -1
 				var gaps := {}
-				for impact in plan:
+				for index in range(plan.size()):
+					var impact: Dictionary = plan[index]
 					var point := Vector2i(impact["x_milli"], impact["y_milli"])
-					unique[point] = true
+					# Exact independent uniform rolls: no artificial center gap,
+					# spacing grid, minimum distance, or coverage-driven rejection.
+					var expected := Vector2i(reference._spell_rng.range_exclusive(left, left + width + 1), reference._spell_rng.range_exclusive(0, height + 1))
+					uniform = uniform and point == expected
+					var cell := Vector2i(mini(2, (point.x - left) * 3 / width), mini(2, point.y * 3 / height))
+					cells[cell] = int(cells.get(cell, 0)) + 1
 					var tick := int(impact["launch_tick"]) - model.tick
-					valid = valid and point.x >= left and point.x <= left + width and point.y >= 0 and point.y <= height and tick > last_tick and tick < 90
+					valid = valid and point.x >= left and point.x <= left + width and point.y >= 0 and point.y <= height and tick == expected_offsets[index] and tick > last_tick and tick < 90
 					if last_tick >= 0:
 						gaps[tick - last_tick] = true
 					last_tick = tick
-				_expect(valid and unique.size() == plan.size() and gaps.size() > 1, "%s L%d seed%d unique distributed points and irregular launches" % [id, level, seed_value])
-				var hit := 0
-				var core_hit := 0
-				# Sample actual damage disks, not just landing cells; include every
-				# battlefield edge and max-radius research, not only novice spells.
-				for row in range(37):
-					for column in range(58):
-						var point := Vector2(left + column * width / 57, row * height / 36)
-						var nearest := INF
-						for impact in plan:
-							nearest = minf(nearest, point.distance_squared_to(Vector2(impact["x_milli"], impact["y_milli"])))
-						if SkillSystem.damage_at_distance(skill, sqrt(nearest)) > 0:
-							hit += 1
-						if sqrt(nearest) <= int(skill["radius_milli"]):
-							core_hit += 1
-				var coverage := float(hit) / (37 * 58)
-				minimum = minf(minimum, coverage)
-				maximum = maxf(maximum, coverage)
-				core_minimum = minf(core_minimum, float(core_hit) / (37 * 58))
-			_expect(minimum >= 0.65 and maximum <= 0.95, "%s L%d damage coverage %.1f–%.1f%% stays within 65–95%%" % [id, level, minimum * 100, maximum * 100])
-			print("[COVERAGE] %s L%d damage %.1f–%.1f%% direct minimum %.1f%%" % [id, level, minimum * 100, maximum * 100, core_minimum * 100])
+				_expect(valid and uniform and gaps.size() > 1, "%s L%d seed%d independent uniform points and irregular launches" % [id, level, seed_value])
+				if level == 1:
+					baseline_plans[seed_value] = plan
+				else:
+					_expect(plan == baseline_plans[seed_value], id + " upgrading range never moves landing points")
+			_expect(cells.size() == 9 and int(cells.get(Vector2i(1, 1), 0)) > 0, "%s L%d samples include all regions and the center" % [id, level])
+
+
+func _check_ranges() -> void:
+	for skill in config["skills"]:
+		var id := str(skill["id"])
+		var initial_level := 0 if int(skill["tier"]) == 1 else 1
+		var initial := SkillCatalog.effective(config, _profile(3, initial_level), id)
+		var next := SkillCatalog.effective(config, _profile(3, initial_level + 1), id)
+		_expect(int(next["radius_milli"]) - int(initial["radius_milli"]) == 1000 and int(next["splash_radius_milli"]) - int(initial["splash_radius_milli"]) == 1000, id + " each research adds only one pixel to either radius")
+		var max_profile := _profile(3, 20)
+		var no_bonus := SkillCatalog.effective(config, max_profile, id)
+		max_profile["upgrades"]["spell_radius"] = 5
+		var maximum := SkillCatalog.effective(config, max_profile, id)
+		_expect(int(maximum["radius_milli"]) == int(no_bonus["radius_milli"]) * 1150 / 1000 and int(maximum["splash_radius_milli"]) == int(no_bonus["splash_radius_milli"]) * 1150 / 1000, id + " general range research adds at most fifteen percent")
+		_expect(int(maximum["radius_milli"]) <= 126000 and int(maximum["splash_radius_milli"]) <= 201000 and int(maximum["splash_radius_milli"]) > int(maximum["radius_milli"]), id + " max research keeps individual impact compact")
+		var deep_profile := _profile(3, 200)
+		deep_profile["upgrades"]["spell_radius"] = 5
+		var deep := SkillCatalog.effective(config, deep_profile, id)
+		_expect(deep["radius_milli"] == maximum["radius_milli"] and deep["splash_radius_milli"] == maximum["splash_radius_milli"] and int(deep["damage"]) > int(maximum["damage"]), id + " endless damage still grows but radius stays capped")
+		if int(skill["tier"]) == 3:
+			print("[SPELL RANGE] %s base=%d/%d max=%.1f/%.1f px" % [id, int(initial["radius_milli"]) / 1000, int(initial["splash_radius_milli"]) / 1000, int(maximum["radius_milli"]) / 1000.0, int(maximum["splash_radius_milli"]) / 1000.0])
 
 
 func _check_dropdowns() -> void:

@@ -1,6 +1,6 @@
 # Windows / Godot 实施状态
 
-版本：1.5.0-windows（以 `project.godot` 的 `application/config/version` 为准）
+版本：1.6.0-windows（以 `project.godot` 的 `application/config/version` 为准）
 
 文档日期：2026-09-08
 
@@ -189,7 +189,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 
 | 项目 | 当前结果 | 依据 |
 |---|---|---|
-| 应用/规则版本 | `1.5.0-windows` / config v10 / `aegis-windows-dense-barrage-v1` | `project.godot`、`content/config/game_rules.json` |
+| 应用/规则版本 | `1.6.0-windows` / config v11 / `aegis-windows-independent-barrage-v1` | `project.godot`、`content/config/game_rules.json` |
 | 内容规模 | 前 30 Stage（3 Boss）+ 第 31 关起无尽生成、6 类普通敌人、4 武器、9 技能（3 系×3 阶）、攻击/魔法/防御/武器/后勤 5 研究页 + 17 项无尽研究、8 Honors；魔法页水晶经济（收入 177 / 成本 169） | `content/config/game_rules.json` 解析 |
 | 内容校验 | 通过（含水晶经济守恒、无尽关卡与研究上限断言） | `tools/validate_content.gd`（本轮运行） |
 | 核心回归 | **162 passed / 0 failed** | `tests/run_all.gd`（本轮运行，含水晶经济/迁移/双币种用例） |
@@ -200,7 +200,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | 无尽关卡专项 | **166 passed / 0 failed** | `tests/endless_stages_acceptance.gd`（本轮运行） |
 | 无尽研究专项 | **286 passed / 0 failed** | `tests/endless_research_acceptance.gd`（本轮运行） |
 | 城堡布局专项 | **34 passed / 0 failed** | `tests/castle_layout_acceptance.gd`（本轮运行） |
-| 技能交互专项 | **234 passed / 0 failed** | `tests/skill_interaction_acceptance.gd`（本轮运行） |
+| 技能交互专项 | **342 passed / 0 failed** | `tests/skill_interaction_acceptance.gd`（本轮运行） |
 | 素材专项 | **69 passed / 0 failed** | `tests/materials_acceptance.gd`（本轮运行） |
 | Stage 自动通关 | 30 authored + 9 generated 全部胜利 | `tests/stage_autoplay.gd`（本轮运行） |
 | 存档槽位 | **18 passed / 0 failed** | `tests/save_slot_acceptance.gd`（本轮运行） |
@@ -208,7 +208,7 @@ Windows 1.0 的 Power/Hurricane/Phantom 武器、Lava Moat、Magic Tower、完�
 | 压力/浸泡 | p95 1.631 ms；100 敌人/200 投射物 | `tests/performance_stress.gd`（本轮运行） |
 | 发布清单 | 重建后 manifest 指向当前 HEAD | `content/build/build-manifest.json`（构建时刷新） |
 
-当前发布候选为 `Aegis-of-Ember-1.5.0-Windows-x64.zip`；已发布的 v1.0.3～v1.4.0 不包含魔法光标与密集三阶弹幕，不应继续分发。
+当前发布候选为 `Aegis-of-Ember-1.6.0-Windows-x64.zip`；已发布的 v1.0.3～v1.5.0 不包含独立随机落点与紧凑技能范围，不应继续分发。
 
 ## 8. 无尽关卡完成（2026-09-08，源码工作树）
 
@@ -243,3 +243,15 @@ config v10 / `aegis-windows-dense-barrage-v1`，同步回退包。主页三系�
 回归：核心 **162/162**、技能链 **309/309**（无头/真实渲染）、攻击 **196/196**、无尽研究 **286/286**、无尽关卡 **166/166**、弓箭 **30/30**、事务 **4/4**、存档槽 **18/18**、输入映射 **9/9**；原 30 关 + 9 个生成关自动战斗全部胜利，双语 × 三分辨率布局无头/真实渲染均 0 失败，无脚本错误。
 
 新增 `tests/skill_interaction_acceptance.gd` 并接入正式导出门禁。详细参数与机制见 [三级技能链说明](skill-chains-reimplementation.md)。
+
+## 11. 独立随机落点与紧凑技能范围（2026-09-09）
+
+config v11 / `aegis-windows-independent-barrage-v1`，主规则与回退包同步。按最新要求废止上一节 v10 的人为空区与覆盖率门槛，删除中部避让圆、抖动格和最远点筛选；三阶每一发分别均匀抽取战场内 x/y，允许自然相近或漏击，不保证任何覆盖百分比。范围升级不再改变同种子的落点。保留 3 秒窗口、56/52/60 发、原下落速度与随机发射间隔，一/二阶指定点与指定区域规则不变。
+
+九技能基础直击/溅射半径缩小，研究每级半径增长从 +4/+6 改为 +1/+1，通用范围研究从每级 +6% 改为 +3%（上限 5 级）。研究 20 级 + 通用范围 5 级时，三阶火/冰/雷的直击/溅射半径约为 119.6/188.6、125.3/200.1、119.6/194.3 逻辑像素。每颗伤害、状态参数、冷却、蓝耗和无尽伤害成长不变；旧档保留研究等级，属性预览与实战统一采用新参数。
+
+本轮技能交互专项 **342/342 无头、369/369 真实渲染**：108 种子/等级组合逐发对照独立均匀随机序列，确认中部可落击、升级不移动落点；增加九技能范围增幅/通用加成/封顶回归，删除所有覆盖率区间断言。100 敌人三系同放 168 发全部结算：规划约 **1.66 ms**，模拟 tick p95 **1.37 ms**（本机真实渲染模式测量）。
+
+核心 **162/162**、技能链 **309/309**（无头及真实渲染）、无尽研究 **286/286** 通过；研究等级 75/200 的第 1000/10000 关及原 30 关 + 9 个生成关自动战斗全部胜利；双语 × 三分辨率真实渲染布局 0 失败。修正核心范围研究测试的旧 200 像素硬编码探针，改为在当前基础/升级后溅射半径之间验证命中。内容校验和差异空白检查通过，无脚本错误。
+
+运行日志为 `Builds/skill-interaction-review/*-independent*.log`，截图在该目录及 `Builds/skill-chains-review/`（均不入库）。详细参数与机制见 [三级技能链说明](skill-chains-reimplementation.md)。

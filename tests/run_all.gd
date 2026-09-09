@@ -753,7 +753,12 @@ func _test_extended_upgrade_effects(source_config: Dictionary) -> void:
 	radius_enemy["max_hp"] = 1000
 	radius_enemy["speed_milli_per_tick"] = 0
 	radius_enemy["attack_x_milli"] = int(radius_enemy["x_milli"])
-	var offset_target_y := clampi(int(radius_enemy["y_milli"]) - 200000, 0, int(radius_config["world"]["height_milli"]))
+	# Probe between the actual base and researched splash boundaries, rather
+	# than a hard-coded distance tied to an older, much larger blast radius.
+	var base_radius := int(_find_skill(radius_config, "fire_ball")["splash_radius_milli"])
+	var improved_radius := int(radius_model.snapshot()["skill_definitions"]["fire_ball"]["splash_radius_milli"])
+	radius_enemy["y_milli"] = int(radius_config["world"]["height_milli"]) / 2
+	var offset_target_y := int(radius_enemy["y_milli"]) - (base_radius + improved_radius) / 2
 	var radius_events := radius_model.step([
 		{"type": "select_skill", "skill_id": "fire_ball"},
 		{"type": "cast_skill", "x_milli": int(radius_enemy["x_milli"]), "y_milli": offset_target_y}
@@ -764,7 +769,7 @@ func _test_extended_upgrade_effects(source_config: Dictionary) -> void:
 	for event in radius_events:
 		if str(event.get("type", "")) == "damage" and str(event.get("source", "")) == "fire" and int(event.get("entity_id", 0)) == int(radius_enemy["entity_id"]):
 			fire_hit = true
-	_expect(fire_hit, "spell radius research extends the fire skill beyond its base radius")
+	_expect(improved_radius > base_radius and fire_hit, "spell radius research extends the fire skill beyond its base radius")
 
 
 func _test_weapon_switch_keeps_upgrades(source_config: Dictionary) -> void:
