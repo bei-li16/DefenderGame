@@ -21,30 +21,24 @@ func _run() -> void:
 	_expect(Castle.floor_key({}) == "battle", "missing upgrades use the complete normal floor")
 	for level in [0, 1, 5]:
 		_expect(Castle.floor_key({"defenses": {"lava_moat_level": level}}) == ("battle" if level == 0 else "lava"), "whole-plate selection at moat level %d" % level)
-	_expect(Art.FILES["wall"] == "Environment/citadel-v3", "wall resolves to the production connected fortress asset")
+	_expect(Art.FILES["wall"] == "Environment/citadel-v3", "towers use the muted stone source")
 	var wall := Art.texture("wall")
 	_expect(wall != null and wall.get_height() <= 1024, "replacement uses the bounded Godot import")
 	var wall_image := wall.get_image()
 	_expect(wall_image.has_mipmaps(), "wall import keeps mipmaps for small gameplay scale")
 	_expect(wall_image.get_pixel(0, 0).a == 0.0, "new fortress padding remains truly transparent")
-	_expect(Castle.source_to_world(Castle.MOUNT_SOURCE).is_equal_approx(Castle.MOUNT_POSITION), "painted platform aligns to the ballista pedestal")
-	var swivel_foot := Castle.BOW_ORIGIN + (Castle.BOW_FOOT_SOURCE - Castle.BOW_RAIL_SOURCE) * Castle.BOW_SIZE.x / Castle.BOW_SOURCE_SIZE.x
-	_expect(swivel_foot.distance_to(Castle.MOUNT_POSITION) < 4, "complete ballista foot rests on the mounting ring")
-	_expect(Castle.SPRITE_RECT.size.is_equal_approx(Castle.SOURCE_SIZE * Castle.SPRITE_SCALE), "whole fortress retains uniform scale and original projection")
-	_expect(Castle.SPRITE_RECT.position.y > 145.0 and Castle.SPRITE_RECT.end.y <= 1080.0, "both roofs and foundations fit inside the gameplay canvas")
-	_expect(Castle.magic_origin().is_equal_approx(Castle.source_to_world(Castle.FAR_CRYSTAL_SOURCE)), "magic beam starts at the new far crystal")
-	_expect(Castle.magic_origin().y < Castle.BOW_ORIGIN.y and Castle.source_to_world(Castle.NEAR_CRYSTAL_SOURCE).y > Castle.BOW_ORIGIN.y, "the two original upright bastions bracket the firing seat")
+	_expect(Geometry2D.is_point_in_polygon(Castle.MOUNT_POSITION, PackedVector2Array(Castle.MOUNT_SURFACE)), "ballista pedestal rests on its projecting seat")
+	_expect(Castle.MOUNT_POSITION == Castle.BOW_ORIGIN + Vector2(0, 32), "fixed pedestal supports the firing assembly above the platform")
+	_expect(Castle.WALL_RECT.position.y <= -48 and Castle.WALL_RECT.end.y >= 1128, "wall continues beyond both viewport edges, including camera shake")
+	_expect(Castle.tower_bounds(0).position.y > 100 and Castle.tower_bounds(1).end.y < 1040, "tower roofs and foundations fit while outer walls continue off screen")
+	_expect(Castle.TOWER_ORIGINS[0].x == Castle.TOWER_ORIGINS[1].x, "both towers sit on one screen-vertical alignment")
+	_expect(Castle.crystal_origins()[0].y < Castle.BOW_ORIGIN.y and Castle.crystal_origins()[1].y > Castle.BOW_ORIGIN.y, "tower crystals bracket the firing seat")
 	for height in [200.0, 450.0, 595.0, 850.0, 1000.0]:
 		var impact := Castle.impact_position(height)
 		_expect(impact.y == height and impact.x >= Castle.STRUCTURE_BOUNDS.position.x and impact.x <= Castle.STRUCTURE_BOUNDS.end.x, "contact effects remain on the measured masonry envelope at y=%d" % int(height))
 	var player: Dictionary = app.get("content").rules["player"]
 	_expect(Castle.BOW_ORIGIN == Vector2(float(player["bow_origin_x_milli"]), float(player["bow_origin_y_milli"])) / 1000.0, "composition preserves the actual combat firing origin")
-	var tower_arrays := Art.quad().surface_get_arrays(0)
-	var vertices: PackedVector3Array = tower_arrays[Mesh.ARRAY_VERTEX]
-	var uvs: PackedVector2Array = tower_arrays[Mesh.ARRAY_TEX_UV]
-	_expect(vertices[0].y < vertices[-1].y and uvs[0].y < uvs[-1].y, "entire fortress remains upright, not vertically mirrored")
-	_expect(uvs[0] == Vector2.ZERO and uvs[2] == Vector2.ONE, "wall uses the entire new sprite, not old tower cutouts")
-	_expect(Art.quad() == Art.quad(), "castle quad is shared, not rebuilt each frame")
+	_check_continuous_wall()
 	_check_courtyard_geometry()
 
 	var game := (load("res://scenes/gameplay.tscn") as PackedScene).instantiate()
@@ -54,6 +48,7 @@ func _run() -> void:
 	game.get("session").set_physics_process(false)
 	var snapshot: Dictionary = game.get("snapshot").duplicate(true)
 	var interior_samples := {}
+	var wall_samples := {}
 	for level in [0, 1]:
 		snapshot["defenses"] = {"lava_moat_level": level, "magic_tower_level": 1}
 		game.call("_on_snapshot", snapshot)
@@ -94,17 +89,26 @@ func _run() -> void:
 			var paving_expected := paving_image.get_pixelv(Vector2i(paving_uv * Vector2(paving_image.get_size()))) * Courtyard.PAVING_TINT
 			var paving_actual := screenshot.get_pixelv(Vector2i(paving_position * Vector2(screenshot.get_size()) / Vector2(1920, 1080)))
 			_expect(_color_distance(paving_actual, paving_expected) < 0.09, "interior visibly uses the painted flagstone material")
-			# Sample both bastions and the connecting wall away from the HUD,
-			# ballista and crystal overlays; guards against the old UV composition.
-			# Sample solid stone away from banners, crystals and the ballista.
-			for source_point in [Vector2(360, 330), Vector2(520, 580), Vector2(603, 1340)]:
-				var world_point := Castle.source_to_world(source_point)
+			# Sample the actual masonry on BOTH sides of the gun and beyond both
+			# towers. No exterior terrain may leak through this straight column.
+			for y in [5, 110, 150, 420, 475, 680, 720, 1010, 1075]:
+				var pixel := Vector2i(Vector2(248, y) * Vector2(screenshot.get_size()) / Vector2(1920, 1080))
+				var actual := screenshot.get_pixelv(pixel)
+				if level == 0:
+					wall_samples[y] = actual
+				else:
+					_expect(_color_distance(actual, wall_samples[y]) < 0.015, "continuous opaque wall at y=%d" % y)
+			# Both fixtures sample the same complete cylindrical tower, preserving
+			# painted texture and lighting without the diagonal curtain-wall tail.
+			for tower in range(2):
+				var source_point := Vector2(565, 1335)
+				var world_point: Vector2 = Castle.TOWER_ORIGINS[tower] + (source_point - Castle.TOWER_SOCKET_SOURCE) * Castle.TOWER_SCALE
 				var screen_point := Vector2i(world_point * Vector2(screenshot.get_size()) / Vector2(1920, 1080))
-				var texel := Vector2i(source_point / Castle.SOURCE_SIZE * Vector2(wall_image.get_size()))
-				var expected_wall := wall_image.get_pixelv(texel)
+				var texel := Vector2i(source_point / Castle.TOWER_SOURCE_SIZE * Vector2(wall_image.get_size()))
+				var expected_wall := wall_image.get_pixelv(texel) * Castle.TOWER_TINT
 				var actual_wall := screenshot.get_pixelv(screen_point)
 				var wall_difference := Vector3(actual_wall.r - expected_wall.r, actual_wall.g - expected_wall.g, actual_wall.b - expected_wall.b).length()
-				_expect(expected_wall.a > 0.95 and wall_difference < 0.18, "scene renders the replacement fortress at " + str(source_point))
+				_expect(expected_wall.a > 0.95 and wall_difference < 0.18, "scene renders the painted stone tower " + str(tower))
 			# Pixels away from UI/castle must come from the chosen FULL plate.
 			# This catches the previous narrow lava-strip-on-normal-floor bug.
 			var key := Castle.floor_key(snapshot)
@@ -128,6 +132,31 @@ func _run() -> void:
 	for message in failures:
 		printerr("[CASTLE FAIL] " + message)
 	quit(0 if failures.is_empty() else 1)
+
+
+func _check_continuous_wall() -> void:
+	var stone := Art.texture("masonry").get_image()
+	_expect(stone.detect_alpha() == Image.ALPHA_NONE and stone.has_mipmaps() and stone.get_width() <= 512, "opaque bounded painted masonry atlas")
+	Castle.prepare()
+	var wall_mesh: ArrayMesh = Castle._wall_mesh
+	var tower_mesh: ArrayMesh = Castle._tower_mesh
+	Castle.prepare()
+	_expect(wall_mesh == Castle._wall_mesh and tower_mesh == Castle._tower_mesh, "wall and tower meshes are cached")
+	var arrays := wall_mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	for y in [-48, 0, 150, 460, 680, 1020, 1080, 1128]:
+		for x in [145, 213, 261]:
+			var covered := false
+			for i in range(0, indices.size(), 3):
+				var triangle := PackedVector2Array()
+				for j in range(3):
+					var vertex := vertices[indices[i + j]]
+					triangle.append(Vector2(vertex.x, vertex.y))
+				if Geometry2D.is_point_in_polygon(Vector2(x, y), triangle):
+					covered = true
+					break
+			_expect(covered, "same wall footprint covers (%d,%d)" % [x, y])
 
 
 func _check_courtyard_geometry() -> void:

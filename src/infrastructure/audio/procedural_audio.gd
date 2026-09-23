@@ -2,16 +2,17 @@ class_name DefenderProceduralAudio
 extends Node
 
 const Bank = preload("res://src/infrastructure/audio/sound_bank.gd")
-const PLAYER_COUNT := 10
-const GAPS := {"shot": 65, "hit": 90, "fatal": 120, "fire": 110, "ice": 110, "lightning": 110, "fire_launch": 150, "ice_launch": 150, "lightning_launch": 160, "wall": 170, "tower": 220, "moat": 300, "boss": 450, "reject": 180, "ui": 70}
+const PLAYER_COUNT := 16
+const GAPS := {"shot": 65, "hit": 90, "fire": 110, "ice": 110, "lightning": 110, "fire_launch": 150, "ice_launch": 150, "lightning_launch": 160, "wall": 170, "tower": 220, "moat": 300, "boss": 450, "reject": 180, "ui": 70}
+const LEVELS := {"shot": 0.68, "hit": 0.56, "fire": 0.65, "ice": 0.60, "lightning": 0.64, "fire_launch": 0.46, "ice_launch": 0.40, "lightning_launch": 0.36}
 var _players: Array[AudioStreamPlayer] = []
 var _music_players: Array[AudioStreamPlayer] = []
 var _music_streams: Dictionary = {}
 var _sounds: Dictionary = {}
+var _variants: Dictionary = {}
+var _variant_cursor: Dictionary = {}
+var _voice_started := PackedInt64Array()
 var _last_play: Dictionary = {}
-var _cursor := 0
-var _spell_cursor := 0
-var _launch_cursor := 0
 var _active_music := 0
 var _music_volume := 0.65
 var _music_mix := 1.0
@@ -29,6 +30,16 @@ func _ready() -> void:
 	_disabled = DisplayServer.get_name().contains("headless")
 	if _disabled:
 		return
+	# Protect the final mix, including simultaneous barrages and music. The
+	# look-ahead limiter catches peaks without clipping individual transients.
+	var has_limiter := false
+	for effect_index in range(AudioServer.get_bus_effect_count(0)):
+		has_limiter = has_limiter or AudioServer.get_bus_effect(0, effect_index) is AudioEffectHardLimiter
+	if not has_limiter:
+		var limiter := AudioEffectHardLimiter.new()
+		limiter.ceiling_db = -1.0
+		limiter.release = 0.10
+		AudioServer.add_bus_effect(0, limiter)
 	_ambience_player = AudioStreamPlayer.new()
 	_ambience_player.name = "MoatAmbience"
 	add_child(_ambience_player)
@@ -43,10 +54,14 @@ func _ready() -> void:
 		_music_players.append(player)
 	for index in range(PLAYER_COUNT):
 		var player := AudioStreamPlayer.new()
+		player.name = "CombatVoice%02d" % index
 		add_child(player)
 		_players.append(player)
-	for kind in ["shot", "hit", "fatal", "wall", "tower", "moat", "boss", "victory", "defeat", "reject", "ui"] + Bank.ELEMENT_KINDS:
-		_sounds[kind] = Bank.effect(kind)
+	_voice_started.resize(PLAYER_COUNT)
+	_voice_started.fill(-1)
+	for kind in ["shot", "hit", "wall", "tower", "moat", "boss", "victory", "defeat", "reject", "ui"] + Bank.ELEMENT_KINDS:
+		_variants[kind] = Bank.effect_variants(kind)
+		_sounds[kind] = _variants[kind][0]
 	for mood in ["menu", "battle", "boss"]:
 		_music_streams[mood] = Bank.music(mood)
 
@@ -98,11 +113,14 @@ func stop_all() -> void:
 		player.stream = null
 	_mood = ""
 	_last_play.clear()
+	_variant_cursor.clear()
+	_voice_started.fill(-1)
 
 
 func shutdown() -> void:
 	stop_all()
 	_sounds.clear()
+	_variants.clear()
 	_music_streams.clear()
 	_ambience_stream = null
 
@@ -131,17 +149,22 @@ func play_ui(volume: float) -> void:
 
 func play_event(event: Dictionary, volume_linear: float = 1.0) -> void:
 	var kind := event_kind(event)
-	# Tiny deterministic pitch variations avoid a machine-gun sample loop.
-	# They never consume combat randomness or change event timing.
-	var variation := int(event.get("x_milli", 0)) / 1000 + int(event.get("tick", 0)) * 7
-	var pitch := 0.94 + posmod(variation, 13) * 0.01 if kind in Bank.ELEMENT_KINDS else 1.0
+	# Recorded variants carry the timbre; pitch changes stay within 2.5%.
+	# Presentation variation never consumes the simulation's seeded RNG.
+	var variation := int(event.get("entity_id", 0)) + int(event.get("tick", 0)) * 7
+	var pitch := 0.975 + posmod(variation, 11) * 0.005 if kind in Bank.SAMPLED_KINDS else 1.0
+	if kind in ["shot", "hit"] and bool(event.get("fatal", false)):
+		pitch *= 0.98
+		volume_linear *= 1.06
 	_play(kind, volume_linear, pitch)
 
 
 static func event_kind(event: Dictionary) -> String:
 	var kind := ""
 	match str(event.get("type", "")):
-		"shot": kind = "fatal" if bool(event.get("fatal", false)) else "shot"
+		# A multishot volley releases one string. A critical arrow keeps its
+		# mechanical sound instead of switching to the former 880 Hz chime.
+		"shot": kind = "shot" if int(event.get("volley_index", 0)) == 0 else ""
 		"hit": kind = "hit" # damage is not a second copy of the same impact.
 		"skill_pulse": kind = str(event.get("element", ""))
 		"skill_launch": kind = str(event.get("element", "")) + "_launch"
@@ -164,27 +187,40 @@ func _play(kind: String, volume: float, pitch: float = 1.0) -> void:
 		_defense_player.volume_db = gain_db(volume * 0.52)
 		_defense_player.play()
 		return
-	# Two reserved voices keep alerts/results audible amid rapid impacts.
+	# Independent pools preserve the string snap, target thud and spell tails.
+	# Prefer an idle voice, and only replace the oldest tail when a pool is full.
 	var important := kind in ["boss", "victory", "defeat", "reject"]
-	var elemental := kind in Bank.ELEMENT_KINDS
-	var index := 8 if kind == "boss" else 9
+	var index := 14 if kind == "boss" else 15
 	if not important:
-		# Four impact, two launch and two weapon/UI voices. Incoming whooshes
-		# cannot truncate the previous impact's boom/crystal/thunder tail.
 		if kind.ends_with("_launch"):
-			index = 4 + _launch_cursor
-			_launch_cursor = (_launch_cursor + 1) % 2
-		elif elemental:
-			index = _spell_cursor
-			_spell_cursor = (_spell_cursor + 1) % 4
+			index = _available_voice(6, 9)
+		elif kind in Bank.ELEMENT_KINDS:
+			index = _available_voice(0, 6)
+		elif kind == "shot":
+			index = _available_voice(9, 11)
+		elif kind == "hit":
+			index = _available_voice(11, 13)
 		else:
-			index = 6 + _cursor
-			_cursor = (_cursor + 1) % 2
+			index = 13
 	var player := _players[index]
-	player.stream = _sounds[kind]
+	var clips: Array = _variants[kind]
+	var variant := int(_variant_cursor.get(kind, 0)) % clips.size()
+	_variant_cursor[kind] = variant + 1
+	player.stream = clips[variant]
 	player.pitch_scale = pitch
-	player.volume_db = gain_db(volume * (0.60 if elemental else (0.72 if not important else 1.0)))
+	player.volume_db = gain_db(volume * float(LEVELS.get(kind, 1.0 if important else 0.72)))
+	_voice_started[index] = Time.get_ticks_msec()
 	player.play()
+
+
+func _available_voice(first: int, end: int) -> int:
+	var oldest := first
+	for index in range(first, end):
+		if not _players[index].playing:
+			return index
+		if _voice_started[index] < _voice_started[oldest]:
+			oldest = index
+	return oldest
 
 
 func allow_event(kind: String, now_ms: int) -> bool:

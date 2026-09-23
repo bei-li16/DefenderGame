@@ -81,7 +81,7 @@ func _check_audio() -> void:
 		if OS.get_cmdline_user_args().has("--capture"):
 			DirAccess.make_dir_recursive_absolute(OUTPUT)
 			clip.save_to_wav(OUTPUT + "/" + kind + ".wav")
-	_expect(total < 220000 and fingerprints.size() == 6, "six distinct elemental clips within 220 KB")
+	_expect(total < 500000 and fingerprints.size() == 6, "six distinct recorded elemental clips within 500 KB")
 	for element in Vfx.ELEMENTS:
 		_expect(Audio.event_kind({"type": "skill_launch", "element": element}) == element + "_launch", element + " wind-up sound follows launch")
 		_expect(Audio.event_kind({"type": "skill_pulse", "element": element}) == element, element + " contact sound follows impact")
@@ -105,9 +105,6 @@ func _check_audio_players() -> void:
 		return
 	var mixer: Node = app.get("audio")
 	mixer.stop_all()
-	mixer.set("_cursor", 0)
-	mixer.set("_spell_cursor", 0)
-	mixer.set("_launch_cursor", 0)
 	var players: Array = mixer.get("_players")
 	mixer.play_event({"type": "skill_pulse", "element": "fire", "x_milli": 600000}, 0)
 	_expect(players.all(func(player: AudioStreamPlayer) -> bool: return player.stream == null), "zero SFX volume creates no voice")
@@ -115,8 +112,8 @@ func _check_audio_players() -> void:
 	mixer.play_event({"type": "skill_launch", "element": "ice", "x_milli": 900000}, 0.8)
 	mixer.play_event({"type": "shot"}, 0.8)
 	mixer.play_event({"type": "boss_warning"}, 0.8)
-	_expect(players.size() == 10 and players[0].stream == mixer.get("_sounds")["fire"] and players[4].stream == mixer.get("_sounds")["ice_launch"] and players[6].stream == mixer.get("_sounds")["shot"] and players[8].stream == mixer.get("_sounds")["boss"], "launch/impact/weapon/alert voice groups are isolated")
-	_expect(players[0].pitch_scale >= 0.94 and players[0].pitch_scale <= 1.06 and players[4].pitch_scale >= 0.94 and players[4].pitch_scale <= 1.06, "elemental pitch variation stays subtle")
+	_expect(players.size() == Audio.PLAYER_COUNT and players[0].stream == mixer.get("_sounds")["fire"] and players[6].stream == mixer.get("_sounds")["ice_launch"] and players[9].stream == mixer.get("_sounds")["shot"] and players[14].stream == mixer.get("_sounds")["boss"], "launch/impact/weapon/alert voice groups are isolated")
+	_expect(players[0].pitch_scale >= 0.975 and players[0].pitch_scale <= 1.025 and players[6].pitch_scale >= 0.975 and players[6].pitch_scale <= 1.025, "recorded elemental pitch variation stays subtle")
 	mixer.stop_all()
 
 

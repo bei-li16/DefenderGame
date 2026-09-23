@@ -1,14 +1,14 @@
 extends RefCounted
 ## Opaque castle interior, separate from the exterior battle/moat plate.
-## The edge sits underneath the new fortress, continuing beyond both screen ends.
+## The vertical edge sits under the continuous wall and extends off screen.
 ## All clipped paving and foundation geometry is built once, never per frame.
 const Art = preload("res://src/presentation/art/game_art.gd")
 const BLEED := 48.0
-const EDGE := [Vector2(183, -48), Vector2(183, 355), Vector2(205, 505), Vector2(224, 685), Vector2(254, 885), Vector2(283, 1128)]
+const EDGE := [Vector2(198, -48), Vector2(198, 1128)]
 const GROUT := Color("28323e")
 const TILE_AXIS_U := Vector2(190, 95)
 const TILE_AXIS_V := Vector2(-190, 95)
-const PAVING_TINT := Color(0.78, 0.82, 0.87, 1)
+const PAVING_TINT := Color(0.64, 0.76, 0.78, 1)
 static var _floor_mesh: ArrayMesh
 static var _paving_mesh: ArrayMesh
 static var _trim_mesh: ArrayMesh
@@ -110,7 +110,7 @@ static func _prepare_paving(clip: PackedVector2Array) -> void:
 					var uv := Vector2((point.x / TILE_AXIS_U.x + point.y / TILE_AXIS_U.y) * 0.5 - column, (point.y / TILE_AXIS_U.y - point.x / TILE_AXIS_U.x) * 0.5 - row)
 					# Reflect ONLY the ground texture at repeat boundaries: same
 					# edge texels meet even if generated art is not pixel-seamless.
-					# The fortress sprite itself is never reflected or repeated.
+					# Wall and tower art retain their original UV orientation.
 					if posmod(column, 2) == 1:
 						uv.x = 1.0 - uv.x
 					if posmod(row, 2) == 1:

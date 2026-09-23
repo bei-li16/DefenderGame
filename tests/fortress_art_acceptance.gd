@@ -84,7 +84,7 @@ func _check_assets() -> void:
 		_expect(absf(float(texture.get_width()) / texture.get_height() - 16.0 / 9.0) < 0.01, key + " is a full landscape plate, not a portrait crop")
 		_expect(texture.get_image().detect_alpha() == Image.ALPHA_NONE and texture.get_image().has_mipmaps(), key + " is opaque and mipmapped")
 	_expect(Art.texture("battle").get_size() == Art.texture("lava").get_size(), "paired terrain shares projection and dimensions")
-	for uv in [Fortress.CROWN_UV, Fortress.LAVA_UV, Fortress.CHIPS_UV]:
+	for uv in [Fortress.LAVA_UV, Fortress.CHIPS_UV]:
 		_expect(Art.region("fortress_fx", uv) == Art.region("fortress_fx", uv), "fortress parts share cached regions")
 
 
@@ -180,7 +180,8 @@ func _check_scene() -> void:
 	var active := await _frame_image()
 	if active != null:
 		_expect(_changed_pixels(idle, active, Rect2(170, 485, 190, 145)) > 30, "ballista recoil visibly changes the mounting region")
-		_expect(_changed_pixels(idle, active, Rect2(100, 160, 110, 110)) > 10, "tower discharge visibly changes its crystal crown")
+		var crown := preload("res://src/presentation/art/castle_view.gd").magic_origin()
+		_expect(_changed_pixels(idle, active, Rect2(crown - Vector2(25, 30), Vector2(50, 60))) > 10, "tower discharge visibly changes its original crystal crown")
 	for quality in ["low", "medium", "high"]:
 		app.get("settings")["quality"] = quality
 		for i in range(25):

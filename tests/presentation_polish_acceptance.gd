@@ -124,7 +124,7 @@ func _check_views() -> void:
 	_prepare_visual_profile()
 	var mixer: Node = app.get("audio")
 	if not DisplayServer.get_name().contains("headless"):
-		_expect(mixer.get("_players").size() == 10 and mixer.get("_music_players").size() == 2, "bounded SFX voices and crossfade players exist")
+		_expect(mixer.get("_players").size() == Audio.PLAYER_COUNT and mixer.get("_music_players").size() == 2, "bounded SFX voices and crossfade players exist")
 		mixer.play_music("boss", 0)
 		mixer.call("_process", 1.0)
 		_expect(mixer.get("_music_players")[mixer.get("_active_music")].volume_db == -80, "runtime music slider zero applies silence floor")

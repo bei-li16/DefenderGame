@@ -1,0 +1,106 @@
+[
+  {
+    "file": "crossbow_dryshot.flac",
+    "author": "HolgiB",
+    "title": "Crossbow sounds",
+    "license": "CC-BY-3.0",
+    "page": "https://opengameart.org/content/crossbow-sounds",
+    "download": "https://opengameart.org/sites/default/files/crossbow_dryshot.flac",
+    "sha256": "2e0fee16e556cfc9fd2376074b56b7082991ede9187db62656d9256d28f4d62f"
+  },
+  {
+    "file": "crossbow_shot_and_hit.flac",
+    "author": "HolgiB",
+    "title": "Crossbow sounds",
+    "license": "CC-BY-3.0",
+    "page": "https://opengameart.org/content/crossbow-sounds",
+    "download": "https://opengameart.org/sites/default/files/crossbow_shot_and_hit.flac",
+    "sha256": "fd24c3bdf32d36e672b0cf89fc98d586ef5cdd8b1dd1eb71b54281799c560bc4"
+  },
+  {
+    "file": "icespells.zip",
+    "author": "bart; based on a recording by Stephan at pdsounds.org",
+    "title": "Ice spells",
+    "license": "CC0-1.0",
+    "page": "https://opengameart.org/content/ice-spells",
+    "download": "https://opengameart.org/sites/default/files/icespells.zip",
+    "sha256": "45f02a204fc7cc896a17487080376c521ac2e564fe3da4d24cffa0086f8d6a54",
+    "extracted": [
+      {
+        "file": "icespells-coldsnap.wav",
+        "sha256": "090977264d65d90a50b04e9f0c1c4e02fb194e5b50d9fe244f0079a4da54158c"
+      },
+      {
+        "file": "icespells-ice.wav",
+        "sha256": "c3039c864d056d0e4951b84b96a7bb0044ca8cb58aeae514fc256145872b6a94"
+      }
+    ]
+  },
+  {
+    "file": "IceShatters.zip",
+    "author": "IgnasD",
+    "title": "Ice breaking/shattering",
+    "license": "CC0-1.0",
+    "page": "https://opengameart.org/content/ice-breakingshattering",
+    "download": "https://opengameart.org/sites/default/files/IceShatters_0.zip",
+    "sha256": "b84ea396fac1af183dd2cb205a01edaa94b493ffb36965eafe59912e41cf9eb7",
+    "extracted": [
+      {
+        "file": "IceShatters-LedasLuzta.ogg",
+        "sha256": "4c7304ac47f84e41b62edb71082d00fe01823a2a54ec4e4268a040c973e3510f"
+      },
+      {
+        "file": "IceShatters-LedasLuzta2.ogg",
+        "sha256": "92a20369f866c852f841ffaef31676cb70f542592504b040327c60f5101f9c47"
+      },
+      {
+        "file": "IceShatters-LedasLuzta33.ogg",
+        "sha256": "fedcd280ffaea38c365647f131eaae71cf2b9e1721c2fce1b539884c9199074a"
+      },
+      {
+        "file": "IceShatters-LedasLuzta4.ogg",
+        "sha256": "81558c035953d4e595640be7ba1a645c47c6f4b72f38de43a44d36fa70d52b8c"
+      },
+      {
+        "file": "IceShatters-LedasLuzta5.ogg",
+        "sha256": "34adbcb652d578b870d5317ec974e9773266ddfd6b4bfc8499ec775e1712b603"
+      }
+    ]
+  },
+  {
+    "file": "flame.ogg",
+    "author": "themightyglider; derived from qubodup Freesound 159725",
+    "title": "Catching fire",
+    "license": "CC0-1.0",
+    "page": "https://opengameart.org/content/catching-fire",
+    "download": "https://opengameart.org/sites/default/files/flame_0.ogg",
+    "sha256": "c1eaafba3746374c68c30dc8b7ec895dac0e1e66064522f03340dc9b2da4a2cd"
+  },
+  {
+    "file": "fire-crackle.wav",
+    "author": "AntumDeluge",
+    "title": "Fire Crackling",
+    "license": "CC0-1.0",
+    "page": "https://opengameart.org/content/fire-crackling",
+    "download": "https://opengameart.org/sites/default/files/fire-1.wav",
+    "sha256": "26702de8a195bcbafeae72034861d875a1b7917168a25106f4e1957ecdddf7e5"
+  },
+  {
+    "file": "waving-torch.wav",
+    "author": "spookymodem",
+    "title": "Torch Fire Spell",
+    "license": "CC-BY-3.0",
+    "page": "https://opengameart.org/content/torch-fire-spell",
+    "download": "https://opengameart.org/sites/default/files/Waving%20Torch.wav",
+    "sha256": "a027961cae4ffdeccfd497788b229dfe32547dcb32f30b8e0429976ae9e9ef57"
+  },
+  {
+    "file": "thunderclap.mp3",
+    "author": "Fission9",
+    "title": "Thunderclap",
+    "license": "CC0-1.0",
+    "page": "https://freesound.org/people/Fission9/sounds/534023/",
+    "download": "https://cdn.freesound.org/previews/534/534023_9395330-hq.mp3",
+    "sha256": "09c8a88b55593476c5ffeb84df0810b5cfc2f6eafe14166c388801aef208cf3f"
+  }
+]

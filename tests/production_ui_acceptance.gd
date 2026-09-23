@@ -62,9 +62,8 @@ func _check_assets() -> void:
 		for state in ["hover", "pressed", "disabled"]:
 			_expect(normal.get_minimum_size() == theme.get_stylebox(state, type).get_minimum_size(), type + " stable " + state + " dimensions")
 	_expect(theme.get_stylebox("background", "ProgressBar") is StyleBoxTexture, "meters have textured metal tracks")
-	_expect(Castle.STRUCTURE_BOUNDS.position.y > 100 and Castle.STRUCTURE_BOUNDS.end.y < 1040, "both complete bastions clear the viewport edges")
-	var foot := Castle.BOW_ORIGIN + (Vector2(708, 594) - Vector2(700, 410)) * (Castle.BOW_SIZE.x / 1577.0)
-	_expect(foot.distance_to(Castle.MOUNT_POSITION) < 4, "ballista swivel foot lands on the painted mount")
+	_expect(Castle.tower_bounds(0).position.y > 100 and Castle.tower_bounds(1).end.y < 1040, "both complete bastions clear the viewport edges")
+	_expect(Geometry2D.is_point_in_polygon(Castle.MOUNT_POSITION, PackedVector2Array(Castle.MOUNT_SURFACE)), "fixed ballista foot lands inside the stone platform")
 
 
 func _check_views(locale: String, dimensions: Vector2i) -> void:

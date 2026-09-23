@@ -4,9 +4,16 @@ extends RefCounted
 const Art = preload("res://src/presentation/art/game_art.gd")
 const Castle = preload("res://src/presentation/art/castle_view.gd")
 const Spell = preload("res://src/presentation/art/spell_visuals.gd")
-const CROWN_UV := Rect2(0.025, 0.015, 0.425, 0.475)
 const LAVA_UV := Rect2(0.0, 0.5, 0.5, 0.5)
 const CHIPS_UV := Rect2(0.5, 0.5, 0.5, 0.5)
+# Source-space outlines separate the original upper assembly and pedestal.
+# Unlike a rectangular crop, this excludes the old hinge/tower without cutting
+# through the lower bowstring. UVs still sample the untouched imported PNG.
+const UPPER_OUTLINE := [Vector2(100, 0), Vector2(1448, 0), Vector2(1448, 600), Vector2(870, 600), Vector2(770, 500), Vector2(720, 450), Vector2(636, 394), Vector2(568, 403), Vector2(535, 425), Vector2(455, 439), Vector2(300, 447), Vector2(266, 477), Vector2(147, 477), Vector2(100, 415)]
+const BASE_OUTLINE := [Vector2(516, 519), Vector2(730, 519), Vector2(763, 553), Vector2(789, 676), Vector2(728, 693), Vector2(530, 693), Vector2(476, 677), Vector2(493, 560)]
+const BASE_FOOT_SOURCE := Vector2(635, 693)
+static var _upper_mesh: ArrayMesh
+static var _base_mesh: ArrayMesh
 
 
 static func terrain(canvas: CanvasItem, moat: bool, clock: float, detail: float) -> void:
@@ -29,35 +36,54 @@ static func terrain(canvas: CanvasItem, moat: bool, clock: float, detail: float)
 
 
 static func tower(canvas: CanvasItem, clock: float, flash: float, detail: float) -> void:
-	for source_point in [Castle.FAR_CRYSTAL_SOURCE, Castle.NEAR_CRYSTAL_SOURCE]:
-		var point := Castle.source_to_world(source_point)
-		Art.draw_sprite(canvas, Art.region("fortress_fx", CROWN_UV), point + Vector2(0, 8), Vector2(72, 85))
-		var pulse := 0.16 + sin(clock * 2.2) * 0.045 + flash * 0.3
-		Art.draw_sprite(canvas, Spell.cell("lightning", 1), point - Vector2(0, 9), Vector2(65, 50), 0, Color(0.42, 0.8, 1, pulse))
+	for point in Castle.crystal_origins():
+		# The structure layer already draws its crowns. Light the existing
+		# crystal instead of stacking a second crown and orbital ring on top.
+		var pulse := 0.08 + sin(clock * 2.2) * 0.025 + flash * 0.3
+		Art.draw_sprite(canvas, Spell.cell("lightning", 1), point, Vector2(39, 48), 0, Color(0.42, 0.8, 1, pulse))
 		for index in range(maxi(2, int(4 * detail))):
 			var angle := clock * 0.85 + index * TAU / 4
-			var orbit := point + Vector2(cos(angle) * 30, sin(angle) * 10 + 18)
-			canvas.draw_line(orbit, orbit + Vector2(0, -3), Color(0.65, 0.9, 1, 0.55), 2.0, true)
+			var orbit := point + Vector2(cos(angle) * 12, sin(angle) * 7)
+			canvas.draw_line(orbit, orbit + Vector2(0, -2), Color(0.65, 0.9, 1, 0.2 + flash * 0.35), 1.2, true)
 
 
 static func ballista(canvas: CanvasItem, angle: float, recoil: float) -> void:
+	prepare_ballista()
 	var axis := Vector2.RIGHT.rotated(angle)
-	var pivot := Castle.BOW_ORIGIN - axis * recoil * 10.0
-	# Offset relative to the measured winding pivot; the stock stays over the
-	# original empty mounting seat and all arrows retain the core's origin.
-	# Rail origin (700,410) and swivel foot (708,594) were measured on the
-	# 1577x997 source; the foot lands on the empty platform, 32px below aim.
-	var center := pivot + ((Castle.BOW_SOURCE_SIZE * 0.5 - Castle.BOW_RAIL_SOURCE) * Castle.BOW_SIZE.x / Castle.BOW_SOURCE_SIZE.x).rotated(angle)
-	var dimensions := Castle.BOW_SIZE * Vector2(1 - recoil * 0.035, 1 + recoil * 0.055)
+	var pivot := Castle.BOW_ORIGIN - axis * recoil * 6.0
+	var rotation := angle - Castle.BOW_RAIL_ANGLE
+	var scale := Vector2.ONE * Castle.BOW_SCALE
 	var part := Art.texture("ballista")
-	Art.draw_sprite(canvas, part, center + Vector2(5, 7), dimensions, angle, Color(0.015, 0.025, 0.04, 0.45))
-	Art.draw_sprite(canvas, part, center, dimensions, angle)
-	# A separately rendered loaded bolt withdraws during recoil, then returns.
-	# The source assembly deliberately contains no baked-in arrow.
-	var ready := clampf(1.0 - recoil * 2.0, 0.0, 1.0)
-	Art.draw_sprite(canvas, Art.texture("arrow"), pivot + axis * (35 + ready * 18), Vector2(92, 26), angle + PI, Color(0.85, 0.96, 1, ready))
+	# The foot is fixed at the painted platform for every aim/recoil state.
+	canvas.draw_mesh(_base_mesh, part, Transform2D(0, scale, 0, Castle.MOUNT_POSITION), Color(0.73, 0.84, 0.86))
+	# Rigid translation preserves the metal bow's proportions during a shot.
+	canvas.draw_mesh(_upper_mesh, part, Transform2D(rotation, scale, 0, pivot + Vector2(2, 3)), Color(0.015, 0.025, 0.04, 0.22))
+	canvas.draw_mesh(_upper_mesh, part, Transform2D(rotation, scale, 0, pivot), Color(0.73, 0.84, 0.86))
+	# The original upper assembly includes its nocked bolt; do not add another.
 	if recoil > 0.35:
-		Art.draw_sprite(canvas, Spell.cell("lightning", 1), pivot + axis * 110, Vector2(35, 27), angle, Color(0.6, 0.85, 1, (recoil - 0.35) * 0.65))
+		Art.draw_sprite(canvas, Spell.cell("lightning", 1), pivot + axis * 115, Vector2(27, 20), angle, Color(0.6, 0.85, 1, (recoil - 0.35) * 0.5))
+
+
+static func prepare_ballista() -> void:
+	if _upper_mesh == null:
+		_upper_mesh = _source_mesh(PackedVector2Array(UPPER_OUTLINE), Castle.BOW_RAIL_SOURCE)
+		_base_mesh = _source_mesh(PackedVector2Array(BASE_OUTLINE), BASE_FOOT_SOURCE)
+
+
+static func _source_mesh(outline: PackedVector2Array, origin: Vector2) -> ArrayMesh:
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	for point in outline:
+		vertices.append(Vector3(point.x - origin.x, point.y - origin.y, 0))
+		uvs.append(point / Castle.BOW_SOURCE_SIZE)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = Geometry2D.triangulate_polygon(outline)
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
 
 
 static func defense(canvas: CanvasItem, defense_id: String, target: Vector2, progress: float, detail: float) -> void:

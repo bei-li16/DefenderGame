@@ -1,8 +1,12 @@
 extends RefCounted
-## Original bounded PCM scores/foley. No downloads or gameplay RNG.
+## Recorded combat foley, with procedural music/UI/ambient beds.
+## Offline source edits and credits: tools/build_combat_audio.py, audio_sources/.
 const RATE := 22050
 const ELEMENT_KINDS := ["fire", "ice", "lightning", "fire_launch", "ice_launch", "lightning_launch"]
 const FORTRESS_KINDS := ["shot", "wall", "tower", "moat"]
+const SAMPLED_KINDS := ["shot", "hit", "fire", "ice", "lightning", "fire_launch", "ice_launch", "lightning_launch"]
+const VARIANT_COUNT := 3
+static var _sample_cache: Dictionary = {}
 
 static func music(mood: String) -> AudioStreamWAV:
 	var beat := 0.8 if mood == "menu" else (0.5 if mood == "boss" else 0.625)
@@ -38,11 +42,13 @@ static func music(mood: String) -> AudioStreamWAV:
 	return _stream(bytes, true)
 
 static func effect(kind: String) -> AudioStreamWAV:
-	if kind in ELEMENT_KINDS:
-		return _element_effect(kind)
+	if kind == "fatal":
+		kind = "shot"
+	if kind in SAMPLED_KINDS:
+		return effect_variants(kind)[0]
 	if kind in FORTRESS_KINDS:
 		return _fortress_effect(kind)
-	var lengths := {"shot": 0.09, "hit": 0.10, "fatal": 0.18, "fire": 0.42, "ice": 0.36, "lightning": 0.40, "wall": 0.20, "boss": 0.70, "victory": 1.2, "defeat": 1.1, "reject": 0.16, "ui": 0.07}
+	var lengths := {"boss": 0.70, "victory": 1.2, "defeat": 1.1, "reject": 0.16, "ui": 0.07}
 	var duration := float(lengths.get(kind, 0.1))
 	var samples := int(RATE * duration)
 	var bytes := PackedByteArray()
@@ -50,83 +56,38 @@ static func effect(kind: String) -> AudioStreamWAV:
 	for index in range(samples):
 		var t := float(index) / RATE
 		var p := t / duration
-		var noise := _noise(index)
 		var value := 0.0
 		match kind:
-			"shot": value = noise * 0.09 + sin(TAU * (620 * t - 1700 * t * t)) * 0.12
-			"hit", "wall": value = noise * 0.08 + sin(TAU * (100 * t + 2 * (1 - exp(-t * 30)))) * 0.22
 			"boss": value = (sin(TAU * 65.41 * t) + sin(TAU * 98 * t) * 0.6) * 0.16
 			"victory", "defeat":
 				var notes := [60, 64, 67, 72] if kind == "victory" else [57, 53, 50, 45]
 				var n := mini(3, int(p * 4))
 				var nt := fmod(t, duration / 4)
 				value = sin(TAU * _hz(notes[n]) * nt) * sin(PI * nt / (duration / 4)) * 0.23
-			"fatal": value = sin(TAU * 880 * t) * 0.18 + noise * 0.04
 			"ui": value = sin(TAU * 660 * t) * 0.12
 			_: value = sin(TAU * 180 * t) * 0.16
 		_write(bytes, index, value * pow(1 - p, 1.6) * minf(1.0, t / 0.003))
 	return _stream(bytes, false)
 
 
-static func _element_effect(kind: String) -> AudioStreamWAV:
-	# Layered original foley, synthesised once at startup. A private xorshift
-	# generator makes broadband noise without touching the gameplay RNG.
-	var durations := {"fire": 0.88, "ice": 0.78, "lightning": 0.95, "fire_launch": 0.38, "ice_launch": 0.38, "lightning_launch": 0.23}
-	var duration := float(durations[kind])
-	var samples := int(RATE * duration)
-	var bytes := PackedByteArray()
-	bytes.resize(samples * 2)
-	var rng_state := 726381 + kind.length() * 419
-	var low := 0.0
-	var mid := 0.0
-	var rumble := 0.0
-	for index in range(samples):
-		rng_state = (rng_state ^ (rng_state << 13)) & 0xffffffff
-		rng_state = (rng_state ^ (rng_state >> 17)) & 0xffffffff
-		rng_state = (rng_state ^ (rng_state << 5)) & 0xffffffff
-		var noise := float(rng_state & 0xffff) / 32768.0 - 1
-		low += (noise - low) * 0.035
-		mid += (noise - mid) * 0.23
-		rumble += (noise - rumble) * 0.008
-		var t := float(index) / RATE
-		var p := t / duration
-		var value := 0.0
-		match kind:
-			"fire_launch":
-				value = (mid * 0.38 + low * 0.45) * pow(sin(p * PI), 1.1)
-				value += sin(TAU * (165 * t - 115 * t * t)) * sin(p * PI) * 0.035
-			"ice_launch":
-				value = (noise - mid) * 0.07 * sin(p * PI)
-				value += (sin(TAU * (1320 * t - 450 * t * t)) + sin(TAU * 2080 * t) * 0.35) * sin(p * PI) * 0.035
-			"lightning_launch":
-				value = (noise - low) * (0.6 + sin(t * 230) * 0.4) * sin(p * PI) * 0.07
-			"fire":
-				var boom := sin(TAU * (48 * t + 2.8 * (1 - exp(-t * 24)))) * exp(-t * 12) * 0.21
-				var roar := (low * 0.7 + mid * 0.28) * exp(-t * 4)
-				var crackle := maxf(0, noise - 0.79) * 0.32 * (1 - exp(-t * 30)) * exp(-t * 3)
-				value = boom + roar + crackle
-			"ice":
-				var shatter := (noise - mid) * exp(-t * 36) * 0.20 + mid * exp(-t * 13) * 0.15
-				var crystal := (sin(TAU * 1297 * t) * exp(-t * 9) + sin(TAU * 2179 * t) * exp(-t * 12) * 0.55 + sin(TAU * 3371 * t) * exp(-t * 18) * 0.3) * 0.11
-				var frost := mid * exp(-t * 4) * 0.10
-				value = shatter + crystal + frost
-			"lightning":
-				var snap := (noise - low) * exp(-t * 50) * 0.23
-				var arc := (noise - mid) * (0.6 + 0.4 * sin(t * 185)) * exp(-t * 15) * 0.13
-				# Delayed low thunder follows the sharp electrical contact.
-				var delay := maxf(0, t - 0.06)
-				var thunder := (rumble * 1.1 + sin(TAU * 47 * delay) * 0.06) * (1 - exp(-delay * 45)) * exp(-delay * 4)
-				value = snap + arc + thunder
-		var edge := minf(1, t / 0.004) * minf(1, (duration - t) / 0.10)
-		_write(bytes, index, value * edge * 0.85)
-	return _stream(bytes, false)
+static func effect_variants(kind: String) -> Array[AudioStreamWAV]:
+	if not _sample_cache.has(kind):
+		var clips: Array[AudioStreamWAV] = []
+		if kind in SAMPLED_KINDS:
+			for variant in range(1, VARIANT_COUNT + 1):
+				clips.append(load("res://Gamematerials/Audio/%s-%02d.wav" % [kind, variant]) as AudioStreamWAV)
+		else:
+			clips.append(effect(kind))
+		_sample_cache[kind] = clips
+	return _sample_cache[kind]
+
 
 static func _hz(midi: int) -> float:
 	return 440.0 * pow(2.0, (midi - 69) / 12.0)
 
 
 static func _fortress_effect(kind: String) -> AudioStreamWAV:
-	var duration := float({"shot": 0.24, "wall": 0.42, "tower": 0.54, "moat": 0.60}[kind])
+	var duration := float({"wall": 0.42, "tower": 0.54, "moat": 0.60}[kind])
 	var count := int(duration * RATE)
 	var bytes := PackedByteArray()
 	bytes.resize(count * 2)
@@ -143,12 +104,6 @@ static func _fortress_effect(kind: String) -> AudioStreamWAV:
 		var t := float(index) / RATE
 		var value := 0.0
 		match kind:
-			"shot":
-				# String snap, walnut stock resonance, then the winding catch.
-				value = (sin(TAU * 183 * t) + sin(TAU * 367 * t) * 0.36) * exp(-t * 26) * 0.17
-				value += (noise - mid) * exp(-t * 100) * 0.24 + sin(TAU * 92 * t) * exp(-t * 34) * 0.12
-				var catch_t := maxf(0, t - 0.105)
-				value += mid * exp(-catch_t * 130) * minf(1, catch_t * 500) * 0.16
 			"wall":
 				value = sin(TAU * 76 * t) * exp(-t * 21) * 0.2 + mid * exp(-t * 14) * 0.38
 				value += (noise - mid) * exp(-t * 38) * 0.11

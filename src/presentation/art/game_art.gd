@@ -4,8 +4,8 @@ extends RefCounted
 
 const FILES := {
 	"menu": "主菜单背景", "battle": "Environment/battle-ground-v2", "lava": "Environment/moat-ground-v2",
-	"wall": "Environment/citadel-v3", "turret": "弩塔", "arrow": "箭矢投射物",
-	"ballista": "Environment/ballista-v3",
+	"wall": "Environment/citadel-v3", "masonry": "Environment/masonry-slate-v1", "turret": "弩塔", "arrow": "箭矢投射物",
+	"ballista": "弩塔",
 	"ui_chrome": "UI/chrome-v2", "ui_symbols": "UI/symbols-v2",
 	"courtyard": "城内石板地面",
 	"spell_icons": "UI/spell-icons-v1", "fortress_fx": "Environment/fortress-atlas-v1",

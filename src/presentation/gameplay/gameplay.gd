@@ -862,10 +862,10 @@ func _draw_background() -> void:
 
 func _draw_castle() -> void:
 	var tower_active := int(snapshot.get("defenses", {}).get("magic_tower_level", 0)) > 0
-	CastleView.draw_structure(self, tower_active, _elapsed_visual)
+	CastleView.draw_structure(self)
 	if tower_active:
 		FortressVisuals.tower(self, _elapsed_visual, _tower_flash, float(_quality_profile()["effect_detail"]))
-	# The independent ballista already includes its complete swivel foot.
+	# The mount stays on the platform; only the upper weapon aims and recoils.
 	FortressVisuals.ballista(self, _aim_visual_angle, _bow_recoil)
 
 func _draw_enemy(enemy: Dictionary) -> void:

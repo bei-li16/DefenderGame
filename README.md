@@ -19,7 +19,7 @@ git switch windows-godot
 
 ## Windows / Godot 实现
 
-`windows-godot` 当前包含可直接运行的原创单机游戏《余烬守望 / Aegis of Ember》(源码 1.7.0)：
+`windows-godot` 当前包含可直接运行的原创单机游戏《余烬守望 / Aegis of Ember》(源码 1.7.1)：
 
 - 无尽关卡：前 30 关保留既有编排，第 31 关起按曲线生成数量、波次、出怪时长和六类普通怪组合；每 10 关恰好一位 Boss，余烬督军→霜痕巨人→风暴女王循环，普通关无 Boss。详见 [无尽关卡规则](docs/endless-stages.md)。
 - 4 把武器:守望长弓、震击长弓(强化击退)、飓风长弓(三连射)、幻影长弓(穿透)。守望长弓初始可用,其余在武器研究中花费金币解锁;顶部弓箭图标展开下拉框切换已解锁弓箭,研究详情也可点击“装备”。两处选择同步保存,并用于随后进入的关卡战斗。
@@ -33,10 +33,12 @@ git switch windows-godot
 - JSON 配置 + 发布包内置回退配置、固定 30 tick、确定性随机、回放事件 hash。
 - EXE 同级 `savedata/` 的三槽 JSON 与设置、临时写入、hash 校验、备份与 schema v1→v6 迁移；脚本测试隔离玩家数据。
 - 本地轮转日志和玩家主动导出的隐私安全诊断 ZIP,不进行网络上传。
+- 三系技能与弩箭使用录音音效，发动/命中独立触发，24 段变体、弩弦/击靶独立声道与叠加限幅。详见 [战斗音效重制](docs/combat-audio.md)。
 - `Gamematerials/` 手绘素材、程序网格动画和三系透明图集特效：火球爆燃/余烬、冰锥碎裂/冰牢、分叉雷击/电弧，配套发射和命中分层音效。详见 [三系视听重制](docs/elemental-vfx.md)；`参考/` 图片不会进入导出包。
 - 城防指挥所首页、战前敌军摘要、统一元素图标、清晰 HUD 和冷却数字；失焦自动暂停，结算可直达研究。菜单/战斗/Boss 三套分层合成配乐、交叉淡化及密集音效限流。见 [1.7 视听与体验优化](docs/presentation-polish.md)。
 - 九枚分阶技能图标、配对横屏地面、机械弩机回弹、水晶塔放电、熔岩泡沫/环境音和墙面碎屑；原素材保留，战斗规则不变。见 [城防视听强化](docs/fortress-art.md) 与 [素材提示词](docs/fortress-art-prompts.md)。
 - 新双塔城墙与独立弩机，统一石铁 UI、图标、战斗计量条、研究/设置/荣誉/存档及结算布局。见 [整机 UI 重制](docs/production-ui.md) 与 [生成记录](docs/production-ui-prompts.md)。
+- 竖直贯通城墙：上下墙段共线、两座圆塔外侧延伸至屏幕外，灰青石材与地面统一；弩机底座固定，上部独立转动，经过双分辨率、多瞄准姿态的实际渲染复查。见 [城墙四项规则修正](docs/straight-wall-art.md)。
 
 运行游戏：
 
@@ -62,4 +64,4 @@ git switch windows-godot
 & .\tools\build_windows.ps1 -Configuration Release
 ```
 
-当前源码为 1.7.0、config v12（保留独立随机倾泻、小范围成长和无尽玩法；修正元素荣誉、初始魔力与败局金币）。正式构建从干净工作树在 `Builds/` 生成内嵌资源的独立 Windows EXE；便携 ZIP 仅含 EXE、README、项目许可及 Godot 声明。源码仓库不收录 EXE/PCK/ZIP，发行附件见 [GitHub Releases](https://github.com/bei-li16/DefenderGame/releases)。升级请解压到新目录并迁移 `savedata/`，不要混入旧独立 PCK。项目使用 MIT 许可。视听与 UI 验收见 [实施状态 §12–15](docs/implementation-status.md)，构建与验收命令见 [开发指南](docs/development-guide.md)。总设计与架构位于 `docs/DefenderGame-design-architecture.tex` 及同名 PDF，后续美术/UI 增量另见上述 Markdown 文档。
+当前源码为 1.7.1、config v12（保留独立随机倾泻、小范围成长和无尽玩法；修正元素荣誉、初始魔力与败局金币）。正式构建从干净工作树在 `Builds/` 生成内嵌资源的独立 Windows EXE；便携 ZIP 仅含 EXE、README、项目许可及 Godot 声明。源码仓库不收录 EXE/PCK/ZIP，发行附件见 [GitHub Releases](https://github.com/bei-li16/DefenderGame/releases)。升级请解压到新目录并迁移 `savedata/`，不要混入旧独立 PCK。项目使用 MIT 许可。视听与 UI 验收见 [实施状态 §12–15](docs/implementation-status.md)，构建与验收命令见 [开发指南](docs/development-guide.md)。总设计与架构位于 `docs/DefenderGame-design-architecture.tex` 及同名 PDF，后续美术/UI 增量另见上述 Markdown 文档。
