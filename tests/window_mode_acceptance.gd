@@ -33,6 +33,13 @@ func _run() -> void:
 	await create_timer(0.25).timeout
 	_expect(DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_WINDOWED, "windowed mode applies")
 	_expect(not DisplayServer.window_get_flag(DisplayServer.WINDOW_FLAG_BORDERLESS), "windowed mode has a normal frame")
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
+	await create_timer(0.25).timeout
+	var maximized_size := DisplayServer.window_get_size()
+	for setting in [["music_volume", 0.4], ["master_volume", 0.6], ["quality", "high"], ["auto_fire", false], ["language", "en_US"]]:
+		var saved: Dictionary = app.call("update_setting", setting[0], setting[1])
+		await create_timer(0.05).timeout
+		_expect(saved.get("ok", false) and DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_MAXIMIZED and DisplayServer.window_get_size() == maximized_size, str(setting[0]) + " preserves maximized geometry")
 
 	app.call("update_setting", "borderless", true)
 	await create_timer(0.25).timeout
@@ -56,6 +63,11 @@ func _run() -> void:
 	var mapped_mouse: Vector2 = gameplay.get_global_mouse_position()
 	_expect(mapped_mouse.distance_to(Vector2(960, 540)) <= 2.0, "viewport mouse position maps back to the same logical battlefield coordinate")
 	_expect(root.content_scale_size == Vector2i(1920, 1080), "window modes preserve the 1920x1080 logical canvas")
+	_expect(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_KEEP, "non-16:9 windows retain the authored battlefield aspect")
+	for dimensions in [Vector2i(1440, 1000), Vector2i(2560, 1080)]:
+		root.size = dimensions
+		await create_timer(0.15).timeout
+		_expect(root.get_visible_rect().size.is_equal_approx(Vector2(1920, 1080)), "non-16:9 window %s does not expand the playable world" % dimensions)
 	root.remove_child(gameplay)
 	gameplay.free()
 

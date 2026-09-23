@@ -10,6 +10,7 @@ var config: Dictionary
 var failures: Array[String] = []
 var passes := 0
 var menu: Node
+var pointer_viewport: Viewport
 
 
 func _initialize() -> void:
@@ -203,10 +204,18 @@ func _check_dropdowns() -> void:
 
 
 func _check_cursors_and_effects() -> void:
+	# Headless has no OS pointer and can letterbox its dummy window. Feed a
+	# local viewport instead; graphical runs still verify the actual window.
+	pointer_viewport = root
+	if DisplayServer.get_name().contains("headless"):
+		var isolated_viewport := SubViewport.new()
+		isolated_viewport.size = Vector2i(1920, 1080)
+		root.add_child(isolated_viewport)
+		pointer_viewport = isolated_viewport
 	for tier in [1, 2, 3]:
 		app.set("profile", _profile(tier))
 		var gameplay := (load("res://scenes/gameplay.tscn") as PackedScene).instantiate()
-		root.add_child(gameplay)
+		pointer_viewport.add_child(gameplay)
 		gameplay.set_process(false)
 		gameplay.set_physics_process(false)
 		var session: Node = gameplay.get("session")
@@ -311,9 +320,12 @@ func _check_cursors_and_effects() -> void:
 			_expect(p95 < 10000 and planning_usec < 33333, "dense barrage stays within fixed tick budget")
 		_move_pointer(Vector2(1100, 500))
 		gameplay.call("_sync_pointer_cursor")
-		root.remove_child(gameplay)
+		pointer_viewport.remove_child(gameplay)
 		gameplay.free()
 		_expect(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "leaving combat restores OS pointer")
+	if pointer_viewport != root:
+		pointer_viewport.free()
+	pointer_viewport = root
 
 
 func _slot(element: String) -> MenuButton:
@@ -329,7 +341,8 @@ func _move_pointer(position: Vector2) -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.position = position
 	motion.global_position = position
-	root.push_input(motion, true)
+	var viewport := pointer_viewport if pointer_viewport != null else root
+	viewport.push_input(motion, true)
 	if not DisplayServer.get_name().contains("headless"):
 		root.warp_mouse(position)
 

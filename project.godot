@@ -7,7 +7,7 @@ config_version=5
 
 config/name="Aegis of Ember"
 config/description="A lightweight offline castle defense game for Windows."
-config/version="1.6.0-windows"
+config/version="1.7.0-windows"
 config/icon="res://icon.png"
 config/windows_native_icon="res://icon.ico"
 run/main_scene="res://scenes/bootstrap.tscn"
@@ -23,7 +23,7 @@ window/size/viewport_height=1080
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
+window/stretch/aspect="keep"
 
 [physics]
 
@@ -48,15 +48,15 @@ combat_cast={
 }
 combat_select_fire={
 "deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":49)]
+"events": [Object(InputEventKey,"physical_keycode":49), Object(InputEventKey,"keycode":49)]
 }
 combat_select_ice={
 "deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":50)]
+"events": [Object(InputEventKey,"physical_keycode":50), Object(InputEventKey,"keycode":50)]
 }
 combat_select_lightning={
 "deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":51)]
+"events": [Object(InputEventKey,"physical_keycode":51), Object(InputEventKey,"keycode":51)]
 }
 combat_cancel_cast={
 "deadzone": 0.5,
@@ -64,5 +64,5 @@ combat_cancel_cast={
 }
 game_pause={
 "deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":4194305)]
+"events": [Object(InputEventKey,"physical_keycode":4194305), Object(InputEventKey,"keycode":4194305)]
 }

@@ -43,9 +43,9 @@ $presetPath = Join-Path $repository 'export_presets.cfg'
 $presetReady = Test-Path -LiteralPath $presetPath -PathType Leaf
 if ($presetReady) {
     $presetText = Get-Content -Raw -LiteralPath $presetPath
-    $presetReady = $presetText -match '(?m)^name="Windows Desktop"$' -and $presetText -match '(?m)^binary_format/embed_pck=false$'
+    $presetReady = $presetText -match '(?m)^name="Windows Desktop"$' -and $presetText -match '(?m)^binary_format/embed_pck=true$'
 }
-Add-ReadinessCheck 'windows_export_preset' $presetReady 'preset=Windows Desktop; separate EXE/PCK required'
+Add-ReadinessCheck 'windows_export_preset' $presetReady 'preset=Windows Desktop; self-contained EXE with embedded PCK'
 
 $releaseReadme = Join-Path $repository 'release\README.txt'
 $godotNotice = Join-Path $repository 'release\GODOT_COPYRIGHT.txt'

@@ -18,6 +18,10 @@ Artifacts/
 TestResults/
 Coverage/
 content/build/build-manifest.json
+*.exe
+*.dll
+*.pck
+*.zip
 
 # Operating system and temporary files
 .DS_Store

@@ -12,6 +12,9 @@ const SkillText = preload("res://src/presentation/skill_text.gd")
 const AttackCatalog = preload("res://src/core/rules/attack_catalog.gd")
 const AttackText = preload("res://src/presentation/attack_text.gd")
 const Art = preload("res://src/presentation/art/game_art.gd")
+const ElementIcon = preload("res://src/presentation/art/element_icon.gd")
+const SpellIcons = preload("res://src/presentation/art/spell_icons.gd")
+const UiAssets = preload("res://src/presentation/art/ui_assets.gd")
 
 var _content_panel: PanelContainer
 var _identity_panel: PanelContainer
@@ -37,8 +40,12 @@ const WEAPON_GLYPHS := {
 func _ready() -> void:
 	theme = UiTheme.create()
 	GameApp.audio.play_music("menu", float(GameApp.settings.get("music_volume", 0.65)))
+	GameApp.audio.set_ducked(false)
 	_build_layout()
 	_show_main_navigation()
+	if GameApp.menu_destination == "research":
+		GameApp.menu_destination = ""
+		_show_upgrades()
 
 
 func _build_layout() -> void:
@@ -62,15 +69,16 @@ func _build_layout() -> void:
 	# Original-style top bar: stage label, loadout strip (equipped bow + battle
 	# spells), then stacked coin/crystal purses and the level progress.
 	var top := PanelContainer.new()
-	top.custom_minimum_size.y = 118
+	top.custom_minimum_size.y = 102
+	top.add_theme_stylebox_override("panel", UiTheme.hud_box())
 	vertical.add_child(top)
 	var top_row := HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", 22)
 	top.add_child(top_row)
 	_stage_label = Label.new()
 	_stage_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_stage_label.add_theme_font_size_override("font_size", 32)
-	_stage_label.add_theme_color_override("font_color", Color("ffd166"))
+	_stage_label.add_theme_font_size_override("font_size", 28)
+	_stage_label.add_theme_color_override("font_color", Color("dcc28b"))
 	top_row.add_child(_stage_label)
 	_loadout_row = HBoxContainer.new()
 	_loadout_row.add_theme_constant_override("separation", 8)
@@ -115,7 +123,7 @@ func _build_layout() -> void:
 	_identity_panel = identity
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	identity.custom_minimum_size.x = 620
-	identity.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(0.02, 0.04, 0.07, 0.12), Color(0.6, 0.75, 0.9, 0.18)))
+	identity.add_theme_stylebox_override("panel", UiTheme.empty())
 	body.add_child(identity)
 	var identity_margin := MarginContainer.new()
 	identity_margin.add_theme_constant_override("margin_left", 46)
@@ -127,17 +135,14 @@ func _build_layout() -> void:
 	identity_stack.alignment = BoxContainer.ALIGNMENT_END
 	identity_stack.add_theme_constant_override("separation", 18)
 	identity_margin.add_child(identity_stack)
-	var crest := Label.new()
-	crest.text = "◆"
-	crest.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	crest.add_theme_font_size_override("font_size", 28)
-	crest.add_theme_color_override("font_color", Color("e9b44c"))
+	var crest := UiAssets.image("health", 84)
+	crest.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	identity_stack.add_child(crest)
 	var heading := Label.new()
 	heading.text = GameApp.text("app.title")
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 64)
-	heading.add_theme_color_override("font_color", Color("ffe2a8"))
+	heading.add_theme_color_override("font_color", Color("f0e3c5"))
 	heading.add_theme_color_override("font_outline_color", Color("111b28"))
 	heading.add_theme_constant_override("outline_size", 8)
 	identity_stack.add_child(heading)
@@ -145,21 +150,13 @@ func _build_layout() -> void:
 	subtitle.text = GameApp.text("app.subtitle")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_font_size_override("font_size", 24)
-	subtitle.add_theme_color_override("font_color", Color("9bc5e6"))
+	subtitle.add_theme_color_override("font_color", Color("c5cec1"))
 	identity_stack.add_child(subtitle)
-	var rule := HSeparator.new()
-	rule.custom_minimum_size.y = 16
-	identity_stack.add_child(rule)
-	var hint := Label.new()
-	hint.text = GameApp.text("controls.hint")
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_color_override("font_color", Color("98aabd"))
-	identity_stack.add_child(hint)
 
 	_content_panel = PanelContainer.new()
 	_content_panel.custom_minimum_size.x = 600
 	_content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_content_panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(0.025, 0.045, 0.075, 0.88), Color(0.45, 0.57, 0.7, 0.8)))
+	_content_panel.add_theme_stylebox_override("panel", UiTheme.panel_box())
 	body.add_child(_content_panel)
 	_content_margin = MarginContainer.new()
 	_content_margin.add_theme_constant_override("margin_left", 28)
@@ -170,22 +167,49 @@ func _build_layout() -> void:
 
 
 func _show_main_navigation() -> void:
-	var stack := _new_content_stack(GameApp.text("menu.continue"))
+	var stack := _new_content_stack(GameApp.text("menu.command"))
+	_identity_panel.visible = true
+	_content_panel.add_theme_stylebox_override("panel", UiTheme.empty())
 	var current_stage := int(GameApp.profile.get("highest_unlocked_stage", 1))
+	var briefing := Label.new()
+	briefing.name = "StageBriefing"
+	var stage := StageCatalog.describe(GameApp.content.rules, current_stage)
+	briefing.text = GameApp.text("stage.plan_stats") % [int(stage.get("enemy_count", 0)), int(stage.get("wave_count", 0)), float(stage.get("spawn_duration_ticks", 0)) / 30.0]
+	briefing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	briefing.add_theme_color_override("font_color", Color("afc9dc"))
+	briefing.add_theme_font_size_override("font_size", 20)
+	stack.add_child(briefing)
 	var continue_button := _button(GameApp.text("menu.continue") + "  ·  %s %02d" % [GameApp.text("common.stage"), current_stage], 76)
+	continue_button.name = "ContinueButton"
+	UiTheme.primary(continue_button)
+	UiAssets.decorate(continue_button, "battle", 38)
 	continue_button.pressed.connect(func() -> void: GameApp.start_stage("stage_%03d" % current_stage))
 	stack.add_child(continue_button)
+	var boss_stage := current_stage + posmod(-current_stage, 10)
+	var boss_hint := Label.new()
+	boss_hint.name = "NextBossHint"
+	boss_hint.text = GameApp.text("menu.next_boss") % boss_stage
+	boss_hint.add_theme_font_size_override("font_size", 18)
+	boss_hint.add_theme_color_override("font_color", Color("e4b780"))
+	stack.add_child(boss_hint)
+	var navigation := GridContainer.new()
+	navigation.columns = 2
+	navigation.add_theme_constant_override("h_separation", 14)
+	navigation.add_theme_constant_override("v_separation", 14)
+	stack.add_child(navigation)
 	for entry in [
-		["menu.stage", Callable(self, "_show_stage_select")],
-		["menu.upgrades", Callable(self, "_show_upgrades")],
-		["menu.honors", Callable(self, "_show_honors")],
-		["menu.saves", Callable(self, "_show_save_data")],
-		["menu.settings", Callable(self, "_show_settings")],
-		["menu.tutorial", Callable(self, "_show_tutorial")]
+		["menu.stage", Callable(self, "_show_stage_select"), "battle"],
+		["menu.upgrades", Callable(self, "_show_upgrades"), "research"],
+		["menu.honors", Callable(self, "_show_honors"), "honor"],
+		["menu.saves", Callable(self, "_show_save_data"), "save"],
+		["menu.settings", Callable(self, "_show_settings"), "settings"],
+		["menu.tutorial", Callable(self, "_show_tutorial"), "tutorial"]
 	]:
-		var button := _button(GameApp.text(entry[0]), 62)
+		var button := _button(GameApp.text(entry[0]), 76)
+		UiAssets.decorate(button, str(entry[2]), 36)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.pressed.connect(entry[1])
-		stack.add_child(button)
+		navigation.add_child(button)
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(spacer)
@@ -210,6 +234,7 @@ func _show_stage_select(page_index: int = -1, focus_stage: int = 0) -> void:
 	navigation.add_theme_constant_override("separation", 14)
 	stack.add_child(navigation)
 	var previous := _button(GameApp.text("stage.previous_page"), 48)
+	UiAssets.decorate(previous, "back", 24)
 	previous.name = "StagePreviousPage"
 	previous.disabled = page == 0
 	previous.pressed.connect(func() -> void: _show_stage_select(page - 1))
@@ -222,6 +247,7 @@ func _show_stage_select(page_index: int = -1, focus_stage: int = 0) -> void:
 	range_label.add_theme_font_size_override("font_size", 22)
 	navigation.add_child(range_label)
 	var following := _button(GameApp.text("stage.next_page"), 48)
+	UiAssets.decorate(following, "next", 24)
 	following.name = "StageNextPage"
 	following.disabled = page >= last_page
 	following.pressed.connect(func() -> void: _show_stage_select(page + 1))
@@ -264,18 +290,19 @@ func _show_stage_select(page_index: int = -1, focus_stage: int = 0) -> void:
 		var stage_id := str(stage["id"])
 		var label := "%s %02d  ·  %s" % [GameApp.text("common.stage"), number, GameApp.text(str(stage.get("name_key", "")))]
 		if bool(stage.get("boss", false)):
-			label += "  ⚠ " + GameApp.text("common.boss")
+			label += "  " + GameApp.text("common.boss")
 			if not str(stage.get("boss_id", "")).is_empty():
 				label += " · " + GameApp.text(str(GameApp.content.find_by_id("enemies", str(stage["boss_id"])).get("name_key", "")))
 		label += "\n" + GameApp.text("stage.plan_stats") % [int(stage["enemy_count"]), int(stage["wave_count"]), float(stage["spawn_duration_ticks"]) / tick_rate]
 		var best: Dictionary = best_results.get(stage_id, {})
 		if not best.is_empty():
-			label += "\n★ %d%%  ·  %s %d" % [int(best.get("wall_percent", 0)), GameApp.text("result.kills"), int(best.get("kills", 0))]
+			label += "\n%s %d%%  ·  %s %d" % [GameApp.text("hud.wall"), int(best.get("wall_percent", 0)), GameApp.text("result.kills"), int(best.get("kills", 0))]
 		if number > unlocked:
-			label += "\n🔒 " + GameApp.text("menu.locked")
+			label += "\n" + GameApp.text("menu.locked")
 		var reward: Dictionary = stage.get("clear_reward", {})
-		label += "\n◆ %d   %s %d" % [int(reward.get("coins", 0)), GameApp.text("common.xp"), int(reward.get("xp", 0))]
+		label += "\n%s %d   %s %d" % [GameApp.text("menu.coins"), int(reward.get("coins", 0)), GameApp.text("common.xp"), int(reward.get("xp", 0))]
 		var stage_button := _button(label, 132)
+		UiAssets.decorate(stage_button, "skull" if bool(stage.get("boss", false)) else "battle", 40)
 		stage_button.name = "Stage_" + str(number)
 		stage_button.add_theme_font_size_override("font_size", 21)
 		stage_button.clip_text = true
@@ -312,8 +339,8 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 			break
 	var stack := _new_content_stack(page_title)
 	# Research graphs use the full canvas, as in the reference screenshots.
-	var full_tree := page_id in ["magic", "attack"]
-	_identity_panel.visible = not full_tree
+	var full_tree := true
+	_identity_panel.visible = false
 	if full_tree:
 		stack.add_theme_constant_override("separation", 10)
 	var page_tabs := HBoxContainer.new()
@@ -373,6 +400,8 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	# upgrade button, mirroring the classic research page detail area.
 	var detail := PanelContainer.new()
 	detail.custom_minimum_size.y = 132
+	detail.add_theme_stylebox_override("panel", UiTheme.empty(12))
+	stack.add_child(HSeparator.new())
 	stack.add_child(detail)
 	var detail_row := HBoxContainer.new()
 	detail_row.add_theme_constant_override("separation", 16)
@@ -421,8 +450,14 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	detail_price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	detail_price.add_theme_font_size_override("font_size", 22)
 	detail_price.add_theme_color_override("font_color", Color("ffd166"))
-	detail_right.add_child(detail_price)
+	var price_row := HBoxContainer.new()
+	price_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var price_icon := UiAssets.image("coin", 26)
+	price_row.add_child(price_icon)
+	price_row.add_child(detail_price)
+	detail_right.add_child(price_row)
 	var detail_button := _button("", 64)
+	UiTheme.primary(detail_button)
 	detail_button.name = "ResearchPurchaseButton"
 	detail_button.custom_minimum_size = Vector2(180, 64)
 	detail_right.add_child(detail_button)
@@ -482,9 +517,10 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 		var currency := str(definition.get("currency", "coins"))
 		var weapon_ref := str(definition.get("weapon_ref", ""))
 		var already_unlocked: bool = upgrade_id == "unlock_" + weapon_ref and GameApp.profile.get("unlocked_weapons", []).has(weapon_ref)
-		var price_glyph := "✦" if currency == "crystals" else "◆"
-		detail_price.text = GameApp.text("common.max") if not can_upgrade else ("✦" if already_unlocked else "%s %s" % [price_glyph, ResearchText.compact(price)])
-		detail_price.tooltip_text = "%s %d" % [price_glyph, price]
+		price_icon.texture = UiAssets.icon("crystal" if currency == "crystals" else "coin")
+		price_icon.visible = can_upgrade and not already_unlocked
+		detail_price.text = GameApp.text("common.max") if not can_upgrade else (GameApp.text("research.unlocked") if already_unlocked else ResearchText.compact(price))
+		detail_price.tooltip_text = str(price)
 		detail_price.add_theme_color_override("font_color", Color("8fd3ff") if currency == "crystals" else Color("ffd166"))
 		detail_button.text = GameApp.text("research.unlocked") if already_unlocked else (GameApp.text("common.upgrade") if can_upgrade else GameApp.text("common.max"))
 		detail_button.disabled = not can_upgrade or already_unlocked or int(GameApp.profile.get(currency, 0)) < price or not prerequisites_met
@@ -663,9 +699,11 @@ func _show_honors() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(scroll)
-	var list := VBoxContainer.new()
+	var list := GridContainer.new()
+	list.columns = 2
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 10)
+	list.add_theme_constant_override("h_separation", 40)
+	list.add_theme_constant_override("v_separation", 16)
 	scroll.add_child(list)
 	var honors: Dictionary = GameApp.profile.get("honors", {})
 	for definition in GameApp.content.rules.get("honors", []):
@@ -676,24 +714,31 @@ func _show_honors() -> void:
 		var milestones: Array = definition.get("milestones", [])
 		var maxed := honor_level >= milestones.size()
 		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", UiTheme.empty(12))
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		list.add_child(card)
 		var honor_stack := VBoxContainer.new()
 		honor_stack.add_theme_constant_override("separation", 6)
 		card.add_child(honor_stack)
 		# Badge pips light up per achieved level (参考 Status badge row).
-		var pips := ""
+		var honor_heading := HBoxContainer.new()
+		honor_heading.add_theme_constant_override("separation", 8)
+		honor_stack.add_child(honor_heading)
 		for pip in range(milestones.size()):
-			pips += "✦" if pip < honor_level else "◇"
+			var badge := UiAssets.image("honor", 22)
+			badge.modulate = Color.WHITE if pip < honor_level else Color(0.48, 0.5, 0.48)
+			honor_heading.add_child(badge)
 		var label := Label.new()
-		label.text = "%s  ·  %s %d/%d\n%s" % [
-			pips,
+		label.text = "%s %d/%d\n%s" % [
 			GameApp.text(str(definition.get("name_key", honor_id))),
 			honor_level, milestones.size(),
 			GameApp.text(str(definition.get("description_key", "")))
 		]
 		label.add_theme_font_size_override("font_size", 19)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		label.add_theme_color_override("font_color", Color("ffd166") if honor_level > 0 else Color("8693a6"))
-		honor_stack.add_child(label)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		honor_heading.add_child(label)
 		# Progress toward the next milestone (full bar at max level).
 		var honor_bar := ProgressBar.new()
 		honor_bar.custom_minimum_size = Vector2(0, 14)
@@ -721,6 +766,7 @@ func _show_honors() -> void:
 		reward.add_theme_font_size_override("font_size", 15)
 		reward.add_theme_color_override("font_color", Color("9fb2c8"))
 		honor_stack.add_child(reward)
+		honor_stack.add_child(HSeparator.new())
 	_add_back_button(stack)
 
 
@@ -745,6 +791,8 @@ func _show_save_data() -> void:
 	path_hint.add_theme_color_override("font_color", Color("9fb2c8"))
 	stack.add_child(path_hint)
 	var open_folder := _button(GameApp.text("saves.open_folder"), 46)
+	UiAssets.decorate(open_folder, "save", 24)
+	open_folder.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	open_folder.pressed.connect(func() -> void:
 		if not bool(GameApp.open_save_directory().get("ok", false)):
 			operation_error.text = GameApp.text("feedback.save_failed")
@@ -754,13 +802,17 @@ func _show_save_data() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_child(scroll)
-	var list := VBoxContainer.new()
+	var list := GridContainer.new()
+	list.columns = 3
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 12)
+	list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	list.add_theme_constant_override("h_separation", 32)
 	scroll.add_child(list)
 	for summary in GameApp.save_slot_summaries():
 		var slot_id := int(summary.get("slot_id", 0))
 		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", UiTheme.empty(12))
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		list.add_child(card)
 		var card_stack := VBoxContainer.new()
 		card_stack.add_theme_constant_override("separation", 6)
@@ -779,6 +831,7 @@ func _show_save_data() -> void:
 		title.add_theme_font_size_override("font_size", 24)
 		title.add_theme_color_override("font_color", Color("ffd166") if is_active else Color("e9eef5"))
 		card_stack.add_child(title)
+		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		if not is_empty:
 			if bool(summary.get("ok", true)):
 				var stats: Dictionary = summary.get("stats", {})
@@ -791,6 +844,7 @@ func _show_save_data() -> void:
 					GameApp.text("saves.playtime"), _format_playtime(int(stats.get("playtime_seconds", 0)))
 				]
 				info.add_theme_font_size_override("font_size", 18)
+				info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				card_stack.add_child(info)
 				var saved_label := Label.new()
 				saved_label.text = "%s: %s  ·  %s %02d" % [
@@ -798,6 +852,7 @@ func _show_save_data() -> void:
 					GameApp.text("common.stage"), int(summary.get("highest_unlocked_stage", 1))
 				]
 				saved_label.add_theme_font_size_override("font_size", 15)
+				saved_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				saved_label.add_theme_color_override("font_color", Color("9fb2c8"))
 				card_stack.add_child(saved_label)
 			else:
@@ -810,6 +865,9 @@ func _show_save_data() -> void:
 			56
 		)
 		action.disabled = is_active or (not is_empty and not bool(summary.get("ok", true)))
+		UiAssets.decorate(action, "check" if is_active else "save", 26)
+		action.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		action.custom_minimum_size.x = 260
 		action.pressed.connect(func() -> void:
 			var result := GameApp.switch_save_slot(slot_id)
 			if bool(result.get("ok", false)):
@@ -819,6 +877,7 @@ func _show_save_data() -> void:
 				operation_error.text = GameApp.text("feedback.save_failed")
 		)
 		card_stack.add_child(action)
+		card_stack.add_child(HSeparator.new())
 	_add_back_button(stack)
 
 
@@ -843,11 +902,24 @@ func _show_settings() -> void:
 	stack.add_child(scroll)
 	var settings_content := VBoxContainer.new()
 	settings_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_content.add_theme_constant_override("separation", 10)
+	settings_content.add_theme_constant_override("separation", 18)
 	scroll.add_child(settings_content)
-	_add_slider_row(settings_content, "settings.master", "master_volume")
-	_add_slider_row(settings_content, "settings.music", "music_volume")
-	_add_slider_row(settings_content, "settings.sfx", "sfx_volume")
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 80)
+	settings_content.add_child(columns)
+	var audio_controls := VBoxContainer.new()
+	var display_controls := VBoxContainer.new()
+	for column in [audio_controls, display_controls]:
+		column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		column.add_theme_constant_override("separation", 12)
+		columns.add_child(column)
+	_add_slider_row(audio_controls, "settings.master", "master_volume")
+	_add_slider_row(audio_controls, "settings.music", "music_volume")
+	_add_slider_row(audio_controls, "settings.sfx", "sfx_volume")
+	audio_controls.add_child(HSeparator.new())
+	_add_toggle_row(audio_controls, "settings.aim_assist", "aim_assist")
+	_add_toggle_row(audio_controls, "settings.auto_fire", "auto_fire")
+	_add_toggle_row(audio_controls, "settings.shake", "screen_shake")
 	var language_row := _setting_row(GameApp.text("settings.language"))
 	var language := OptionButton.new()
 	language.add_item("简体中文")
@@ -858,7 +930,7 @@ func _show_settings() -> void:
 			_refresh_after_language_change()
 	)
 	language_row.add_child(language)
-	settings_content.add_child(language_row)
+	display_controls.add_child(language_row)
 	var resolution_row := _setting_row(GameApp.text("settings.resolution"))
 	var resolution := OptionButton.new()
 	var resolutions := ["1280x720", "1366x768", "1920x1080", "2560x1440"]
@@ -867,13 +939,10 @@ func _show_settings() -> void:
 	resolution.selected = maxi(0, resolutions.find(str(GameApp.settings.get("resolution", "1920x1080"))))
 	resolution.item_selected.connect(func(index: int) -> void: _save_setting("resolution", resolutions[index]))
 	resolution_row.add_child(resolution)
-	settings_content.add_child(resolution_row)
-	_add_toggle_row(settings_content, "settings.fullscreen", "fullscreen")
-	_add_toggle_row(settings_content, "settings.borderless", "borderless")
-	_add_toggle_row(settings_content, "settings.aim_assist", "aim_assist")
-	_add_toggle_row(settings_content, "settings.auto_fire", "auto_fire")
-	_add_toggle_row(settings_content, "settings.shake", "screen_shake")
-	_add_range_slider_row(settings_content, "settings.ui_scale", "ui_scale", 0.85, 1.25, 0.05)
+	display_controls.add_child(resolution_row)
+	_add_toggle_row(display_controls, "settings.fullscreen", "fullscreen")
+	_add_toggle_row(display_controls, "settings.borderless", "borderless")
+	_add_range_slider_row(display_controls, "settings.ui_scale", "ui_scale", 0.85, 1.25, 0.05)
 	var quality_row := _setting_row(GameApp.text("settings.quality"))
 	var quality := OptionButton.new()
 	var qualities := ["low", "medium", "high"]
@@ -882,7 +951,7 @@ func _show_settings() -> void:
 	quality.selected = maxi(0, qualities.find(str(GameApp.settings.get("quality", "medium"))))
 	quality.item_selected.connect(func(index: int) -> void: _save_setting("quality", qualities[index]))
 	quality_row.add_child(quality)
-	settings_content.add_child(quality_row)
+	display_controls.add_child(quality_row)
 	var note := Label.new()
 	note.text = GameApp.text("settings.applied")
 	note.add_theme_font_size_override("font_size", 16)
@@ -890,6 +959,8 @@ func _show_settings() -> void:
 	settings_content.add_child(note)
 	_settings_note = note
 	var export_diagnostics := _button(GameApp.text("settings.export_diagnostics"), 54)
+	UiAssets.decorate(export_diagnostics, "save", 24)
+	export_diagnostics.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	export_diagnostics.pressed.connect(_export_diagnostics)
 	settings_content.add_child(export_diagnostics)
 	_add_admin_section(settings_content)
@@ -901,11 +972,17 @@ func _show_settings() -> void:
 # transaction as every other profile write.
 func _add_admin_section(settings_content: VBoxContainer) -> void:
 	settings_content.add_child(HSeparator.new())
-	var admin_title := Label.new()
-	admin_title.text = GameApp.text("admin.title")
-	admin_title.add_theme_font_size_override("font_size", 22)
-	admin_title.add_theme_color_override("font_color", Color("ffd166"))
+	var admin_title := _button(GameApp.text("admin.title"), 48)
+	admin_title.toggle_mode = true
+	admin_title.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	UiAssets.decorate(admin_title, "settings", 24)
 	settings_content.add_child(admin_title)
+	var fields := VBoxContainer.new()
+	fields.visible = false
+	fields.add_theme_constant_override("separation", 10)
+	settings_content.add_child(fields)
+	admin_title.toggled.connect(func(expanded: bool) -> void: fields.visible = expanded)
+	settings_content = fields
 	var password_row := _setting_row(GameApp.text("admin.password"))
 	var password := LineEdit.new()
 	password.name = "AdminPassword"
@@ -975,11 +1052,11 @@ func _add_admin_amount_row(panel: VBoxContainer, label_key: String, current: int
 
 func _show_tutorial() -> void:
 	var stack := _new_content_stack(GameApp.text("tutorial.title"))
-	var glyphs := Label.new()
-	glyphs.text = "⌖     🖱     ① ② ③     ⚡"
-	glyphs.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	glyphs.add_theme_font_size_override("font_size", 44)
-	glyphs.add_theme_color_override("font_color", Color("ffd166"))
+	var glyphs := HBoxContainer.new()
+	glyphs.alignment = BoxContainer.ALIGNMENT_CENTER
+	glyphs.add_theme_constant_override("separation", 24)
+	for key in ["battle", "health", "mana", "tower"]:
+		glyphs.add_child(UiAssets.image(key, 72))
 	stack.add_child(glyphs)
 	var body := Label.new()
 	body.text = GameApp.text("tutorial.body")
@@ -992,6 +1069,8 @@ func _show_tutorial() -> void:
 	save_error.add_theme_color_override("font_color", Color("ff8d7a"))
 	stack.add_child(save_error)
 	var training := _button(GameApp.text("menu.start") + " · %s 01" % GameApp.text("common.stage"), 68)
+	UiTheme.primary(training)
+	UiAssets.decorate(training, "battle", 30)
 	training.pressed.connect(func() -> void:
 		var save_result := GameApp.complete_tutorial()
 		if not bool(save_result.get("ok", false)):
@@ -1005,15 +1084,16 @@ func _show_tutorial() -> void:
 
 func _new_content_stack(title_text: String) -> VBoxContainer:
 	_research_detail_refresh = Callable()
-	_identity_panel.visible = true
+	_identity_panel.visible = false
+	_content_panel.add_theme_stylebox_override("panel", UiTheme.panel_box())
 	_clear_content()
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 16)
 	_content_margin.add_child(stack)
 	var title := Label.new()
 	title.text = title_text
-	title.add_theme_font_size_override("font_size", 34)
-	title.add_theme_color_override("font_color", Color("ffd166"))
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color("dcc28b"))
 	stack.add_child(title)
 	stack.add_child(HSeparator.new())
 	return stack
@@ -1027,7 +1107,10 @@ func _clear_content() -> void:
 
 
 func _add_back_button(stack: VBoxContainer) -> void:
-	var back := _button("←  " + GameApp.text("menu.back"), 54)
+	var back := _button(GameApp.text("menu.back"), 54)
+	UiAssets.decorate(back, "back", 24)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	back.custom_minimum_size.x = 180
 	back.pressed.connect(_show_main_navigation)
 	stack.add_child(back)
 
@@ -1036,6 +1119,7 @@ func _button(label: String, height: float) -> Button:
 	var button := Button.new()
 	button.text = label
 	button.custom_minimum_size.y = height
+	button.pressed.connect(func() -> void: GameApp.audio.play_ui(float(GameApp.settings.get("sfx_volume", 0.85))))
 	return button
 
 
@@ -1045,6 +1129,8 @@ func _setting_row(label_text: String) -> HBoxContainer:
 	var label := Label.new()
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(label)
 	return row
 
@@ -1063,6 +1149,13 @@ func _add_range_slider_row(stack: VBoxContainer, label_key: String, setting_key:
 	slider.value = float(GameApp.settings.get(setting_key, 0.8))
 	slider.value_changed.connect(func(value: float) -> void: _save_setting(setting_key, value))
 	row.add_child(slider)
+	var value_label := Label.new()
+	value_label.custom_minimum_size.x = 64
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	value_label.text = "%d%%" % roundi(slider.value * 100)
+	slider.value_changed.connect(func(value: float) -> void: value_label.text = "%d%%" % roundi(value * 100))
+	row.add_child(value_label)
 	stack.add_child(row)
 
 
@@ -1079,8 +1172,10 @@ func _refresh_header() -> void:
 	if _stage_label == null:
 		return
 	_stage_label.text = "%s %02d" % [GameApp.text("common.stage"), int(GameApp.profile.get("highest_unlocked_stage", 1))]
-	_coins_label.text = str(int(GameApp.profile.get("coins", 0)))
-	_crystals_label.text = str(int(GameApp.profile.get("crystals", 0)))
+	_coins_label.text = ResearchText.compact(int(GameApp.profile.get("coins", 0)))
+	_crystals_label.text = ResearchText.compact(int(GameApp.profile.get("crystals", 0)))
+	_coins_label.tooltip_text = str(GameApp.profile.get("coins", 0))
+	_crystals_label.tooltip_text = str(GameApp.profile.get("crystals", 0))
 	var progress: Dictionary = Progression.level_progress(GameApp.content.rules, int(GameApp.profile.get("xp", 0)))
 	_xp_label.text = GameApp.text("status.level_short") % int(progress.get("level", 1))
 	_xp_bar.max_value = maxi(1, int(progress.get("needed", 1)))
@@ -1139,9 +1234,9 @@ func _rebuild_loadout() -> void:
 			var unlock_node: Dictionary = GameApp.content.find_by_id("upgrades", "unlock_" + weapon_id)
 			var price := int(unlock_node.get("base_cost", 0))
 			if price > 0:
-				bow_menu.add_item("🔒  %s  ·  ◆ %d" % [weapon_name, price], item_index)
+				bow_menu.add_item("%s  ·  %s  ·  %d" % [weapon_name, GameApp.text("menu.locked"), price], item_index)
 			else:
-				bow_menu.add_item("🔒  %s" % weapon_name, item_index)
+				bow_menu.add_item("%s  ·  %s" % [weapon_name, GameApp.text("menu.locked")], item_index)
 			index_by_item[item_index] = "unlock_" + weapon_id
 		bow_menu.set_item_tooltip(item_index, weapon_name + "  ·  " + _weapon_summary(definition))
 		bow_menu.set_item_icon(item_index, Art.texture(weapon_id))
@@ -1167,8 +1262,15 @@ func _rebuild_loadout() -> void:
 		var spell := MenuButton.new()
 		spell.name = "SkillSelector_" + str(spell_definition[1])
 		spell.flat = false
-		spell.text = "%s%s ▾" % [str(spell_definition[0]), ["Ⅰ", "Ⅱ", "Ⅲ"][int(skill.get("tier", 1)) - 1]]
-		spell.custom_minimum_size = Vector2(92, 56)
+		spell.text = "    %s ▾" % ["Ⅰ", "Ⅱ", "Ⅲ"][int(skill.get("tier", 1)) - 1]
+		spell.custom_minimum_size = Vector2(108, 56)
+		var emblem := ElementIcon.new()
+		emblem.element = str(spell_definition[1])
+		emblem.tier = int(skill.get("tier", 1))
+		emblem.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+		emblem.position = Vector2(8, -20)
+		emblem.size = Vector2(36, 40)
+		spell.add_child(emblem)
 		spell.add_theme_font_size_override("font_size", 23)
 		spell.add_theme_stylebox_override("normal", _loadout_frame(false))
 		spell.add_theme_stylebox_override("hover", _loadout_frame(true))
@@ -1190,8 +1292,10 @@ func _rebuild_loadout() -> void:
 			var equipped := id == str(skill["id"])
 			var index := choices.size()
 			choices.append(definition)
-			popup.add_item("%s %s %s  ·  ◈ %d" % ["✓" if equipped else ("  " if available else "🔒"), ["Ⅰ", "Ⅱ", "Ⅲ"][int(definition["tier"]) - 1], GameApp.text(str(definition["name_key"])), int(definition["mana_cost"])], index)
+			popup.add_item("%s %s %s  ·  %d" % ["✓" if equipped else ("  " if available else GameApp.text("menu.locked")), ["Ⅰ", "Ⅱ", "Ⅲ"][int(definition["tier"]) - 1], GameApp.text(str(definition["name_key"])), int(definition["mana_cost"])], index)
 			popup.set_item_disabled(index, equipped)
+			popup.set_item_icon(index, SpellIcons.texture(str(definition["element"]), int(definition["tier"])))
+			popup.set_item_icon_max_width(index, 42)
 			popup.set_item_tooltip(index, SkillText.summary(SkillCatalog.effective(GameApp.content.rules, GameApp.profile, id), GameApp.text, int(GameApp.content.rules.get("simulation_tick_rate", 30))))
 		popup.index_pressed.connect(func(index: int) -> void:
 			popup.hide()
@@ -1230,12 +1334,8 @@ func _equip_skill(skill_id: String) -> void:
 			_research_detail_refresh.call()
 
 
-func _loadout_frame(highlighted: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("16263c")
-	style.border_color = Color("ffd166") if highlighted else Color("33465e")
-	style.set_border_width_all(2 if highlighted else 1)
-	style.set_corner_radius_all(10)
+func _loadout_frame(highlighted: bool) -> StyleBoxTexture:
+	var style := UiTheme.frame("button", Color(1.2, 1.18, 1.0) if highlighted else Color.WHITE)
 	# Identical compact margins in normal/hover/pressed states prevent the
 	# tier and dropdown arrow being clipped when MenuButton opens its popup.
 	style.content_margin_left = 6.0
@@ -1248,11 +1348,7 @@ func _loadout_frame(highlighted: bool) -> StyleBoxFlat:
 # Coin/crystal purse pill (参考 top bar assets): glyph + amount in a framed box.
 func _make_asset_pill(glyph: String, color: Color, value_label: Label) -> PanelContainer:
 	var pill := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("16263c")
-	style.border_color = Color("33465e")
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(12)
+	var style := UiTheme.empty()
 	style.content_margin_left = 12.0
 	style.content_margin_right = 14.0
 	style.content_margin_top = 3.0
@@ -1261,14 +1357,11 @@ func _make_asset_pill(glyph: String, color: Color, value_label: Label) -> PanelC
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	pill.add_child(row)
-	var icon := Label.new()
-	icon.text = glyph
-	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	icon.add_theme_font_size_override("font_size", 20)
-	icon.add_theme_color_override("font_color", color)
+	var icon := UiAssets.image("coin" if glyph == "◆" else "crystal", 26)
 	row.add_child(icon)
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	value_label.add_theme_font_size_override("font_size", 21)
+	value_label.add_theme_color_override("font_color", color)
 	value_label.custom_minimum_size = Vector2(64, 0)
 	row.add_child(value_label)
 	return pill

@@ -1,6 +1,6 @@
 {
-  "config_version": 11,
-  "ruleset_version": "aegis-windows-fallback-independent-barrage-v1",
+  "config_version": 12,
+  "ruleset_version": "aegis-windows-fallback-presentation-polish-v1",
   "source": "Built-in release fallback configuration",
   "simulation_tick_rate": 30,
   "rules": {"status_resistance_floor_permille": 950},

@@ -1,7 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$ExePath,
-    [Parameter(Mandatory = $true)]
     [string]$PckPath,
     [Parameter(Mandatory = $true)]
     [string]$ExpectedGitSha,
@@ -12,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 
 $repository = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $resolvedExe = (Resolve-Path -LiteralPath $ExePath).Path
-$resolvedPck = (Resolve-Path -LiteralPath $PckPath).Path
+$resolvedPck = if ($PckPath) { (Resolve-Path -LiteralPath $PckPath).Path } else { $resolvedExe }
 if (-not (Test-Path -LiteralPath $GodotConsole -PathType Leaf)) {
     throw "Godot console executable not found: $GodotConsole"
 }
@@ -48,7 +47,9 @@ New-Item -ItemType Directory -Force -Path $gameDirectory | Out-Null
 # Run a copy of the package: the new save contract puts savedata/ beside the
 # EXE, so the probe must not touch the real distribution directory.
 Copy-Item -LiteralPath $resolvedExe -Destination (Join-Path $gameDirectory 'DefenderGame.exe') -Force
-Copy-Item -LiteralPath $resolvedPck -Destination (Join-Path $gameDirectory 'DefenderGame.pck') -Force
+if ($resolvedPck -ne $resolvedExe) {
+    Copy-Item -LiteralPath $resolvedPck -Destination (Join-Path $gameDirectory 'DefenderGame.pck') -Force
+}
 $probeExe = Join-Path $gameDirectory 'DefenderGame.exe'
 $isolatedAppData = Join-Path $runDirectory 'AppData'
 New-Item -ItemType Directory -Force -Path $isolatedAppData | Out-Null

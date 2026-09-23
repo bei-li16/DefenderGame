@@ -7,11 +7,30 @@ const REQUIRED_PATHS: Array[String] = [
 	"res://scenes/bootstrap.tscn",
 	"res://scenes/main_menu.tscn",
 	"res://scenes/gameplay.tscn",
-	"res://src/autoload/game_app.gd"
+	"res://src/autoload/game_app.gd",
+	"res://src/presentation/art/spell_visuals.gd",
+	"res://src/presentation/art/spell_icons.gd",
+	"res://src/presentation/art/fortress_visuals.gd",
+	"res://src/presentation/art/ui_assets.gd",
+	"res://src/presentation/gameplay/hud_meter.gd",
+	"res://Gamematerials/UI/chrome-v2.png",
+	"res://Gamematerials/UI/symbols-v2.png",
+	"res://Gamematerials/Environment/citadel-v3.png",
+	"res://Gamematerials/Environment/ballista-v3.png",
+	"res://src/infrastructure/audio/sound_bank.gd",
+	"res://Gamematerials/UI/spell-icons-v1.png",
+	"res://Gamematerials/Environment/battle-ground-v2.png",
+	"res://Gamematerials/Environment/moat-ground-v2.png",
+	"res://Gamematerials/Environment/fortress-atlas-v1.png",
+	"res://Gamematerials/VFX/fire-atlas-v1.png",
+	"res://Gamematerials/VFX/ice-atlas-v1.png",
+	"res://Gamematerials/VFX/lightning-atlas-v1.png"
 ]
 
 const EXCLUDED_PATHS: Array[String] = [
 	"res://tests/run_all.gd",
+	"res://tests/fortress_art_acceptance.gd",
+	"res://tests/production_ui_acceptance.gd",
 	"res://tests/support/failing_save_service.gd",
 	"res://tools/build_windows.ps1",
 	"res://tools/verify_export_pack.gd",

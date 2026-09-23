@@ -9,6 +9,17 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	# Cover actual keys, not only synthetic InputEventAction. Remote keyboards
+	# can supply a logical keycode without a physical scan code.
+	for binding in [["combat_select_fire", KEY_1], ["combat_select_ice", KEY_2], ["combat_select_lightning", KEY_3], ["game_pause", KEY_ESCAPE]]:
+		for physical in [true, false]:
+			var key := InputEventKey.new()
+			key.pressed = true
+			if physical:
+				key.physical_keycode = binding[1]
+			else:
+				key.keycode = binding[1]
+			_expect(key.is_action_pressed(binding[0]), "%s accepts %s key events" % [binding[0], "physical" if physical else "logical"])
 	var app := root.get_node_or_null("GameApp")
 	if app == null:
 		push_error("GameApp autoload is unavailable")
@@ -23,10 +34,24 @@ func _run() -> void:
 	legacy_settings["auto_fire"] = false
 	app.set("settings", legacy_settings)
 	var gameplay := (load("res://scenes/gameplay.tscn") as PackedScene).instantiate()
-	root.add_child(gameplay)
+	# A local viewport owns its test pointer, independent of dummy display
+	# coordinates and the desktop window's letterbox transform.
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1920, 1080)
+	root.add_child(viewport)
+	viewport.add_child(gameplay)
 	await process_frame
 	await process_frame
 	var session: Node = gameplay.get("session")
+	gameplay.set_process(false)
+	gameplay.set_physics_process(false)
+	session.set_physics_process(false)
+	# Never rely on the OS/headless pointer origin: letterboxing can map it
+	# outside the logical canvas, which is correctly not a firing position.
+	var pointer := InputEventMouseMotion.new()
+	pointer.position = Vector2(960, 540)
+	pointer.global_position = pointer.position
+	viewport.push_input(pointer, true)
 
 	gameplay.call("_unhandled_input", _action("combat_fire", true))
 	_expect(_last_command(session) == "fire_started", "combat_fire action starts continuous fire when auto-fire is off")
@@ -68,8 +93,8 @@ func _run() -> void:
 	gameplay.call("_resume_game")
 
 	paused = false
-	root.remove_child(gameplay)
-	gameplay.free()
+	root.remove_child(viewport)
+	viewport.free()
 	app.set("profile", original_profile)
 	app.set("settings", original_settings)
 	if app.get("audio") != null:

@@ -33,8 +33,8 @@
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small\color{Muted}余烬守望 / 工程设计与软件架构}
-\fancyhead[R]{\small\color{Muted}源码基线 1.6.0}
-\fancyfoot[L]{\footnotesize\color{Muted}DefenderGame · 2026-09-21}
+\fancyhead[R]{\small\color{Muted}源码基线 1.7.0}
+\fancyfoot[L]{\footnotesize\color{Muted}DefenderGame · 2026-09-22}
 \fancyfoot[R]{\small\thepage}
 \renewcommand{\headrulewidth}{0.3pt}
 \setcounter{tocdepth}{1}
@@ -55,14 +55,14 @@
 \vspace{9mm}
 \noindent\begin{tabularx}{\linewidth}{@{}P{34mm}Y@{}}
 分析对象 & Windows 离线 2D 城堡防御游戏，Godot 实现分支\\
-源码版本 & \code{1.6.0-windows}；规则 config v11；存档 schema v6\\
-分支 / 提交 & \code{windows-godot} / \code{d0d9484}\\
-分析日期 & 2026 年 9 月 21 日\\
+源码版本 & \code{1.7.0-windows}；规则 config v12；存档 schema v6\\
+分支 / 提交 & \code{windows-godot} / \code{dd32a33} + 本轮工作树\\
+分析日期 & 2026 年 9 月 22 日\\
 交付内容 & 可独立编译的 LaTeX 源文件、PDF 设计与架构文档\\
 证据口径 & 当前代码与配置优先；历史文档用于追溯设计意图\\
 \end{tabularx}
 \vfill
-\note{本文是现有实现的工程基线，不是原版 Defender II 的精确规格，也不表示所有设计目标已通过验证。实装机制、测试证据与尚未修复的问题分别标注；本次只生成文档，不修改游戏逻辑或玩家存档，不提交、推送或重新发行游戏。}
+\note{本文是源码 1.7 的工程基线，不是原版 Defender II 的精确规格。本轮在既有素材与规则基础上优化界面、特效和音频，修复三项玩法缺陷，并同步需求、架构与验证记录。未改动真实玩家存档，未提交、推送或重新导出发行包。实装机制、测试证据与剩余风险分别标注。}
 \vspace{8mm}
 \noindent{\small\color{Muted}仓库：\path{G:/Data/GitFiles/AI_Project/DefenderGame}}
 \end{titlepage}
@@ -76,12 +76,12 @@
 \subsection{范围与方法}
 本次从启动入口、唯一 Autoload、应用服务、纯规则、战场与菜单表现、资源注册、两份规则配置、双语文本、测试脚本及发布工具建立调用与数据链路，结合 \code{docs/} 下十份专题文档以及参考库说明核对设计演化。对生产脚本做模块级清点，对战斗、成长、结算与持久化关键路径逐段核查，并运行核心、专项和图形验收。
 
-基线提交完整标识为 \code{d0d94844e10a89b61d2db5cc47bb1bd61cb92e8c}。开始分析时工作区干净。当前统计：39 个生产 GDScript、7809 行（含注释与空行）、3 个场景、24 个顶层测试 GDScript、21 张游戏 PNG；\code{GameArt} 登记其中 20 张，旧 \code{主城墙.png} 未用于当前城墙绘制。测试支持目录另有失败保存替身。分析不读取真实 \code{savedata/} 的玩家数据，不重新验证外部网站与原作数值。
+基线提交完整标识为 \code{dd32a331fc955d5f9b4ff5898122ea8d8c5e1dfc}。开始分析时工作区干净。当前统计：41 个生产 GDScript、3 个场景、25 个顶层测试 GDScript、21 张游戏 PNG；\code{GameArt} 登记其中 20 张，旧 \code{主城墙.png} 未用于当前城墙绘制。测试支持目录另有失败保存替身。分析不读取真实 \code{savedata/} 的玩家数据，不重新验证外部网站与原作数值。
 
 \subsection{总体判断}
 工程已经具备完整的“装备与研究、进入关卡、固定步长战斗、持久化结算、下一关”离线闭环。主要优点是规则可脱离场景运行、共享属性目录减少预览与实战漂移、战斗 RNG 分流、保存优先事务、内容校验和较广的回归脚本。
 
-主要维护压力集中在三个大文件：\code{main_menu.gd} 1328 行、\code{gameplay.gd} 1060 行、\code{run_model.gd} 601 行。当前分层是实用的逻辑分离，不是严格端口适配器架构：应用层直接使用 Godot 文件 API，表现层依赖具体 \code{GameApp} 与规则查询，战斗子系统通过 model 门面调用内部方法。
+主要维护压力集中在 \code{main_menu.gd}、\code{gameplay.gd} 与 \code{run_model.gd} 三个大文件。当前分层是实用的逻辑分离，不是严格端口适配器架构：应用层直接使用 Godot 文件 API，表现层依赖具体 \code{GameApp} 与规则查询，战斗子系统通过 model 门面调用内部方法。
 
 \begin{tabularx}{\linewidth}{@{}P{29mm}Y@{}}
 \toprule
@@ -90,12 +90,12 @@
 无尽玩法 & 前 30 关编排；31 关起按需生成；十关一 Boss。17 项研究持续成长，15 项有限。玩家显示等级仍封顶 99。\\
 可靠性 & 三槽 JSON、schema 迁移、临时写入与备份恢复、永久奖励账本；没有云存档或数据库。\\
 表现 & PNG 与共享 UV 网格动画，程序技能特效和合成音频；不是逐怪节点或骨骼动画体系。\\
-主要差异 & 元素施法次数漏入结算、荣誉加蓝后初始蓝不满、败局额外悬赏、导出资源版本滞后等，详见第 \ref{sec:risks} 节。\\
+本轮修订 & 元素荣誉、入场满蓝、败局悬赏已修复；主界面、HUD、法术冲击、分层配乐与暂停优化。剩余边界见第 \ref{sec:risks} 节。\\
 \bottomrule
 \end{tabularx}
 
 \subsection{证据等级}
-“实现”表示当前源码可定位；“本次验证”表示 2026-09-21 实际执行；“设计目标”来自需求，不等同验收结果；“建议”不代表已经实施。原版截图只支持布局或机制研究，项目当前的伤害、价格、控制和增长公式均按本地配置解释。
+“实现”表示当前源码可定位；“本次验证”表示 2026-09-22 实际执行；“设计目标”来自需求，不等同验收结果；“建议”不代表已经实施。原版截图只支持布局或机制研究，项目当前的伤害、价格、控制和增长公式均按本地配置解释。
 
 \nextsection{产品设计与功能边界}
 \subsection{核心循环与用户路径}
@@ -107,7 +107,7 @@
 \node[box,below=of menu,text width=127mm] (prepare) {应用边界校验关卡解锁，建立 run ID、seed 与只读约定的档案快照};
 \node[box,below=of prepare,text width=127mm] (play) {固定 30 tick 战斗：射击、法术、敌人、设施、死亡与胜负};
 \node[box,below=of play,text width=127mm] (save) {结算副本 → 幂等奖励与荣誉 → 保存验证 → 提交内存};
-\node[box,below=of save,text width=127mm] (next) {胜利：下一关或返回菜单；失败：重试；保存失败：重试保存};
+\node[box,below=of save,text width=127mm] (next) {胜利：下一关；失败：重试；均可研究整备；保存失败：重试保存};
 \draw[flow] (menu)--(prepare); \draw[flow] (prepare)--(play);
 \draw[flow] (play)--(save); \draw[flow] (save)--(next);
 \end{tikzpicture}
@@ -120,10 +120,12 @@
 \item 1/2/3 选择火/冰/雷装备槽，左键按下进入拖拽、松开施法；UI 上松手取消，右键取消，Esc 优先取消法术，否则暂停。
 \item 未选法术时显示十字准星；选中后为元素魔法图标，包含阶位及非法提示。指针离窗、失焦、暂停或退出场景恢复系统指针。
 \item 选关每页最多 20 张卡片，按需查询摘要，可定位已解锁编号；预览锁定内容不授予进入权限。
+\item 1.7 首页以金色继续按钮为主入口，六个次级入口为两列网格；显示当前关敌数、波数、出怪窗口与下一次Boss关。窗口失焦自动暂停并取消拖拽，必须手动恢复。
+\item 非16:9窗口采用固定画布居中留边，HUD不延伸到规则战场之外。1/2/3与Esc同时接受物理键码和逻辑键码，兼容不提供扫描码的输入源。
 \end{itemize}
 
 \subsection{非目标与质量目标}
-当前不包含联机 Battle、账号、广告、支付、服务器、移动端、在线排行榜或强制网络。Windows 10/11 x86\_64 是文档目标平台；采用 Compatibility 渲染，逻辑画布 1920×1080、默认显示 1280×720（启动设置可覆盖），\code{canvas_items + expand} 适配。
+当前不包含联机 Battle、账号、广告、支付、服务器、移动端、在线排行榜或强制网络。Windows 10/11 x86\_64 是文档目标平台；采用 Compatibility 渲染，逻辑画布 1920×1080、默认显示 1280×720（启动设置可覆盖），\code{canvas_items + keep} 适配。
 
 性能目标为 60 FPS、逻辑 30 tick/s、100 怪与 200 箭逻辑 p95 小于 10 ms；SSD 冷启动小于 4 秒、工作集小于 750 MB、60 分钟不持续增长为需求目标，本次不重新给出这些运行指标的全面通过结论。离线、双语、缩放与信息不只依赖颜色是持续约束。
 
@@ -224,7 +226,7 @@ GameSession 维护待处理命令，在 \code{_physics_process} 每次推进一�
 Command & type、技能 ID、目标 milli 坐标；由表现层表达意图，核心负责合法性。\\
 Event & type、tick、sequence 以及实体/伤害/奖励字段；驱动音效、飘字、特效、攻击反馈与回放 hash。\\
 Snapshot & 城墙/Mana、波次、装备和有效技能、敌人与箭、falling\_spells；驱动插值、HUD 和指针。\\
-Result & run/stage 身份、胜负、击杀、累计资源、墙百分比、武器、Boss 数；应用层结算。当前缺少分元素施法数，见问题清单。\\
+Result & run/stage 身份、胜负、击杀、累计资源、墙百分比、武器、Boss数及 fire/ice/lightning\_casts；应用层据此结算元素荣誉。\\
 \bottomrule
 \end{tabularx}
 事件排序不等于执行顺序：例如 skill\_pulse 排在 damage 之前，而它是在落击计算后发出。表现层应按约定读取字段，不能用事件列表位置再次推导伤害。Snapshot 为只读约定；实体只做浅复制，嵌套字典/数组并非强制不可变。
@@ -459,7 +461,7 @@ C(N)=3+\left\lfloor\frac{N-1}{5}\right\rfloor+4\,[N\bmod10=0],
 \subsection{幂等与顺序}
 一局资源键为 \code{run_id:reward_version}，永久保存，不为了限制长度而直接删除旧键。GameApp 在资源副本上依次应用荣誉、首通水晶、解锁、最佳结果，再持久化；成功后才发 profile\_changed。首通检查依赖结算前 best\_results 中是否已有 victory，而非静态30关数组。
 
-\note{当前存在实现缺口：RunModel 记录并在 Snapshot 提供 fire/ice/lightning\_casts，但 result() 没有这些字段，HonorService 按缺省0累加，实际法术无法正常推进元素荣誉。另败局 result 会无条件加一次 coin\_bounty；不要将期望的“败局只保留击杀收入”写成已完全实现。}
+\note{1.7已补齐Result中的三元素施法数，并用真实施法→结果→保存→重载→重复结算验证荣誉链路。失败结算不提交统计，重试不重计。败局只保留真实击杀收入，不加通关悬赏；胜利仍领取通关悬赏。旧版本未记录的施法次数无法准确还原，不伪造历史补偿。great\_mage的魔力上限加成完成后再初始化mana，满蓝进入关卡。}
 \source{src/application/honor_service.gd; src/core/rules/progression.gd; src/application/upgrade_service.gd}
 
 \nextsection{存档模型、迁移与恢复}
@@ -528,6 +530,15 @@ CreatureVisuals 为每实体保留表现时钟、受击/攻击反馈与插值位
 位置按30tick快照插值；攻击回摆由真实 wall\_damage/boss\_special事件触发，临近攻击冷却结束可表现前摇，\textbf{动画不产生伤害}。冻结/眩晕停动作时钟，减速调低动作速度；暂停将表现delta置0。死亡0.48秒缩小、转动、淡出，残影上限48。快照中的规则位置不随视觉摆动变化。
 \source{src/presentation/art/; src/presentation/gameplay/gameplay.gd}
 
+\subsection{1.7 视觉统一与信息层级}
+主菜单、魔法研究、技能按钮和光标共用 \code{MagicCursor.draw_symbol}，\code{ElementIcon}仅负责缩放和元素颜色。复用既有PNG，不新增外部图标字体或图片依赖。暖金用于主操作，青色用于键盘焦点，深蓝底板隔开文字与高对比背景；菜单装饰微粒最多20个，低画质关闭。
+
+战斗顶部硬边暗带改为连续透明渐变，左下HP/Mana、武器、设施使用独立底板；装饰控件鼠标穿透，技能与暂停按钮仍响应输入。Boss血条与反馈文字分区，反馈带优先级，普通命中不抢占Boss警告。新增波次、残敌清理、危墙一次性提示、场上敌数/用时及冷却整数秒；危墙同时用文字与颜色表达。
+
+每次真实落击增加受预算限制的冲击碎片与短闪光。火系使用向上火焰尖舌、热核和烟尘，冰系在地面形成短暂晶刺并保留冰牢，雷系根据落点区分折线形状。飘字增加描边并限制屏内位置。这些变化不新增命中，不改变落点、RNG、半径、3秒窗口或56/52/60发数量。密集场面仍优先保证怪物和HUD可读。
+
+结果面板补用时、施法数、失败建议和研究整备入口；应用使用一次性的 \code{menu_destination} 返回研究页，不将导航状态写入存档。多项荣誉文本自动折行。画面质量预算与真实伤害解耦，低画质仍完整结算所有落击。
+
 \nextsection{配置、本地化、随机与调试}
 \subsection{配置加载与校验}
 主配置 \code{game_rules.json} 与回退配置分别独立校验。Debug主配置错误直接报错；Release或显式测试开关可回退，返回 used\_fallback/fallback\_reason。本地化同样有独立回退文件。规则目录不是运行时远程下载或热更服务。
@@ -546,7 +557,12 @@ x_{t+1}=(1103515245x_t+12345)\bmod2^{31}.
 GameSession在调试构建记录命令、seed、stage/config版本及事件SHA-256；ReplayService只负责JSON导入导出，不包含独立回放播放器。当前记录不携完整Profile快照、规则内容hash或引擎版本，\textbf{只靠该文件不能保证跨档案、跨规则复现}；可靠复现仍需匹配原配置、档案与引擎。发布构建默认不记录，避免整局事件内存持续积累。
 
 \subsection{设置与诊断}
-简中/英文文本由key查询，缺少语言回退简中，缺key回显key；内容校验保证要求的键存在。窗口、无边框、全屏、音量、自动射击、震动、画质和UI缩放在应用层处理。音频是22050Hz程序合成，10个音效播放器循环使用，另一个音乐播放器，headless禁用音频生成。
+简中/英文文本由key查询，缺少语言回退简中，缺key回显key；内容校验保证要求的键存在。窗口、无边框、全屏、音量、自动射击、震动、画质和UI缩放在应用层处理。暂停快速设置新增独立音乐滑杆；保存失败仍回滚旧设置。
+
+\subsection{1.7 分层程序音频}
+\code{SoundBank}生成22050Hz、16位单声道PCM：菜单12.8秒、战斗10秒、Boss8秒，均为四小节Am/F/C/G结构，包含铺底、拨弦和低音，战斗/Boss增加节奏层。三段PCM总量小于1.5MB，一次生成缓存，无在线下载或新增音乐素材授权依赖。数学相位和噪声不消耗规则RNG。
+
+\code{DefenderProceduralAudio}用两个音乐播放器在0.8秒内交叉淡化；暂停/结算将背景音乐压至32\%，恢复后平滑回升。音乐零值增益为-80dB；headless不创建播放声部。音效共10声部，8个普通轮换、2个告警/结果保留，射击、命中、元素落击按各自毫秒间隔限流；不重复播放hit与damage两份同一命中。PCM首尾加短包络以减轻接缝；声音素材并非录制配器，主观音色仍需玩家试听。
 
 DiagnosticService保存最多5份、每份256KiB的本地日志；导出的ZIP最多5份，仅包含日志。details白名单允许 operation/stage/status/renderer，绝对路径被脱敏，不导出Profile、不自动上传。此限制不等于日志覆盖所有错误，尤其本地文件写失败仍须检查返回值。
 \source{src/application/content_service.gd; src/core/rules/content_validator.gd; src/core/rules/deterministic_rng.gd; src/infrastructure/}
@@ -556,7 +572,7 @@ DiagnosticService保存最多5份、每份256KiB的本地日志；导出的ZIP�
 \subsection{测试层次与执行边界}
 测试为自有 SceneTree脚本，不依赖测试插件。Core用纯数据fixture，应用事务用失败保存替身，UI用真实Control/子Viewport，图形测试用Compatibility设备，发布测试检查实际PCK和EXE。\code{--script}自动切换隔离存档；多个脚本会重置同一隔离目录，必须串行。不能以进程退出0或PASS文本代替检查 stderr的SCRIPT ERROR。
 
-2026-09-21在上述源码基线执行以下验收。表中数量为各脚本自身断言口径，不将不同脚本重叠断言当成独立需求覆盖率。
+2026-09-22在上述源码基线执行以下验收。表中数量为各脚本自身断言口径，不将不同脚本重叠断言当成独立需求覆盖率。
 \begin{tabularx}{\linewidth}{@{}Y P{39mm}P{25mm}@{}}
 \toprule
 测试入口（\code{tests/}） & 模式 & 结果\\\midrule
@@ -571,26 +587,28 @@ DiagnosticService保存最多5份、每份256KiB的本地日志；导出的ZIP�
 \code{weapon_selection_acceptance.gd} & headless & 30/30\\
 \code{menu_selection_acceptance.gd} & headless & 12/12\\
 \code{settings_acceptance.gd} & headless & 8/8\\
-\code{inputmap_acceptance.gd} & headless & 9/9\\
+\code{inputmap_acceptance.gd} & headless & 17/17\\
 \code{diagnostic_acceptance.gd} & headless & 10/10\\
 \code{tutorial_acceptance.gd} & headless & 8/8\\
 \code{stage_autoplay.gd} & headless & 30+9关全胜\\
-\code{performance_stress.gd} & headless & p95 1.713ms\\
+\code{presentation_polish_acceptance.gd} & headless / 图形 & 41 / 44项\\
+\code{performance_stress.gd} & headless & p95 1.430ms\\
+\code{long_soak.gd} & headless，60模拟分钟 & p95 1.465ms\\
 \bottomrule
 \end{tabularx}
-内容校验确认 config11有效；无尽研究脚本包含正常模拟第1000关（研究75）与第10000关（研究200），不是人工强制清怪。固定seed自动瞄准胜利不代表人手操作难度已平衡。
+内容校验确认 config12有效；无尽研究脚本包含正常模拟第1000关（研究75）与第10000关（研究200），不是人工强制清怪。固定seed自动瞄准胜利不代表人手操作难度已平衡。
 
 \subsection{性能解释}
-压力fixture为100敌人与200箭矢，推进9000tick即5模拟分钟，本机平均1.351ms、p95 1.713ms、墙钟12.16秒，低于10ms门槛。该fixture大部分是无命中静态箭，不能替代最坏穿透、密集落击和真实GPU帧率。三系III合计168发的技能专项另测计划约1.75ms、逻辑p95约1.43ms；这些均是本机快照，不是最低硬件承诺。
+压力fixture为100敌人与200箭矢，推进9000tick即5模拟分钟，本机平均1.257ms、p95 1.430ms、墙钟11.31秒，低于10ms门槛。该fixture大部分是无命中静态箭，不能替代最坏穿透、密集落击和真实GPU帧率。三系III合计168发的图形技能专项另测计划约1.60ms、逻辑p95约1.22ms；这些均是本机快照，不是最低硬件承诺。
 
 性能控制包括生成关活怪96上限、箭寿命与最多五箭齐射、空间带碰撞、共享网格缓存、死亡残影48上限。低/中/高画质效果队列12/32/64、飘字8/18/32；这些预算只影响显示，不能丢失核心伤害。
 
 \subsection{额外验证与未重跑项}
-真实图形验收结果见随后的补充记录。此次未运行60模拟分钟长稳、完整窗口模式切换、杀进程保存恢复、冷启动/工作集测试、全套导出验收或正式构建；已有脚本是能力，不应引用历史数字为本次结论。临时审计探针确认三项现有缺陷，详见第\ref{sec:risks}节；因此“测试全绿”不等于“工程无缺陷”。
+60模拟分钟浸泡实际墙钟137.60秒，内存由28.42MiB至31.58MiB，增长3.17MiB、峰值34.23MiB，节点3→3；这是加速纯逻辑测试，不是60分钟实时时长的GPU音频长稳。窗口模式及非16:9映射专项10项通过，图形结果见末节。未重跑杀进程保存恢复、冷启动/工作集测试、全套导出或正式构建；历史数字不作为本轮发布结论。三项已知玩法缺陷已有永久回归，剩余风险仍单列。
 
 \nextsection{发布构建、资源合规与可追溯性}
 \subsection{构建链路}
-\code{tools/build_windows.ps1}要求干净工作区，顺序执行：内容校验→核心/无尽关卡/无尽研究/技能交互/自动通关/存档槽测试→引擎版权声明一致性→PCK预检→项目许可完整性→构建清单→匹配的Godot4.7.2模板→EXE/PCK导出→实际包验收→Release ZIP。
+\code{tools/build_windows.ps1}要求干净工作区，顺序执行：内容校验→核心/无尽关卡/无尽研究/技能交互/视听体验/自动通关/存档槽测试→引擎版权声明一致性→PCK预检→项目许可完整性→构建清单→匹配的Godot4.7.2模板→EXE/PCK导出→实际包验收→Release ZIP。
 
 清单位于 \code{content/build/build-manifest.json}，记录app版本、Godot版本、GitSHA、配置版本/hash与UTC；生成物不提交。ZIP收集EXE/PCK、README、游戏许可及Godot声明。Debug与Release分别输出不同目录；导出预设为独立PCK，不内嵌EXE，目前未开启签名。
 
@@ -603,11 +621,11 @@ Windows导出验收复制到隔离运行目录，再让EXE创建同级 \code{sav
 \begin{tabularx}{\linewidth}{@{}P{59mm}Y@{}}
 \toprule
 版本来源 & 当前值\\\midrule
-\code{project.godot} & 1.6.0-windows\\
-\code{SaveService.APP_VERSION} & 1.6.0-windows\\
-主/回退配置 & config11；独立随机倾泻ruleset\\
-\code{export_presets.cfg}文件/产品版本 & 1.0.5.0（滞后）\\
-构建ZIP文件名 & Aegis-of-Ember-1.6.0-Windows-x64.zip\\
+\code{project.godot} & 1.7.0-windows\\
+\code{SaveService.APP_VERSION} & 1.7.0-windows\\
+主/回退配置 & config12；presentation-polish-v1（保留独立随机倾泻）\\
+\code{export_presets.cfg}文件/产品版本 & 1.7.0.0（本轮同步）\\
+构建ZIP文件名 & Aegis-of-Ember-1.7.0-Windows-x64.zip\\
 \bottomrule
 \end{tabularx}
 建议以单一版本源派生窗口标题、存档信封、资源版本和压缩包名，并在发布前拒绝不一致。已有源码提交不证明本机旧EXE包含相同改动，本次也没有重新导出游戏。
@@ -617,13 +635,13 @@ Windows导出验收复制到隔离运行目录，再让EXE创建同级 \code{sav
 
 \nextsection{发现的问题与改进顺序}
 \label{sec:risks}
-本节只记录，不修改实现。优先级P1表示影响主要功能/数据可靠性，应先补失败回归；P2表示一致性、可维护性或边界风险。复现均用隔离测试档案。
+本节区分本轮已修复项和仍保留的边界风险。优先级P1表示影响主要功能/数据可靠性；P2表示一致性、可维护性或边界风险。验证均用隔离测试档案。
 
-\subsection{已用临时探针复现}
+\subsection{1.7 已修复并纳入永久回归}
 \begin{enumerate}
-\item \textbf{P1：元素荣誉统计断链。}model一次火球后 fire\_casts=1，result不含fire\_casts，HonorService结算后累计为0。冰雷同样缺字段。位置：\code{run_model.gd:result}、\code{honor_service.gd:apply_result}。建议补三字段与“真实施法→结果→保存→重载”的链路测试，不能只测手工构造result。
-\item \textbf{P2：荣誉加蓝后开局蓝不满。}great\_mage=3、无其他研究时初始mana=120、max\_mana=138。setup先赋mana，再应用上限荣誉。若产品要求满蓝开局，应在全部上限计算后初始化mana并测试三个荣誉等级。
-\item \textbf{P2：零击杀败局仍有额外金币。}coin\_bounty=10，立即破墙，kills=0但result.coins=10。clear\_coins无条件叠加悬赏。建议明确败局契约，将仅胜利的悬赏与击杀悬赏分开，并测试零杀/有杀两类败局。
+\item \textbf{元素荣誉统计。}Result加入fire/ice/lightning\_casts，实际三系施法可进入HonorService；测试跨越火系200次门槛、保存失败回滚、重载与重复结算。
+\item \textbf{入场魔力。}setup在great\_mage上限计算后赋满mana；荣誉3级无其他研究时为138/138，而不是120/138。
+\item \textbf{败局额外悬赏。}clear\_coins的coin\_bounty只在胜利加算；零击杀败局为0，有击杀败局保留真实收入，胜利收益保持。
 \end{enumerate}
 
 \subsection{静态核查发现的边界与技术债}
@@ -634,11 +652,11 @@ Windows导出验收复制到隔离运行目录，再让EXE创建同级 \code{sav
 \item \textbf{P2：回放上下文不足。}缺Profile快照与精确规则hash/引擎身份；建议建立ReplayEnvelope并补跨重载重演测试。Release日志关闭策略应保留。
 \item \textbf{P2：管理员更新不是组合事务。}金币保存成功后水晶保存失败会留下部分更新；内置口令只用于本地功能入口，不是鉴权。建议合并余额变更为一次候选Profile保存。
 \item \textbf{P2：长线档案增长。}reward\_ledger与best\_results永久增长，查重线性扫描、全档序列化带来长线延迟；需要规模fixture，不应直接裁剪历史身份。
-\item \textbf{P2：发布版本与旧文档漂移。}PE资源版本1.0.5.0、旧user存档路径、假想场景节点、旧三技能/固定30关描述需统一；本文提供当前基线但未改动历史文件。
+\item \textbf{P2：发布可追溯性。}本轮已同步源码/存档/PE/ZIP版本与主要文档路径，但多个版本常量仍需人工维护，正式1.7包尚未导出。旧版历史验收保留原日期，不代表当前工作树已发布。
 \end{itemize}
 
 \subsection{建议实施顺序与验收}
-第一阶段补功能与恢复失败回归，优先元素荣誉和坏备份；第二阶段统一版本与文档入口，补回放上下文；第三阶段按职责拆菜单/战场控制器，稳定Command/Snapshot/Result结构；第四阶段做长期经济与存档规模测试。拆分不改变tick顺序、RNG消耗和奖励键；用现有事件hash和战斗专项约束等价性，不同时重写所有架构。
+本轮已完成三项功能修复及版本/文档入口同步。后续优先补坏备份故障fixture与恢复；再补回放上下文；随后按职责拆菜单/战场控制器，稳定Command/Snapshot/Result结构，做长期经济与存档规模测试。拆分不改变tick顺序、RNG消耗和奖励键；不同时重写所有架构。
 
 \nextsection{维护指南与需求追踪}
 \subsection{典型改动的完整触点}
@@ -684,7 +702,7 @@ NFR表现/预算 & CreatureVisuals / Gameplay & materials、castle、resolution�
 
 \nextsection{附录：生产模块完整索引}
 \small
-下表覆盖当前39个生产脚本，目录简写均相对仓库根。修改定位以路径和函数名为准，行号会随后续开发变化。
+下表覆盖当前41个生产脚本，目录简写均相对仓库根。修改定位以路径和函数名为准，行号会随后续开发变化。
 \begin{longtable}{@{}P{77mm}P{79mm}@{}}
 \toprule 文件 & 职责\\\midrule\endfirsthead
 \toprule 文件（续） & 职责\\\midrule\endhead
@@ -718,6 +736,7 @@ NFR表现/预算 & CreatureVisuals / Gameplay & materials、castle、resolution�
 \path{src/presentation/gameplay/skill_button.gd} & 阶位、冷却和Mana状态按钮。\\
 \path{src/presentation/gameplay/magic_cursor.gd} & 三元素代码绘制光标。\\
 \path{src/presentation/art/game_art.gd} & PNG、Atlas、UV与四边形缓存。\\
+\path{src/presentation/art/element_icon.gd} & 复用魔法光标形状的可缩放元素图标。\\
 \path{src/presentation/art/castle_view.gd} & 完整城墙定位、背景选择与受击轮廓。\\
 \path{src/presentation/art/courtyard_view.gd} & 不透明内院、铺地裁切、地基阴影。\\
 \path{src/presentation/art/creature_visuals.gd} & 插值、网格姿态、攻击受击死亡表现。\\
@@ -727,6 +746,7 @@ NFR表现/预算 & CreatureVisuals / Gameplay & materials、castle、resolution�
 \path{src/presentation/skill_text.gd} & 共享技能说明。\\
 \path{src/infrastructure/diagnostic_service.gd} & 脱敏日志、轮转和本地ZIP。\\
 \path{src/infrastructure/audio/procedural_audio.gd} & 合成音乐与事件音效、有限声部。\\
+\path{src/infrastructure/audio/sound_bank.gd} & 三段四小节配乐与12类短音效PCM生成。\\
 \bottomrule
 \end{longtable}
 \normalsize
@@ -734,7 +754,7 @@ NFR表现/预算 & CreatureVisuals / Gameplay & materials、castle、resolution�
 \nextsection{附录：来源、复现与文档交付}
 \subsection{本地依据清单}
 \begin{enumerate}
-\item \path{project.godot}、\path{scenes/}、\path{src/}：版本、真实场景和39个生产模块。
+\item \path{project.godot}、\path{scenes/}、\path{src/}：版本、真实场景和41个生产模块。
 \item \path{content/config/game_rules.json}、\path{game_rules_fallback.json}（同目录）：玩法与回退；\path{content/catalogs/}：显示文本。
 \item \path{docs/defender-ii-requirements.md}、\path{docs/defender-ii-software-architecture.md}：需求与历史架构。
 \item \path{docs/attack-research-reimplementation.md}、\path{docs/skill-chains-reimplementation.md}：机制来源、项目平衡和演化。
@@ -766,8 +786,10 @@ xelatex -interaction=nonstopmode -halt-on-error\newline
 
 \subsection{本次图形与交付检查记录}
 \label{sec:finalqa}
-真实Compatibility图形验收：双语×三分辨率菜单/战斗状态布局0失败；素材69项、城墙52项、技能交互369项全部通过。未启用游戏截图输出，所以断言数不包含可选截图保存检查。上述进程退出码均为0，标准错误无SCRIPT ERROR或ERROR。
+真实Compatibility图形验收：双语×三分辨率菜单/战斗布局0失败；素材75项、城墙54项、技能交互369项、体验44项、窗口10项通过，包含可选截图检查。像素样本避开新增HUD，布局测试不再依赖结算页最后一个子节点；最终进程检查退出码与标准错误，不能将首轮失败日志误算为通过。
 
-PDF使用XeLaTeX重复编译，检查缺字、引用、边界和全部渲染页面；最终交付只保留本源文件和对应PDF。游戏代码、原素材及现有历史文档不作修改。本次测试证明的是当前版本在所列fixture和本机环境的行为，不等同完整发布认证。
+计算机技能实际操作隔离试玩：下拉换装、战斗施法、胜败结算、研究整备入口、暂停与音乐滑杆保存均已观察。音频验证覆盖PCM峰值/边界、声部/限流/增益，未作主观试听评价。日志和游戏截图位于忽略目录 \path{Builds/polish-review-20260922/}，其他专项按各自目录保存。
+
+PDF用XeLaTeX编译并渲染全部页面检查缺字、引用、边界与分页。保留源文件与PDF；TeX中间文件仅在忽略的Builds临时目录，清理操作被环境策略阻止，尚未删除。测试证明所列fixture和本机行为，不等同最低硬件承诺、全部高关卡人工平衡或完整发布认证。真实玩家存档与原PNG未修改。
 
 \end{document}

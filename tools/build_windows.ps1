@@ -24,7 +24,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Content validation failed; Windows export was not attempted.'
 }
 
-foreach ($testScript in @('res://tests/run_all.gd', 'res://tests/endless_stages_acceptance.gd', 'res://tests/endless_research_acceptance.gd', 'res://tests/skill_interaction_acceptance.gd', 'res://tests/stage_autoplay.gd', 'res://tests/save_slot_acceptance.gd')) {
+foreach ($testScript in @('res://tests/run_all.gd', 'res://tests/endless_stages_acceptance.gd', 'res://tests/endless_research_acceptance.gd', 'res://tests/skill_interaction_acceptance.gd', 'res://tests/presentation_polish_acceptance.gd', 'res://tests/elemental_vfx_acceptance.gd', 'res://tests/fortress_art_acceptance.gd', 'res://tests/production_ui_acceptance.gd', 'res://tests/resolution_layout.gd', 'res://tests/stage_autoplay.gd', 'res://tests/save_slot_acceptance.gd')) {
     & $GodotConsole --headless --path $repository --script $testScript
     if ($LASTEXITCODE -ne 0) {
         throw "Required headless test failed: $testScript"
@@ -68,19 +68,23 @@ if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
 $outputDirectory = if ($Configuration -eq 'Debug') { 'Builds\Windows-Dev' } else { 'Builds\Windows' }
 $outputPath = Join-Path $repository "$outputDirectory\DefenderGame.exe"
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $outputPath) | Out-Null
+# Old separate packs must not accompany the new self-contained executable.
+$legacyPack = [System.IO.Path]::ChangeExtension($outputPath, '.pck')
+if (Test-Path -LiteralPath $legacyPack -PathType Leaf) {
+    Remove-Item -LiteralPath $legacyPack -Force
+}
 $exportSwitch = if ($Configuration -eq 'Debug') { '--export-debug' } else { '--export-release' }
 & $GodotConsole --headless --path $repository $exportSwitch 'Windows Desktop' $outputPath
 if ($LASTEXITCODE -ne 0) {
     throw "Windows $Configuration export failed with exit code $LASTEXITCODE."
 }
 
-$pckPath = [System.IO.Path]::ChangeExtension($outputPath, '.pck')
-if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf) -or -not (Test-Path -LiteralPath $pckPath -PathType Leaf)) {
-    throw 'Export reported success but the expected EXE/PCK pair is incomplete.'
+if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf) -or (Test-Path -LiteralPath $legacyPack)) {
+    throw 'Export must produce a self-contained EXE without a separate PCK.'
 }
 
 $gitSha = (& git -C $repository rev-parse HEAD).Trim()
-& (Join-Path $PSScriptRoot 'verify_windows_export.ps1') -ExePath $outputPath -PckPath $pckPath -ExpectedGitSha $gitSha -GodotConsole $GodotConsole
+& (Join-Path $PSScriptRoot 'verify_windows_export.ps1') -ExePath $outputPath -ExpectedGitSha $gitSha -GodotConsole $GodotConsole
 if ($LASTEXITCODE -ne 0) {
     throw 'Exported Windows package acceptance failed.'
 }
@@ -95,19 +99,30 @@ if ($Configuration -eq 'Release') {
     Copy-Item -LiteralPath $releaseReadme -Destination $packagedReadme -Force
     Copy-Item -LiteralPath $gameLicense -Destination $packagedGameLicense -Force
     Copy-Item -LiteralPath $godotCopyright -Destination $packagedGodotCopyright -Force
-    $archivePath = Join-Path $repository 'Builds\Aegis-of-Ember-1.6.0-Windows-x64.zip'
+    $archivePath = Join-Path $repository 'Builds\Aegis-of-Ember-1.7.0-Windows-x64.zip'
     if (Test-Path -LiteralPath $archivePath -PathType Leaf) {
         Remove-Item -LiteralPath $archivePath -Force
     }
     # Antivirus scanners transiently lock the freshly exported EXE and fail the
     # first Compress-Archive with UnauthorizedAccess.  Wait and retry once.
-    $archiveInputs = @($outputPath, $pckPath, $packagedReadme, $packagedGameLicense, $packagedGodotCopyright)
+    $archiveInputs = @($outputPath, $packagedReadme, $packagedGameLicense, $packagedGodotCopyright)
     try {
         Compress-Archive -LiteralPath $archiveInputs -DestinationPath $archivePath -CompressionLevel Optimal
     } catch [System.IO.IOException] {
         Write-Output "[BUILD] ZIP packaging hit an IO lock, retrying once after 8s"
         Start-Sleep -Seconds 8
         Compress-Archive -LiteralPath $archiveInputs -DestinationPath $archivePath -CompressionLevel Optimal
+    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [IO.Compression.ZipFile]::OpenRead($archivePath)
+    try {
+        $expectedFiles = @('DefenderGame.exe', 'README.txt', 'GAME_LICENSE.txt', 'GODOT_COPYRIGHT.txt')
+        $actualFiles = @($archive.Entries | ForEach-Object { $_.FullName })
+        if ($actualFiles.Count -ne $expectedFiles.Count -or (Compare-Object $expectedFiles $actualFiles)) {
+            throw 'Release ZIP must contain only the self-contained EXE and the three notices.'
+        }
+    } finally {
+        $archive.Dispose()
     }
     Write-Output "[BUILD] PASS: $outputPath and $archivePath"
 } else {

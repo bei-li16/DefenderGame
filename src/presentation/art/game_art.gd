@@ -3,9 +3,14 @@ extends RefCounted
 ## resize/mipmap them. Never use Image.load: exported games resolve import remaps.
 
 const FILES := {
-	"menu": "主菜单背景", "battle": "战斗场地背景", "lava": "熔岩沟场景变体",
-	"wall": "主城墙new", "turret": "弩塔", "arrow": "箭矢投射物",
+	"menu": "主菜单背景", "battle": "Environment/battle-ground-v2", "lava": "Environment/moat-ground-v2",
+	"wall": "Environment/citadel-v3", "turret": "弩塔", "arrow": "箭矢投射物",
+	"ballista": "Environment/ballista-v3",
+	"ui_chrome": "UI/chrome-v2", "ui_symbols": "UI/symbols-v2",
 	"courtyard": "城内石板地面",
+	"spell_icons": "UI/spell-icons-v1", "fortress_fx": "Environment/fortress-atlas-v1",
+	"vfx_fire": "VFX/fire-atlas-v1", "vfx_ice": "VFX/ice-atlas-v1",
+	"vfx_lightning": "VFX/lightning-atlas-v1",
 	"snail": "红蜗牛龟", "fist": "红拳石怪", "tentacle": "粉色触手怪",
 	"spike": "刺猬球怪", "mage": "法师怪", "bat": "飞行怪",
 	"dragon": "红龙Boss", "giant": "岩石巨人Boss", "matron": "巨型触手领主Boss",

@@ -2,19 +2,19 @@ class_name DefenderResearchTree
 extends Control
 
 const Art = preload("res://src/presentation/art/game_art.gd")
+const ElementIcon = preload("res://src/presentation/art/element_icon.gd")
 const ResearchCatalog = preload("res://src/core/rules/research_catalog.gd")
 const ResearchText = preload("res://src/presentation/research_text.gd")
+const UiAssets = preload("res://src/presentation/art/ui_assets.gd")
+const UiTheme = preload("res://src/presentation/ui_theme.gd")
 
 signal node_selected(upgrade_id: String)
 
-# Tree-shaped research layout matching the classic Defender II research pages:
-# root upgrades on the left, each prerequisite→child pair linked by an arrow,
-# the selected node highlighted with a gold frame.  Each node bar carries an
-# element-tinted icon square with the level badge (top-right) and the
-# next-level price (bottom-left), then the upgrade name.
-const NODE_SIZE := Vector2(280, 92)
-const COLUMN_GAP := 308.0
-const ROW_GAP := 118.0
+# Prerequisite links run left to right. Each node keeps a two-line name above
+# a shared level/price row, inside the painted frame's content area.
+const NODE_SIZE := Vector2(284, 92)
+const COLUMN_GAP := 312.0
+const ROW_GAP := 126.0
 const ORIGIN := Vector2(24, 24)
 const ICON_SIZE := 64.0
 
@@ -89,27 +89,32 @@ func build(definitions: Array, levels: Dictionary, balances: Dictionary, selecte
 	select(selected_id if _node_buttons.has(selected_id) else (str(_definitions[0].get("id", "")) if not _definitions.is_empty() else ""))
 
 
-# Original-style node bar: icon square (glyph, level badge, price badge) plus
-# the display name; children ignore the mouse so the Button keeps ownership.
+# Children ignore the mouse so the Button keeps ownership.
 func _populate_node(button: Button, definition: Dictionary) -> void:
 	var upgrade_id := str(definition.get("id", ""))
 	var level := ResearchCatalog.normalize_level(definition, int(_levels.get(upgrade_id, 0)))
 	var icon_origin := Vector2(14, 14)
-	var icon := ColorRect.new()
+	var icon := TextureRect.new()
 	icon.position = icon_origin
 	icon.size = Vector2(ICON_SIZE, ICON_SIZE)
-	icon.color = _icon_color(upgrade_id)
+	icon.texture = UiAssets.chrome("socket")
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(icon)
-	var glyph := Label.new()
-	glyph.text = str(NODE_GLYPHS.get(upgrade_id, "✦"))
-	glyph.position = Vector2.ZERO
-	glyph.size = icon.size
-	glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	glyph.add_theme_font_size_override("font_size", 34)
-	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var glyph := UiAssets.image(_symbol_for(upgrade_id), 44)
+	glyph.position = Vector2(10, 10)
+	glyph.size = Vector2(44, 44)
 	icon.add_child(glyph)
+	if definition.has("skill_ref"):
+		glyph.hide()
+		var emblem := ElementIcon.new()
+		var spell := GameApp.content.find_by_id("skills", str(definition["skill_ref"]))
+		emblem.element = str(spell.get("element", "fire"))
+		emblem.tier = int(spell.get("tier", 1))
+		emblem.position = Vector2(8, 10)
+		emblem.size = Vector2(48, 48)
+		icon.add_child(emblem)
 	if not str(definition.get("weapon_ref", "")).is_empty():
 		glyph.hide()
 		var illustration := TextureRect.new()
@@ -127,10 +132,9 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 		level_badge.text = "%s · %s" % [["Ⅰ", "Ⅱ", "Ⅲ"][clampi(int(skill.get("tier", 1)), 1, 3) - 1], ResearchText.compact(level)]
 	if ResearchCatalog.is_endless(definition):
 		level_badge.text += " ∞"
-	level_badge.position = icon_origin + Vector2(-6, -6)
-	level_badge.size = Vector2(84, 18)
-	level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	level_badge.add_theme_font_size_override("font_size", 13)
+	level_badge.position = Vector2(92, 59)
+	level_badge.size = Vector2(85, 20)
+	level_badge.add_theme_font_size_override("font_size", 14)
 	level_badge.add_theme_color_override("font_color", Color("8ce99a"))
 	level_badge.add_theme_color_override("font_outline_color", Color("101d2d"))
 	level_badge.add_theme_constant_override("outline_size", 4)
@@ -144,26 +148,28 @@ func _populate_node(button: Button, definition: Dictionary) -> void:
 	else:
 		var price := GameApp.upgrade_service.price_for_level(definition, level)
 		var currency := str(definition.get("currency", "coins"))
-		var glyph_symbol := "✦" if currency == "crystals" else "◆"
 		var affordable_color := Color("8fd3ff") if currency == "crystals" else Color("ffd166")
-		price_badge.text = "%s %s" % [glyph_symbol, ResearchText.compact(price)]
-		button.tooltip_text = "Lv.%d · %s %d" % [level, glyph_symbol, price]
+		price_badge.text = ResearchText.compact(price)
+		var currency_icon := UiAssets.image("crystal" if currency == "crystals" else "coin", 17)
+		currency_icon.position = Vector2(177, 61)
+		button.add_child(currency_icon)
+		button.tooltip_text = "Lv.%d · %s %d" % [level, GameApp.text("result.crystals" if currency == "crystals" else "menu.coins"), price]
 		price_badge.add_theme_color_override("font_color", affordable_color if int(_balances.get(currency, 0)) >= price else Color("8693a6"))
-	price_badge.position = icon_origin + Vector2(-2.0, ICON_SIZE - 4.0)
-	price_badge.size = Vector2(84, 18)
-	price_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	price_badge.add_theme_font_size_override("font_size", 13)
+	price_badge.position = Vector2(196, 59)
+	price_badge.size = Vector2(70, 20)
+	price_badge.add_theme_font_size_override("font_size", 15)
 	price_badge.add_theme_color_override("font_outline_color", Color("101d2d"))
 	price_badge.add_theme_constant_override("outline_size", 4)
 	price_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(price_badge)
 	var name_label := Label.new()
+	name_label.name = "ResearchName"
 	name_label.text = GameApp.text(str(definition.get("name_key", upgrade_id)))
-	name_label.position = Vector2(icon_origin.x + ICON_SIZE + 12.0, 0.0)
-	name_label.size = Vector2(NODE_SIZE.x - icon_origin.x - ICON_SIZE - 24.0, NODE_SIZE.y)
+	name_label.position = Vector2(icon_origin.x + ICON_SIZE + 12.0, 14.0)
+	name_label.size = Vector2(NODE_SIZE.x - icon_origin.x - ICON_SIZE - 24.0, 44)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 25)
+	name_label.add_theme_font_size_override("font_size", 20)
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -230,13 +236,22 @@ func _draw() -> void:
 		draw_colored_polygon(head, color)
 
 
-func _node_box(highlighted: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("1d3050") if highlighted else Color("263a54")
-	style.border_color = Color("ffd166") if highlighted else Color("768aa4")
-	style.set_border_width_all(3 if highlighted else 2)
-	style.set_corner_radius_all(10)
-	return style
+func _node_box(highlighted: bool) -> StyleBoxTexture:
+	return UiTheme.frame("primary" if highlighted else "button")
+
+
+func _symbol_for(upgrade_id: String) -> String:
+	if upgrade_id.contains("mana") or upgrade_id.contains("spell") or upgrade_id.contains("cooldown"):
+		return "mana"
+	if upgrade_id.contains("wall"):
+		return "health" if upgrade_id.contains("armor") else "research"
+	if upgrade_id.contains("tower") or upgrade_id.contains("moat"):
+		return "tower"
+	if upgrade_id.contains("bounty"):
+		return "coin" if upgrade_id.contains("coin") else "honor"
+	if upgrade_id.contains("poison") or upgrade_id.contains("fatal"):
+		return "skull"
+	return "battle"
 
 
 func _icon_color(upgrade_id: String) -> Color:

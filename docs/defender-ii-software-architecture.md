@@ -1,16 +1,22 @@
 # Defender II Windows / Godot 软件架构
 
-版本：3.1-godot-windows
+版本：3.2-godot-windows（对应源码 1.7.0）
 
-文档日期：2026-09-03
+文档日期：2026-09-22
 
 对应分支：`windows-godot`
 
 目标：使用 Godot 4.7.2 和 GDScript 在一台 Windows 电脑上完成轻量、离线、可测试的 2D 单机 MVP
 
-实施状态：本文架构已在当前分支落地。模块、测试结果和发布阻塞项见 [`implementation-status.md`](implementation-status.md)，本机命令见 [`development-guide.md`](development-guide.md)。
+实施状态：本文保留分层设计意图；目录/场景树示意并非全部实际类或节点。当前实现以 `DefenderGame-design-architecture.tex` 及同名 PDF 的模块索引为准。1.7 体验变化见 [`presentation-polish.md`](presentation-polish.md)，测试与发布边界见 [`implementation-status.md`](implementation-status.md) §12。
 
 ## 1. 架构目标
+
+2026-09-22 三系补充：`SpellVisuals` 消费 `falling_spells` / `skill_pulse`，通过 `GameArt` 三张透明图集完成飞行、命中、地面残留和状态覆盖；血条位于命中光效之上。`SoundBank` 新增六段发射/命中 PCM，十声部划分为 4 命中 + 2 发射 + 2 武器/界面 + 2 告警/结果。新增 `elemental_vfx_acceptance.gd` 对照双模型事件流、透明度、分组音频和三档预算。详见 [三系视听重制](elemental-vfx.md)；本次表现层补充尚未合并进上一轮总设计 PDF。
+
+1.7 新增 `ElementIcon`；2026-09-23 城防增量后由 `SpellIcons` 统一九阶图集，供图标、下拉、HUD 与 `MagicCursor` 复用。`FortressVisuals` 只读绘制地面装饰、水晶塔、弩机和受击；`SoundBank` 负责 PCM 生成，`DefenderProceduralAudio` 管理两音乐声部、十个既有事件声部、一个防御声部和一个环境声部。所有视觉和音频相位均不消耗战斗 RNG。`Result` 携带三元素施法数；`mana` 在荣誉叠加完成后初始化；`coin_bounty` 的通关增益限于胜利。`GameApp.menu_destination` 是一次性研究页导航意图，不写进 Profile。新资源、声音生命周期和像素验收详见 [城防视听强化](fortress-art.md)。
+
+画布改为 `canvas_items + keep`，不扩展规则战场到 1920×1080 以外。失焦暂停只作用于实际活动的战斗场景，测试离屏场景不受窗口焦点干扰。`presentation_polish_acceptance.gd` 提供隔离自动验证、截图与实际输入试玩入口，已加入发布门禁。
 
 本方案以最小工具链为首要约束。Godot 编辑器、导出模板、Git 和游戏资源应构成首版全部开发依赖，不安装 .NET、Visual Studio、移动 SDK、数据库、容器或云服务。
 
@@ -31,8 +37,8 @@
 | 渲染 | Compatibility Renderer + CanvasItem 2D | 面向 D3D11/OpenGL 3.3 级硬件；不用 Forward+ 特效 |
 | UI | Control、Container、Theme | 设计分辨率 1920×1080，使用 stretch 和锚点适配 |
 | 输入 | InputMap | `ui_*` 与 `combat_*` action 分离，鼠标/键盘首发 |
-| 内容 | JSON 规则 + `.tres` 资源目录 + PackedScene | JSON 是规则真源，Resource 只映射表现资产 |
-| 存档 | FileAccess/DirAccess + JSON + hash/备份 | 槽位文件保存于 EXE 同级 `savedata/`（可携带），偏好与日志在 `user://`，不使用数据库 |
+| 内容 | JSON 规则 + GameArt PNG 注册 + PackedScene | JSON 是规则真源；资源由 Godot 导入映射，不存在独立 `.tres` 图册目录 |
+| 存档 | FileAccess/DirAccess + JSON + hash/备份 | 槽位与设置均保存于 EXE 同级 `savedata/`；日志在 `user://`，不使用数据库 |
 | 测试 | 自有轻量 headless runner | 不依赖测试 addon；失败返回非零退出码 |
 | 构建 | Windows Desktop export preset | Windows x86_64，EXE/PCK 打 ZIP |
 | 版本管理 | Git | 提交 `project.godot`、场景、资源、`.uid` 和 export preset |
@@ -206,6 +212,8 @@ BuildManifest.load
 
 ## 7. 场景树设计
 
+以下为概念职责图，不是磁盘 `.tscn` 结构。实际只有 Bootstrap/Node、MainMenu/Control、Gameplay/Node2D 三个轻量根；菜单由脚本动态构建，Gameplay 运行时添加 Hud/CanvasLayer 与 GameSession。
+
 ### 7.1 Bootstrap
 
 ```text
@@ -335,7 +343,7 @@ PauseRequested
 }
 ```
 
-当前已接入 `Gamematerials/` 的 19 张纹理，`src/presentation/art/game_art.gd` 注册稳定 ID 到导入资源的映射，`creature_visuals.gd` 管理只读动作状态。`.tres` 目录是后续更大资源库的可选演进方案，不是当前运行依赖：
+当前 `Gamematerials/` 注册 25 张纹理（含内院、三系 VFX、九图标及城防图集），`src/presentation/art/game_art.gd` 注册稳定 ID 到导入资源的映射，`creature_visuals.gd` 管理只读动作状态。`.tres` 目录是后续更大资源库的可选演进方案，不是当前运行依赖：
 
 ```text
 enemy_id -> PackedScene / Texture2D / sound_id
@@ -472,7 +480,7 @@ config_hash
 build_utc
 ```
 
-正式构建在打 ZIP 前必须校验实际 PCK，并从非管理员进程、隔离 `%APPDATA%` 启动实际 EXE，确认默认档案与设置只写入 `user://`。项目所有者可用 `tools/set_game_license.ps1` 从 MIT 或专有模板生成待审阅许可；源模板不进入 PCK。发布 ZIP 包含 EXE、PCK、最终项目许可、Godot/第三方声明和 README，不写注册表、不要求管理员权限。安装器、代码签名和 Steam 是独立发布阶段。
+正式构建在打 ZIP 前校验实际 PCK，将 EXE 复制到隔离目录并用非管理员进程启动，确认槽位与设置写入同级 `savedata/`，隔离 `%APPDATA%` 只承载日志等用户数据。发布 ZIP 包含 EXE、PCK、项目许可、Godot 声明和 README；源许可模板不进入 PCK。不写注册表、不要求管理员权限。1.7 尚未重新导出，代码签名和安装器仍为后续阶段。
 
 ## 16. 交付分期
 

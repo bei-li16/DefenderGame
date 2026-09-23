@@ -115,7 +115,6 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	var player: Dictionary = config.get("player", {})
 	max_mana = int(player.get("max_mana", 100))
 	max_mana += _reward_bonus("mana_capacity")
-	mana = max_mana
 	coins_earned = 0
 	xp_earned = 0
 	kills = 0
@@ -141,6 +140,7 @@ func setup(game_config: Dictionary, stage_id: String, run_seed: int, player_prof
 	wall_max_hp = int(player.get("wall_hp", 500)) + _reward_bonus("wall_repair")
 	wall_max_hp = _percent_boosted(wall_max_hp, "wall_hp_pct")
 	max_mana = _percent_boosted(max_mana, "max_mana_pct")
+	mana = max_mana
 	wall_hp = wall_max_hp
 	_build_spawn_queue()
 	return {"ok": true, "run_id": run_id}
@@ -218,7 +218,7 @@ func snapshot() -> Dictionary:
 func result() -> Dictionary:
 	var clear_reward: Dictionary = stage.get("clear_reward", {}) if status == STATUS_VICTORY else {}
 	var reward_version := str(config.get("ruleset_version", "unknown"))
-	var clear_coins := int(clear_reward.get("coins", 0)) + _reward_bonus("coin_bounty")
+	var clear_coins := int(clear_reward.get("coins", 0)) + _reward_bonus("coin_bounty") if status == STATUS_VICTORY else 0
 	var clear_xp := AttackCatalog.reward_xp(config, profile_snapshot, int(clear_reward.get("xp", 0)) + _reward_bonus("xp_bounty")) if status == STATUS_VICTORY else 0
 	return {
 		"run_id": run_id,
@@ -232,6 +232,9 @@ func result() -> Dictionary:
 		"tick": tick,
 		"kills": kills,
 		"spells_cast": spells_cast,
+		"fire_casts": fire_casts,
+		"ice_casts": ice_casts,
+		"lightning_casts": lightning_casts,
 		"wave": current_wave,
 		"wave_total": int(stage.get("wave_count", stage.get("groups", []).size())),
 		"wall_percent": int(round(float(wall_hp) * 100.0 / maxf(1.0, float(wall_max_hp)))),

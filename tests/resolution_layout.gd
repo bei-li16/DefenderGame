@@ -25,14 +25,14 @@ func _run() -> void:
 		var localized_settings := original_settings.duplicate(true)
 		localized_settings["language"] = locale
 		app.set("settings", localized_settings)
-		for viewport_size in [Vector2i(1366, 768), Vector2i(1920, 1080), Vector2i(2560, 1440)]:
+		for viewport_size in [Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1920, 1080), Vector2i(2560, 1440)]:
 			await _check_scene(menu_scene, "MainMenu-%s" % locale, viewport_size)
 			await _check_scene(gameplay_scene, "Gameplay-%s" % locale, viewport_size)
 	app.set("settings", original_settings)
 	app.set("profile", original_profile)
 	for failure in failures:
 		push_error("[LAYOUT FAIL] " + failure)
-	print("[LAYOUT] 2 locales x 3 resolutions x menu/gameplay states checked; failures=%d" % failures.size())
+	print("[LAYOUT] 2 locales x 4 resolutions x menu/gameplay states checked; failures=%d" % failures.size())
 	quit(failures.size())
 
 
@@ -55,6 +55,8 @@ func _check_scene(scene: PackedScene, scene_name: String, viewport_size: Vector2
 			["_show_upgrades", "upgrades"],
 			["_show_research_page", "magic-research", "magic"],
 			["_show_settings", "settings"],
+			["_show_honors", "honors"],
+			["_show_save_data", "saves"],
 			["_show_tutorial", "tutorial"]
 		]:
 			if view.size() == 3:
@@ -150,8 +152,12 @@ func _check_magic_chains(instance: Node, view_name: String) -> void:
 func _check_result_actions(instance: Node, view_name: String, victory: bool) -> void:
 	var app := instance.get_tree().root.get_node("GameApp")
 	var overlay := instance.get("_result_overlay") as Control
-	var stack := overlay.get_meta("stack") as VBoxContainer
-	var actions := stack.get_child(stack.get_child_count() - 1) as HBoxContainer
+	var actions := overlay.find_child("ResultActions", true, false) as HBoxContainer
+	_expect(actions != null, "%s has the named result-action row" % view_name)
+	if actions == null:
+		return
+	var research := overlay.find_child("ResultResearchButton", true, false) as Button
+	_expect(research != null and research.is_visible_in_tree(), "%s offers research preparation" % view_name)
 	var expected_count := 3 if victory else 2
 	_expect(actions.get_child_count() == expected_count, "%s exposes %d result actions" % [view_name, expected_count])
 	if actions.get_child_count() < 2:

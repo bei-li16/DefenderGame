@@ -12,6 +12,7 @@ const PAVING_TINT := Color(0.78, 0.82, 0.87, 1)
 static var _floor_mesh: ArrayMesh
 static var _paving_mesh: ArrayMesh
 static var _trim_mesh: ArrayMesh
+static var _coping_mesh: ArrayMesh
 static var _shadow_mesh: ArrayMesh
 
 
@@ -37,6 +38,7 @@ static func draw(canvas: CanvasItem) -> void:
 	canvas.draw_mesh(_shadow_mesh, null)
 	canvas.draw_mesh(_floor_mesh, null)
 	canvas.draw_mesh(_paving_mesh, Art.texture("courtyard"))
+	canvas.draw_mesh(_coping_mesh, Art.texture("courtyard"))
 	canvas.draw_mesh(_trim_mesh, null)
 
 
@@ -51,19 +53,10 @@ static func prepare() -> void:
 	_append_polygon(vertices, colors, indices, clip, GROUT)
 	_floor_mesh = _mesh(vertices, colors, indices)
 	_prepare_paving(clip)
+	_prepare_coping(clip)
 	vertices = PackedVector3Array()
 	colors = PackedColorArray()
 	indices = PackedInt32Array()
-	# Segmented perimeter footing anchors the wall, following its projection,
-	# not the rectangular transparent padding of its source PNG.
-	for step in range(30):
-		var y := -BLEED + step * 40.0
-		var near_x := boundary_x(y)
-		var far_x := boundary_x(y + 40)
-		var stone := PackedVector2Array([Vector2(near_x - 26, y), Vector2(near_x, y), Vector2(far_x, y + 40), Vector2(far_x - 26, y + 40)])
-		_append_clipped(vertices, colors, indices, stone, clip, Color("738091") if step % 3 == 0 else Color("657383"))
-		var seam := PackedVector2Array([Vector2(near_x - 26, y), Vector2(near_x, y), Vector2(near_x, y + 2), Vector2(near_x - 26, y + 2)])
-		_append_clipped(vertices, colors, indices, seam, clip, GROUT)
 	# Inner contact shade darkens the paving towards the wall.
 	for index in range(1, EDGE.size()):
 		var a: Vector2 = EDGE[index - 1]
@@ -79,6 +72,24 @@ static func prepare() -> void:
 		var b: Vector2 = EDGE[index]
 		_append_gradient_quad(vertices, colors, indices, a, a + Vector2(30, 6), b + Vector2(30, 6), b, Color(0.015, 0.025, 0.04, 0.55), Color(0.015, 0.025, 0.04, 0))
 	_shadow_mesh = _mesh(vertices, colors, indices)
+
+
+static func _prepare_coping(clip: PackedVector2Array) -> void:
+	# Painted stone coping, not the former flat grey striped placeholder.
+	var vertices := PackedVector3Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	var uvs := PackedVector2Array()
+	for step in range(30):
+		var y := -BLEED + step * 40.0
+		var left := boundary_x(y)
+		var right := boundary_x(y + 38)
+		var stone := PackedVector2Array([Vector2(left - 22, y), Vector2(left, y), Vector2(right, y + 38), Vector2(right - 22, y + 38)])
+		for part in Geometry2D.intersect_polygons(stone, clip):
+			_append_polygon(vertices, colors, indices, part, Color(0.64, 0.69, 0.76))
+			for point in part:
+				uvs.append(Vector2(0.1 + clampf((point.x - left + 22) / 22, 0, 1) * 0.3, 0.2 + (point.y - y) / 38 * 0.5))
+	_coping_mesh = _mesh(vertices, colors, indices, uvs)
 
 
 static func _prepare_paving(clip: PackedVector2Array) -> void:

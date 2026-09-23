@@ -21,21 +21,22 @@ func _run() -> void:
 	_expect(Castle.floor_key({}) == "battle", "missing upgrades use the complete normal floor")
 	for level in [0, 1, 5]:
 		_expect(Castle.floor_key({"defenses": {"lava_moat_level": level}}) == ("battle" if level == 0 else "lava"), "whole-plate selection at moat level %d" % level)
-	_expect(Art.FILES["wall"] == "主城墙new", "wall resolves to the new complete fortress asset")
+	_expect(Art.FILES["wall"] == "Environment/citadel-v3", "wall resolves to the production connected fortress asset")
 	var wall := Art.texture("wall")
 	_expect(wall != null and wall.get_height() <= 1024, "replacement uses the bounded Godot import")
 	var wall_image := wall.get_image()
 	_expect(wall_image.has_mipmaps(), "wall import keeps mipmaps for small gameplay scale")
 	_expect(wall_image.get_pixel(0, 0).a == 0.0, "new fortress padding remains truly transparent")
 	_expect(Castle.source_to_world(Castle.MOUNT_SOURCE).is_equal_approx(Castle.MOUNT_POSITION), "painted platform aligns to the ballista pedestal")
-	_expect(is_equal_approx(Castle.PEDESTAL_POSITION.y + Castle.PEDESTAL_SIZE.y * 0.5, Castle.MOUNT_POSITION.y), "pedestal rests on the existing platform, not a second stone tower")
+	var swivel_foot := Castle.BOW_ORIGIN + (Castle.BOW_FOOT_SOURCE - Castle.BOW_RAIL_SOURCE) * Castle.BOW_SIZE.x / Castle.BOW_SOURCE_SIZE.x
+	_expect(swivel_foot.distance_to(Castle.MOUNT_POSITION) < 4, "complete ballista foot rests on the mounting ring")
 	_expect(Castle.SPRITE_RECT.size.is_equal_approx(Castle.SOURCE_SIZE * Castle.SPRITE_SCALE), "whole fortress retains uniform scale and original projection")
 	_expect(Castle.SPRITE_RECT.position.y > 145.0 and Castle.SPRITE_RECT.end.y <= 1080.0, "both roofs and foundations fit inside the gameplay canvas")
 	_expect(Castle.magic_origin().is_equal_approx(Castle.source_to_world(Castle.FAR_CRYSTAL_SOURCE)), "magic beam starts at the new far crystal")
 	_expect(Castle.magic_origin().y < Castle.BOW_ORIGIN.y and Castle.source_to_world(Castle.NEAR_CRYSTAL_SOURCE).y > Castle.BOW_ORIGIN.y, "the two original upright bastions bracket the firing seat")
 	for height in [200.0, 450.0, 595.0, 850.0, 1000.0]:
 		var impact := Castle.impact_position(height)
-		_expect(impact.y == height and impact.x > 200.0 and impact.x < 320.0, "contact effects follow the new wall at y=%d" % int(height))
+		_expect(impact.y == height and impact.x >= Castle.STRUCTURE_BOUNDS.position.x and impact.x <= Castle.STRUCTURE_BOUNDS.end.x, "contact effects remain on the measured masonry envelope at y=%d" % int(height))
 	var player: Dictionary = app.get("content").rules["player"]
 	_expect(Castle.BOW_ORIGIN == Vector2(float(player["bow_origin_x_milli"]), float(player["bow_origin_y_milli"])) / 1000.0, "composition preserves the actual combat firing origin")
 	var tower_arrays := Art.quad().surface_get_arrays(0)
@@ -95,7 +96,8 @@ func _run() -> void:
 			_expect(_color_distance(paving_actual, paving_expected) < 0.09, "interior visibly uses the painted flagstone material")
 			# Sample both bastions and the connecting wall away from the HUD,
 			# ballista and crystal overlays; guards against the old UV composition.
-			for source_point in [Vector2(490, 320), Vector2(505, 615), Vector2(610, 1200)]:
+			# Sample solid stone away from banners, crystals and the ballista.
+			for source_point in [Vector2(360, 330), Vector2(520, 580), Vector2(603, 1340)]:
 				var world_point := Castle.source_to_world(source_point)
 				var screen_point := Vector2i(world_point * Vector2(screenshot.get_size()) / Vector2(1920, 1080))
 				var texel := Vector2i(source_point / Castle.SOURCE_SIZE * Vector2(wall_image.get_size()))
@@ -113,7 +115,7 @@ func _run() -> void:
 			for normalized in [Vector2(0.20, 0.36), Vector2(0.22, 0.70), Vector2(0.68, 0.42), Vector2(0.83, 0.64)]:
 				var point := Vector2i(normalized * destination_size)
 				var uv := Vector2i(crop + Vector2(point) / factor)
-				var expected := source.get_pixelv(uv) * Color(0.86, 0.9, 0.98)
+				var expected := source.get_pixelv(uv) * Castle.FLOOR_TINT
 				var actual := screenshot.get_pixelv(point)
 				var difference := Vector3(actual.r - expected.r, actual.g - expected.g, actual.b - expected.b).length()
 				_expect(difference < 0.07, "battlefield pixels belong to the full %s plate" % key)

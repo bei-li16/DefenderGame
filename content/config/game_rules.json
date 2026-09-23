@@ -1,6 +1,6 @@
 {
-  "config_version": 11,
-  "ruleset_version": "aegis-windows-independent-barrage-v1",
+  "config_version": 12,
+  "ruleset_version": "aegis-windows-presentation-polish-v1",
   "source": "Windows offline 1.0 tuning derived from the Defender II requirements",
   "simulation_tick_rate": 30,
   "rules": {

@@ -31,6 +31,7 @@ var _playtime_buffer: float = 0.0
 var current_stage_id: String = "stage_001"
 var current_seed: int = 1
 var current_run_id: String = ""
+var menu_destination: String = ""
 var initialized_ok: bool = false
 var initialization_error: Dictionary = {}
 var audio: DefenderProceduralAudio
@@ -245,7 +246,8 @@ func start_stage(stage_id: String, run_seed: int = 0) -> Dictionary:
 	return {"ok": true, "stage_id": current_stage_id, "seed": current_seed, "run_id": current_run_id}
 
 
-func return_to_menu() -> void:
+func return_to_menu(destination: String = "") -> void:
+	menu_destination = destination
 	_flush_playtime()
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
@@ -448,12 +450,13 @@ func update_setting(key: String, value: Variant) -> Dictionary:
 	var updated := settings.duplicate(true)
 	updated[key] = value
 	settings = updated
-	_apply_settings()
+	var window_changed := key in ["resolution", "fullscreen", "borderless"]
+	_apply_settings(window_changed)
 	var save_result := save_service.save_settings(settings, int(content.rules["config_version"]))
 	if not bool(save_result.get("ok", false)):
 		_record_failure("settings_save", save_result, "Settings")
 		settings = previous
-		_apply_settings()
+		_apply_settings(window_changed)
 		return save_result
 	settings_changed.emit(settings.duplicate(true))
 	return save_result
@@ -492,12 +495,13 @@ func _record_failure(operation: String, result: Dictionary, scene_name: String) 
 	diagnostics.record("operation_failed", str(result.get("error_code", "unknown")), scene_name, {"operation": operation})
 
 
-func _apply_settings() -> void:
+func _apply_settings(apply_window: bool = true) -> void:
 	var master_db := linear_to_db(clampf(float(settings.get("master_volume", 0.8)), 0.0, 1.0))
 	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), master_db)
 	if audio != null:
 		audio.set_music_volume(float(settings.get("music_volume", 0.65)))
-	if not DisplayServer.get_name().contains("headless"):
+	# Volume/gameplay changes must not restore a maximized or resized window.
+	if apply_window and not DisplayServer.get_name().contains("headless"):
 		var mode := DisplayServer.WINDOW_MODE_FULLSCREEN if bool(settings.get("fullscreen", false)) else DisplayServer.WINDOW_MODE_WINDOWED
 		DisplayServer.window_set_mode(mode)
 		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, bool(settings.get("borderless", false)) and mode == DisplayServer.WINDOW_MODE_WINDOWED)

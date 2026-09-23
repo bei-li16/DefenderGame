@@ -1,6 +1,6 @@
 # Windows / Godot 开发指南
 
-文档日期：2026-09-02
+文档日期：2026-09-22（源码 1.7.0）
 
 分支：`windows-godot`
 
@@ -64,6 +64,7 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 & $GodotConsole --headless --path . --script res://tests/attack_research_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/materials_acceptance.gd
 & $GodotConsole --headless --path . --script res://tests/castle_layout_acceptance.gd
+& $GodotConsole --headless --path . --script res://tests/presentation_polish_acceptance.gd
 ```
 
 弓箭选择验收覆盖顶部单一入口、四把弓的切换、锁定弓跳转研究、解锁后装备、研究页同步、存档失败与重试，以及实际战斗使用所选弓箭。测试使用隔离存档，不修改玩家存档。移除 `--headless` 还会验证原生/嵌入式下拉框在三档 UI 缩放下的位置；追加 `-- --capture` 可将界面截图保存到被 Git 忽略的 `Builds/weapon-selection-review/`。
@@ -72,7 +73,9 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 
 无尽关卡验收覆盖前 600 关的 Boss/普通关隔离、曲线、百万关有限生成、存活上限延后出怪、确定性、旧 30 关存档衔接、首通和保存失败、分页与定位。移除 `--headless` 并追加 `-- --capture` 可将中英文选关和下一关界面保存到 `Builds/endless-stages-review/`。`stage_autoplay.gd` 自动通关原 30 关与 9 个无尽段样例；高关卡生成测试不等同于证明满级角色可通关所有关卡。详见 [无尽关卡规则](endless-stages.md)。脚本共享隔离测试档，应串行运行，不操作真实玩家存档。
 
-素材动画验收覆盖 19 张纹理导入、弓箭映射、弩塔 UV 裁切、快照隔离、冻结/眩晕/减速/暂停、真实事件触发动作、死亡回收和共享网格。移除 `--headless` 并追加 `-- --capture` 可进行 100 动画怪物＋200 箭的真实渲染检查，并保存菜单/研究/战场截图到 `Builds/materials-review/`。接入规则与现有立绘动画的限制见 [素材接入说明](materials-integration.md)。
+素材动画验收覆盖当前 20 张注册纹理、弓箭映射、弩塔 UV 裁切、快照隔离、冻结/眩晕/减速/暂停、真实事件触发动作、死亡回收和共享网格。移除 `--headless` 并追加 `-- --capture` 可进行 100 动画怪物＋200 箭的真实渲染检查，并保存菜单/研究/战场截图到 `Builds/materials-review/`。接入规则与现有立绘动画的限制见 [素材接入说明](materials-integration.md)。
+
+`presentation_polish_acceptance.gd` 验证真实施法到荣誉保存的链路、失败回滚、败局金币、满蓝开局、音乐 PCM/限流及界面；图形模式增加混音检查。`-- --capture` 输出中英文菜单/研究、密集法术、Boss、暂停设置、结算截图及三段配乐 WAV 至 `Builds/polish-review-20260922/`。`-- --interactive` 启动可操作的隔离测试档，供鼠标键盘试玩；关闭窗口即可结束，不使用玩家进度。所有脚本必须串行运行。
 
 攻击研究验收覆盖七节点前置、四弓全部齐射档位、毒伤/击退/暴击快照、经验结算、一次性退款及中英文购买/装备同步。移除 `--headless` 并追加 `-- --capture` 可截图到 `Builds/attack-research-review/`；测试仅使用隔离存档。完整规则见 [攻击研究说明](attack-research-reimplementation.md)。
 
@@ -106,7 +109,7 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 
 ## 4. 内容编辑
 
-规则真源是 `content/config/game_rules.json`，当前为 config version 9 / ruleset `aegis-windows-endless-research-v1`，回退包同步使用 `aegis-windows-fallback-endless-research-v1`，包括：
+规则真源是 `content/config/game_rules.json`，当前为 config version 12 / ruleset `aegis-windows-presentation-polish-v1`，回退包同步使用 `aegis-windows-fallback-presentation-polish-v1`。v12 不改倾泻分布、研究或关卡曲线，仅标识结算语义与体验修订。包括：
 
 - 世界、城墙、Mana 和基础弓参数。
 - 火、冰、雷三系九技能及装备、升级链。
@@ -117,23 +120,22 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 
 可见文本位于 `content/catalogs/localization.json`。修改后先运行内容校验和 `run_all.gd`，再运行 Stage 自动通关，避免引入无解关卡、坏引用、缺失翻译或越界数值。
 
-`endless_research_acceptance.gd` 检查高等级购买、费用、实际效果、存档和中英文研究页，以及第 1000/10000 关的正常自动战斗。移除 `--headless` 并追加 `-- --capture` 可在 `Builds/endless-research-review/` 生成截图。`resolution_layout.gd` 另检查双语 × 三分辨率的百万级研究详情。规则与参数见 [无尽研究说明](endless-research.md)，该专项也已加入 Windows 导出门禁。
+`endless_research_acceptance.gd` 检查高等级购买、费用、实际效果、存档和中英文研究页，以及第 1000/10000 关的正常自动战斗。移除 `--headless` 并追加 `-- --capture` 可在 `Builds/endless-research-review/` 生成截图。`resolution_layout.gd` 另检查双语 × 四分辨率的百万级研究详情。规则与参数见 [无尽研究说明](endless-research.md)，该专项也已加入 Windows 导出门禁。
 
 ## 5. 存档与诊断
 
-Godot 将玩家数据写入 `user://`，Windows 默认对应 `%APPDATA%\Godot\app_userdata\Aegis of Ember`。主要内容：
+槽位和设置统一写入 EXE 同级 `savedata/`（编辑器运行时为项目根目录）；需要用户可写目录。日志、诊断、调试回放位于 `user://`，Windows 默认对应 `%APPDATA%\Godot\app_userdata\Aegis of Ember`。schema 为 v6。
 
 ```text
-profile.json
-profile.json.bak
-settings.json
-settings.json.bak
-replays/
-logs/
-diagnostics/
+savedata/slot_1.json                  # 槽位 1..3，各有 .bak
+savedata/settings.json                # 含活动槽号，亦有 .bak
+savedata/profile.json                 # 旧档迁移来源，不是当前主档
+user://replays/
+user://logs/
+user://diagnostics/
 ```
 
-主档损坏时会保留 `.corrupt-<timestamp>` 诊断副本并尝试备份。若主档和备份都无效，启动恢复页提供重试、开始新档和退出，不会静默覆盖原文件。购买、结算、教学和设置均在持久化成功后才提交内存状态；保存失败会显示重试入口。
+主档损坏时保留 `.corrupt-<timestamp>` 副本并尝试备份；主档存在但双档无效时进入恢复页。当前仍有“主档缺失且备份损坏会返回默认档”的边界风险，不能宣称所有双档无效情形均已安全恢复。购买、结算、教学保存成功才提交内存；设置先应用、保存失败则回滚。
 
 日志最多保留 5 个文件，每个最大 256 KiB，只记录白名单事件和错误码，不写完整 Profile、存档内容或本机绝对路径。设置页的“导出诊断日志”仅在玩家主动点击时生成本地 ZIP；程序不会上传或发送该文件。
 
@@ -168,7 +170,7 @@ diagnostics/
 & .\tools\build_windows.ps1 -Configuration Release
 ```
 
-脚本要求 Git 工作树干净，并依次执行内容校验、核心测试、无尽关卡专项、30 编排关 + 9 生成关自动通关、存档槽位、Godot 声明一致性、PCK 预检、项目许可、清单和匹配模板检查。导出后还会检查实际 PCK，使用非管理员进程和隔离 `%APPDATA%` 启动实际 EXE，并确认 `profile.json`、`settings.json` 写入用户数据目录。Release 成功后才会生成包含 EXE/PCK、`README.txt`、`GAME_LICENSE.txt`、`GODOT_COPYRIGHT.txt` 的便携 ZIP。
+脚本要求 Git 工作树干净，并执行内容校验、核心、无尽关卡/研究、技能交互、视听体验专项、30 编排关 + 9 生成关自动通关、存档槽位、Godot 声明、PCK 预检、许可、清单和模板检查。自 1.7 起，发行资源内嵌进 EXE；导出后直接验证 EXE 内的资源清单，并复制 EXE 到隔离运行目录，确认 `savedata/slot_1.json` 与设置写入 EXE 同级目录。Release ZIP 严格只含 `DefenderGame.exe`、`README.txt`、`GAME_LICENSE.txt` 和 `GODOT_COPYRIGHT.txt` 四项，不含独立 PCK、源码、编辑器、测试日志或玩家存档。独立 PCK 仅用于构建前诊断，不上传发行页。Git 忽略 EXE/DLL/PCK/ZIP，源码提交与 GitHub Release 二进制附件分离。
 
 项目当前采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。需要为后续项目有意更换许可时，可任选一条命令生成待审阅文件：
 
@@ -187,4 +189,18 @@ diagnostics/
 & .\tools\check_release_readiness.ps1
 ```
 
-它会执行 PCK 预检，并把分支、Git、Godot、导出预设、许可、两个模板、非管理员状态和 PCK 结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。当前本机结果为 12/12、blockers=0。未满足条件或跳过动态预检时返回退出码 2；只想快速查看静态材料时可增加 `-SkipPackPreflight`，但该模式不会产生“发布就绪”结论。
+它会执行 PCK 预检，并将结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。历史的 12/12 不代表本轮工作树已发布就绪；1.7 修改仍需审阅提交后重新构建。未满足条件或跳过动态预检时返回退出码 2；`-SkipPackPreflight` 只检查静态材料，不产生发布就绪结论。
+
+## 三系特效专项
+
+新增 `tests/elemental_vfx_acceptance.gd`，已经加入 `build_windows.ps1` 串行门禁。使用 `--capture` 可输出九技能阶段截图、三档混合压力截图及六段 WAV 至 `Builds/elemental-vfx-review/`。测试涵盖透明图集、真实落击事件、效果过期、音频分组与 PCM 边界，命令和说明见 [三系视听重制](elemental-vfx.md)。
+
+## 九技能图标与城防专项
+
+2026-09-23 收尾 `tests/fortress_art_acceptance.gd`，加入正式构建串行门禁；PCK 必需路径增加九图标、城防部件、两张横屏地面及相应脚本。专项检查图标各界面映射、动画像素差、快照不变、音频路由、暂停和场景清理。命令、输出位置和试玩隔离说明见 [城防视听强化](fortress-art.md)。图形验收应与其他 `--script` 测试串行运行。
+
+## 整机 UI 专项
+
+`tests/production_ui_acceptance.gd` 覆盖新城墙/弩机/九宫格/图标资源、安装位置、固定 HUD 内槽、装饰区鼠标穿透、所有研究页及菜单/战斗覆盖层。图形模式追加 `-- --capture`，输出中英文两种分辨率的 64 张非空像素验证截图到 `Builds/production-ui-review/`。`resolution_layout.gd` 另覆盖中英文与 1280x720、1366x768、1920x1080、2560x1440。两者已加入正式构建串行门禁。
+
+`tests/window_mode_acceptance.gd` 必须在图形模式运行；新增音量、画质、自动射击、语言设置不重置最大化窗口的回归。所有 `--script` 测试共享隔离自动化目录，不能并行运行。命令、素材锚点、截图范围和正式发行边界见 [整机 UI 重制](production-ui.md)。

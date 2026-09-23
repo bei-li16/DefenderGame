@@ -1,155 +1,194 @@
 class_name DefenderProceduralAudio
 extends Node
 
-const SAMPLE_RATE := 22050
+const Bank = preload("res://src/infrastructure/audio/sound_bank.gd")
 const PLAYER_COUNT := 10
-
+const GAPS := {"shot": 65, "hit": 90, "fatal": 120, "fire": 110, "ice": 110, "lightning": 110, "fire_launch": 150, "ice_launch": 150, "lightning_launch": 160, "wall": 170, "tower": 220, "moat": 300, "boss": 450, "reject": 180, "ui": 70}
 var _players: Array[AudioStreamPlayer] = []
-var _cursor: int = 0
-var _sounds: Dictionary = {}
-var _music_player: AudioStreamPlayer
+var _music_players: Array[AudioStreamPlayer] = []
 var _music_streams: Dictionary = {}
-var _disabled: bool = false
+var _sounds: Dictionary = {}
+var _last_play: Dictionary = {}
+var _cursor := 0
+var _spell_cursor := 0
+var _launch_cursor := 0
+var _active_music := 0
+var _music_volume := 0.65
+var _music_mix := 1.0
+var _duck := 1.0
+var _duck_target := 1.0
+var _mood := ""
+var _disabled := false
+var _ambience_player: AudioStreamPlayer
+var _defense_player: AudioStreamPlayer
+var _ambience_stream: AudioStreamWAV
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_disabled = DisplayServer.get_name().contains("headless")
 	if _disabled:
 		return
-	_music_player = AudioStreamPlayer.new()
-	_music_player.name = "Music"
-	add_child(_music_player)
+	_ambience_player = AudioStreamPlayer.new()
+	_ambience_player.name = "MoatAmbience"
+	add_child(_ambience_player)
+	_defense_player = AudioStreamPlayer.new()
+	_defense_player.name = "DefenseFoley"
+	add_child(_defense_player)
+	_ambience_stream = Bank.ambience()
+	for index in range(2):
+		var player := AudioStreamPlayer.new()
+		player.name = "Music%d" % index
+		add_child(player)
+		_music_players.append(player)
 	for index in range(PLAYER_COUNT):
 		var player := AudioStreamPlayer.new()
-		player.name = "Voice%d" % index
 		add_child(player)
 		_players.append(player)
-	_sounds = {
-		"shot": _tone(760.0, 0.055, 0.22, 0.72),
-		"hit": _tone(180.0, 0.07, 0.25, 0.35),
-		"fatal": _tone(1040.0, 0.16, 0.32, 0.75),
-		"fire": _tone(125.0, 0.34, 0.42, 0.18),
-		"ice": _tone(1320.0, 0.28, 0.28, 0.95),
-		"lightning": _tone(84.0, 0.30, 0.44, 0.08),
-		"wall": _tone(74.0, 0.12, 0.34, 0.12),
-		"boss": _tone(56.0, 0.62, 0.45, 0.03),
-		"victory": _tone(660.0, 0.55, 0.30, 0.82),
-		"defeat": _tone(110.0, 0.58, 0.34, 0.15),
-		"reject": _tone(220.0, 0.12, 0.20, 0.02)
-	}
-	_music_streams = {
-		"menu": _music_loop([110.0, 146.83, 164.81], 4.0, 0.11),
-		"battle": _music_loop([82.41, 123.47, 164.81], 3.0, 0.13)
-	}
+	for kind in ["shot", "hit", "fatal", "wall", "tower", "moat", "boss", "victory", "defeat", "reject", "ui"] + Bank.ELEMENT_KINDS:
+		_sounds[kind] = Bank.effect(kind)
+	for mood in ["menu", "battle", "boss"]:
+		_music_streams[mood] = Bank.music(mood)
 
 
-func play_music(mood: String, volume_linear: float = 0.6) -> void:
+func _process(delta: float) -> void:
 	if _disabled:
 		return
-	if not _music_streams.has(mood):
-		return
-	_music_player.volume_db = linear_to_db(clampf(volume_linear, 0.01, 1.0))
-	if _music_player.stream != _music_streams[mood]:
-		_music_player.stream = _music_streams[mood]
-		_music_player.play()
-	elif not _music_player.playing:
-		_music_player.play()
+	_music_mix = minf(1.0, _music_mix + delta / 0.8)
+	_duck = move_toward(_duck, _duck_target, delta * 2)
+	for index in range(2):
+		var gain := _music_mix if index == _active_music else 1.0 - _music_mix
+		_music_players[index].volume_db = gain_db(_music_volume * gain * _duck)
+		if gain == 0 and index != _active_music:
+			_music_players[index].stop()
 
 
-func set_music_volume(volume_linear: float) -> void:
-	if _disabled:
+static func gain_db(value: float) -> float:
+	return -80.0 if value <= 0.0 else linear_to_db(clampf(value, 0.0001, 1.0))
+
+
+func play_music(mood: String, volume_linear: float = 0.65) -> void:
+	_music_volume = clampf(volume_linear, 0, 1)
+	if _disabled or not _music_streams.has(mood) or _mood == mood:
 		return
-	_music_player.volume_db = linear_to_db(clampf(volume_linear, 0.01, 1.0))
+	_mood = mood
+	_active_music = 1 - _active_music
+	_music_mix = 0.0
+	var player := _music_players[_active_music]
+	player.stream = _music_streams[mood]
+	player.volume_db = -80
+	player.play()
+
+
+func set_music_volume(value: float) -> void:
+	_music_volume = clampf(value, 0, 1)
+
+
+func set_ducked(value: bool) -> void:
+	_duck_target = 0.32 if value else 1.0
 
 
 func stop_all() -> void:
-	if _disabled:
-		return
-	if _music_player != null:
-		_music_player.stop()
-		_music_player.stream = null
-	for player in _players:
+	stop_ambience()
+	if _defense_player != null:
+		_defense_player.stop()
+		_defense_player.stream = null
+	for player in _players + _music_players:
 		player.stop()
 		player.stream = null
+	_mood = ""
+	_last_play.clear()
 
 
 func shutdown() -> void:
 	stop_all()
 	_sounds.clear()
 	_music_streams.clear()
+	_ambience_stream = null
+
+
+func set_ambience(moat: bool, volume: float, suspended: bool) -> void:
+	if _disabled or _ambience_player == null:
+		return
+	if not moat or volume <= 0 or suspended:
+		stop_ambience()
+		return
+	_ambience_player.volume_db = gain_db(clampf(volume, 0, 1) * 0.22)
+	if not _ambience_player.playing:
+		_ambience_player.stream = _ambience_stream
+		_ambience_player.play()
+
+
+func stop_ambience() -> void:
+	if _ambience_player != null:
+		_ambience_player.stop()
+		_ambience_player.stream = null
+
+
+func play_ui(volume: float) -> void:
+	_play("ui", volume)
 
 
 func play_event(event: Dictionary, volume_linear: float = 1.0) -> void:
-	if _disabled:
-		return
-	var sound_id := ""
+	var kind := event_kind(event)
+	# Tiny deterministic pitch variations avoid a machine-gun sample loop.
+	# They never consume combat randomness or change event timing.
+	var variation := int(event.get("x_milli", 0)) / 1000 + int(event.get("tick", 0)) * 7
+	var pitch := 0.94 + posmod(variation, 13) * 0.01 if kind in Bank.ELEMENT_KINDS else 1.0
+	_play(kind, volume_linear, pitch)
+
+
+static func event_kind(event: Dictionary) -> String:
+	var kind := ""
 	match str(event.get("type", "")):
-		"shot":
-			sound_id = "fatal" if bool(event.get("fatal", false)) else "shot"
-		"hit", "damage":
-			sound_id = "hit" if str(event.get("source", "")) == "arrow" or event["type"] == "hit" else ""
-		"skill_pulse":
-			sound_id = str(event.get("element", ""))
-			match str(event.get("skill_id", "")):
-				"fire_ball": sound_id = "fire"
-				"glacial_spike": sound_id = "ice"
-				"lightning_strike": sound_id = "lightning"
-		"skill_rejected":
-			sound_id = "reject"
-		"wall_damage":
-			sound_id = "wall"
-		"boss_warning", "boss_special":
-			sound_id = "boss"
-		"run_end":
-			sound_id = "victory" if str(event.get("status", "")) == "victory" else "defeat"
-	if sound_id.is_empty() or not _sounds.has(sound_id):
+		"shot": kind = "fatal" if bool(event.get("fatal", false)) else "shot"
+		"hit": kind = "hit" # damage is not a second copy of the same impact.
+		"skill_pulse": kind = str(event.get("element", ""))
+		"skill_launch": kind = str(event.get("element", "")) + "_launch"
+		"skill_rejected": kind = "reject"
+		"wall_damage": kind = "wall" if int(event.get("amount", 0)) > 0 else ""
+		"defense_attack": kind = "tower" if str(event.get("defense_id", "")) == "magic_tower" else ("moat" if str(event.get("defense_id", "")) == "lava_moat" else "")
+		"boss_warning", "boss_special": kind = "boss"
+		"run_end": kind = "victory" if str(event.get("status", "")) == "victory" else "defeat"
+	return kind
+
+
+func _play(kind: String, volume: float, pitch: float = 1.0) -> void:
+	if _disabled or volume <= 0.0 or not _sounds.has(kind):
 		return
-	var player := _players[_cursor]
-	_cursor = (_cursor + 1) % _players.size()
-	player.stream = _sounds[sound_id]
-	player.volume_db = linear_to_db(clampf(volume_linear, 0.01, 1.0))
+	if not allow_event(kind, Time.get_ticks_msec()):
+		return
+	# One bounded extra voice: defense cues cannot cut off the bow's pluck.
+	if kind in ["tower", "moat"]:
+		_defense_player.stream = _sounds[kind]
+		_defense_player.volume_db = gain_db(volume * 0.52)
+		_defense_player.play()
+		return
+	# Two reserved voices keep alerts/results audible amid rapid impacts.
+	var important := kind in ["boss", "victory", "defeat", "reject"]
+	var elemental := kind in Bank.ELEMENT_KINDS
+	var index := 8 if kind == "boss" else 9
+	if not important:
+		# Four impact, two launch and two weapon/UI voices. Incoming whooshes
+		# cannot truncate the previous impact's boom/crystal/thunder tail.
+		if kind.ends_with("_launch"):
+			index = 4 + _launch_cursor
+			_launch_cursor = (_launch_cursor + 1) % 2
+		elif elemental:
+			index = _spell_cursor
+			_spell_cursor = (_spell_cursor + 1) % 4
+		else:
+			index = 6 + _cursor
+			_cursor = (_cursor + 1) % 2
+	var player := _players[index]
+	player.stream = _sounds[kind]
+	player.pitch_scale = pitch
+	player.volume_db = gain_db(volume * (0.60 if elemental else (0.72 if not important else 1.0)))
 	player.play()
 
 
-func _tone(frequency: float, duration: float, amplitude: float, harmonic: float) -> AudioStreamWAV:
-	var sample_count := maxi(1, int(float(SAMPLE_RATE) * duration))
-	var bytes := PackedByteArray()
-	bytes.resize(sample_count * 2)
-	for sample_index in range(sample_count):
-		var time := float(sample_index) / float(SAMPLE_RATE)
-		var envelope := pow(1.0 - float(sample_index) / float(sample_count), 2.0)
-		var wave := sin(TAU * frequency * time) + harmonic * sin(TAU * frequency * 2.01 * time)
-		var sample := clampi(int(wave * envelope * amplitude * 16000.0), -32768, 32767)
-		bytes[sample_index * 2] = sample & 0xff
-		bytes[sample_index * 2 + 1] = (sample >> 8) & 0xff
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = SAMPLE_RATE
-	stream.stereo = false
-	stream.data = bytes
-	return stream
-
-
-func _music_loop(frequencies: Array, duration: float, amplitude: float) -> AudioStreamWAV:
-	var sample_count := maxi(1, int(float(SAMPLE_RATE) * duration))
-	var bytes := PackedByteArray()
-	bytes.resize(sample_count * 2)
-	for sample_index in range(sample_count):
-		var time := float(sample_index) / float(SAMPLE_RATE)
-		var value := 0.0
-		for frequency in frequencies:
-			value += sin(TAU * float(frequency) * time) * 0.55
-			value += sin(TAU * float(frequency) * 0.5 * time) * 0.18
-		var pulse := 0.72 + 0.28 * sin(TAU * 0.5 * time)
-		var sample := clampi(int(value * pulse * amplitude * 7000.0), -32768, 32767)
-		bytes[sample_index * 2] = sample & 0xff
-		bytes[sample_index * 2 + 1] = (sample >> 8) & 0xff
-	var stream := AudioStreamWAV.new()
-	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = SAMPLE_RATE
-	stream.stereo = false
-	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	stream.loop_begin = 0
-	stream.loop_end = sample_count
-	stream.data = bytes
-	return stream
+func allow_event(kind: String, now_ms: int) -> bool:
+	if now_ms - int(_last_play.get(kind, -100000)) < int(GAPS.get(kind, 100)):
+		return false
+	_last_play[kind] = now_ms
+	return true

@@ -1,10 +1,11 @@
 # Defender II 风格素材生成提示词
 
-> 美术基准：Q版卡通塔防手游（Defender II / DroidHen 风格）。竖屏战场，左侧为城堡墙与弩塔，怪物从右向左进攻。
+> 美术基准：Q版卡通塔防手游参考。游戏为 1920×1080 横屏，左侧竖向城防线，怪物从右向左进攻；竖长的是城墙素材，不是游戏画布。
 > 通用风格词（所有提示词末尾统一追加）：
 > `cartoon mobile tower-defense game art, Defender II style, thick black outline, soft cel-shading with smooth gradients, vibrant saturated colors, clean vector-like rendering, high detail, game asset, no text, no watermark, no UI`
 > 透明背景素材追加：`isolated on transparent background, sprite sheet ready, full body visible, centered`
-> 建议比例：小怪 512×512 透明 PNG；Boss 1024×1024；背景 960×540（或 2048×1152 竖屏 9:16）；图标 256×256。
+> 建议比例：小怪 512×512 透明 PNG；Boss 1024×1024；整幅背景 1920×1080 或 2048×1152（横屏 16:9）；独立城墙 1024×1536；图标 256×256。
+> 2026-09-22：继续使用现有 21 张生产 PNG（20 张注册）。元素图标和法术落击用统一代码绘制，本轮不生成或替换图片，不将原作截图放入游戏。当前实现见 [视听优化说明](presentation-polish.md)。
 
 ---
 
@@ -289,3 +290,11 @@ Style: coherent stylized hand-painted mobile tower-defense art, crisp but restra
 Lighting: evenly distributed diffuse cool daylight, delicate upper-left bevel highlights only. No large baked shadows, no vignette, no glowing seams.
 Constraints: exact seamless continuous repeat on all four edges, no border or trim, no framing, no focal ornament, no castle, wall, tower, steps, crates, weapons, characters, vegetation tufts, water, lava, cracks glowing with magic, UI, text, logos or watermark. Full opaque RGB surface covering every pixel; NO transparent areas.
 ```
+
+## 17. 三系技能透明特效图集（2026-09-22）
+
+本轮实际使用的三段完整提示词及实际输出尺寸统一保存于 [三系特效生成记录](elemental-vfx-prompts.md)。原第 8 节是早期单张技能素材需求；当前生产资源采用 `Gamematerials/VFX/` 下三张 2×2 RGBA 图集，动画和声音实现见 [三系视听重制](elemental-vfx.md)。
+
+## 18. 九技能图标与城防部件（2026-09-22，09-23 补录）
+
+四张已接入资源的完整生成记录见 [城防素材提示词](fortress-art-prompts.md)。当前生产地面由 `Environment/battle-ground-v2.png` / `moat-ground-v2.png` 替代第 15.2 节的旧背景，仍为两张完整场景切换；原 PNG 均保留。新增九图标和城防部件通过图集复用，设计、实际输出尺寸与验收见 [城防视听强化](fortress-art.md)。
