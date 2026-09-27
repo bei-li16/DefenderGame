@@ -1,5 +1,5 @@
 AEGIS OF EMBER / 余烬守望
-Version 1.7.1-windows - Windows x86_64
+Version 1.8.0-windows - Windows x86_64
 
 An offline, single-player castle defense game. No account, server, payment,
 telemetry, or mandatory network connection is used.
@@ -17,13 +17,18 @@ Do not place an older DefenderGame.pck beside the new executable.
 升级前关闭游戏并备份 savedata，再将存档复制到新版本的解压目录。
 请勿将旧 DefenderGame.pck 放入新目录。此版本未进行数字签名。
 
-VERSION 1.7.1 / 本版更新
-Straight, continuous castle walls align above and below the ballista and
-extend past both towers to the screen edges, with muted stone and ground colors.
-城墙竖直贯通、上下共线并延伸出屏幕，统一石材、地面与原弩机风格。
-Recorded crossbow, fire, ice and thunder sounds replace synthetic combat tones.
-Separate launch/impact voices and a limiter keep overlapping attacks clear.
-三系技能与弩箭改为实录分层音效，区分发动和命中，改善连射与叠加混音。
+VERSION 1.8.0 / 本版更新
+Nine creature atlases provide 216 distinct poses for movement, attacks,
+hit reactions and death, replacing stretched single-image animation.
+9套角色图集、216个独立姿势，强化小怪与Boss的移动、攻击、受击和倒地。
+Bosses gain distinct claw/fire-breath, punch/frost-slam and club/lightning
+performances synchronized with their existing combat events.
+三位Boss分别强化爪击吐息、重拳冰霜砸地、挥棒触手引雷，与真实技能事件同步。
+Victory rewards save immediately while the final enemy finishes falling.
+Gameplay balance, config v12 and save schema v6 are unchanged.
+胜利奖励立即保存，结算面板等待最后敌人倒地；规则与数值保持不变。
+The design, architecture and animation documentation is updated, including PDF.
+同步更新需求、架构、动作说明以及TeX/PDF总设计文档。
 Existing v6 save slots remain compatible; back up before upgrading.
 
 MINIMUM TARGET

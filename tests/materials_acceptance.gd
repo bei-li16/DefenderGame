@@ -2,6 +2,7 @@ extends SceneTree
 
 const Art = preload("res://src/presentation/art/game_art.gd")
 const Creatures = preload("res://src/presentation/art/creature_visuals.gd")
+const Motion = preload("res://src/presentation/art/creature_animation.gd")
 var failures: Array[String] = []
 var passes := 0
 var app: Node
@@ -26,7 +27,7 @@ func _run() -> void:
 		var texture := Art.texture(key)
 		_expect(texture != null and texture.get_width() > 0, "imported " + key)
 		if texture != null and not key in ["menu", "battle", "lava"]:
-			_expect(maxi(texture.get_width(), texture.get_height()) <= 1024, "bounded texture " + key)
+			_expect(maxi(texture.get_width(), texture.get_height()) <= (2048 if str(key).begins_with("anim_") else 1024), "bounded texture " + key)
 	_expect(Art.FILES["power_bow"] == "武器图标4" and Art.FILES["hurricane_bow"] == "武器图标2", "weapon mapping follows actual colors")
 	_expect(Art.FILES["wall"] == "Environment/citadel-v3" and Art.texture("masonry") != null, "runtime loads the stone towers and continuous wall material")
 	var upper_uv := Rect2(0.05, 0, 0.91, 0.55)
@@ -69,7 +70,7 @@ func _run() -> void:
 	var visuals: RefCounted = game.get("_creatures")
 	var original := JSON.stringify(sample)
 	visuals.call("advance", 0.1)
-	_expect(JSON.stringify(sample) == original, "animation does not mutate authoritative snapshots")
+	_expect(JSON.stringify(sample) == original, "Motion does not mutate authoritative snapshots")
 	_expect(visuals.get("actors").size() == 10, "all enemy archetypes plus cosmetic variant")
 	game.queue_redraw()
 	await _frames(3)
@@ -116,18 +117,19 @@ func _run() -> void:
 	await _frames(3)
 	await _capture("04-attacks")
 	visuals.call("event", {"type": "death", "entity_id": 1})
-	_expect(visuals.get("retired").size() == 1, "death keeps one fading sprite")
+	_expect(visuals.get("retired").size() == 1, "death retains its authored collapse")
 	visuals.call("sync", [])
 	_expect(visuals.get("actors").is_empty(), "removed actors are pruned")
-	visuals.call("advance", 0.6)
+	visuals.call("advance", 1.2)
 	_expect(visuals.get("retired").is_empty(), "death sprites expire")
 	for number in range(80):
+		visuals.call("sync", [])
 		visuals.call("sync", [enemies[0]])
 		visuals.call("event", {"type": "death", "entity_id": 1})
 	_expect(visuals.get("retired").size() == Creatures.CORPSE_LIMIT, "corpse queue is bounded")
-	var walk := Creatures._pose_mesh("flutter", "walk", 4)
-	_expect(walk == Creatures._pose_mesh("flutter", "walk", 4), "pose meshes are reused")
-	_expect(walk.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] != Creatures._pose_mesh("flutter", "walk", 12).surface_get_arrays(0)[Mesh.ARRAY_VERTEX], "wing geometry visibly changes")
+	var walk := Motion.cell("bat", 0, 1)
+	_expect(walk == Motion.cell("bat", 0, 1), "authored frames reuse imported atlas regions")
+	_expect(walk.region != Motion.cell("bat", 0, 3).region, "upstroke and downstroke use different painted wing silhouettes")
 	# Render 100 animated creatures / 200 arrows after warming shared poses.
 	var crowd: Array = []
 	var arrows: Array = []
@@ -142,7 +144,7 @@ func _run() -> void:
 	sample["enemies"] = crowd
 	sample["projectiles"] = arrows
 	game.call("_on_snapshot", sample)
-	visuals.call("advance", 0.6)
+	visuals.call("advance", 1.2)
 	var visual_begin := Time.get_ticks_usec()
 	for frame in range(90):
 		game.call("_process", 1.0 / 60.0)

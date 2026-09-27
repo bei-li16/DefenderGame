@@ -1,6 +1,6 @@
 # Windows / Godot 开发指南
 
-文档日期：2026-09-22（源码 1.7.0）
+文档日期：2026-09-27（源码 1.8.0）
 
 分支：`windows-godot`
 
@@ -73,7 +73,9 @@ Stage、教学、设置、应用事务、InputMap 和诊断验收：
 
 无尽关卡验收覆盖前 600 关的 Boss/普通关隔离、曲线、百万关有限生成、存活上限延后出怪、确定性、旧 30 关存档衔接、首通和保存失败、分页与定位。移除 `--headless` 并追加 `-- --capture` 可将中英文选关和下一关界面保存到 `Builds/endless-stages-review/`。`stage_autoplay.gd` 自动通关原 30 关与 9 个无尽段样例；高关卡生成测试不等同于证明满级角色可通关所有关卡。详见 [无尽关卡规则](endless-stages.md)。脚本共享隔离测试档，应串行运行，不操作真实玩家存档。
 
-素材动画验收覆盖当前 20 张注册纹理、弓箭映射、弩塔 UV 裁切、快照隔离、冻结/眩晕/减速/暂停、真实事件触发动作、死亡回收和共享网格。移除 `--headless` 并追加 `-- --capture` 可进行 100 动画怪物＋200 箭的真实渲染检查，并保存菜单/研究/战场截图到 `Builds/materials-review/`。接入规则与现有立绘动画的限制见 [素材接入说明](materials-integration.md)。
+素材动画验收覆盖注册纹理、弓箭映射、弩塔 UV 裁切、快照隔离、冻结/眩晕/减速/暂停、真实事件触发动作、死亡回收和共享图集。移除 `--headless` 并追加 `-- --capture` 可进行 100 动画怪物＋200 箭的真实渲染检查，并保存菜单/研究/战场截图到 `Builds/materials-review/`。
+
+`creature_animation_acceptance.gd` 验证 9 套逐帧图集的透明度、独立帧、等比显示和动作状态，另通过真实战斗模型验证三位 Boss 的普攻、技能释放、死亡与保存后结算时机。图形模式追加 `-- --capture --movie` 可输出 1080p/720p 实际画面和三段连续动作帧到 `Builds/creature-review/`。该专项已纳入正式导出门禁；与其他 Godot 脚本串行运行。美术实现、素材生成和验证范围见 [角色动作重制](creature-animation.md)。
 
 `presentation_polish_acceptance.gd` 验证真实施法到荣誉保存的链路、失败回滚、败局金币、满蓝开局、音乐 PCM/限流及界面；图形模式增加混音检查。`-- --capture` 输出中英文菜单/研究、密集法术、Boss、暂停设置、结算截图及三段配乐 WAV 至 `Builds/polish-review-20260922/`。`-- --interactive` 启动可操作的隔离测试档，供鼠标键盘试玩；关闭窗口即可结束，不使用玩家进度。所有脚本必须串行运行。
 
@@ -170,7 +172,7 @@ user://diagnostics/
 & .\tools\build_windows.ps1 -Configuration Release
 ```
 
-脚本要求 Git 工作树干净，并执行内容校验、核心、无尽关卡/研究、技能交互、视听体验专项、30 编排关 + 9 生成关自动通关、存档槽位、Godot 声明、PCK 预检、许可、清单和模板检查。自 1.7 起，发行资源内嵌进 EXE；导出后直接验证 EXE 内的资源清单，并复制 EXE 到隔离运行目录，确认 `savedata/slot_1.json` 与设置写入 EXE 同级目录。Release ZIP 严格只含 `DefenderGame.exe`、`README.txt`、`GAME_LICENSE.txt` 和 `GODOT_COPYRIGHT.txt` 四项，不含独立 PCK、源码、编辑器、测试日志或玩家存档。独立 PCK 仅用于构建前诊断，不上传发行页。Git 忽略 EXE/DLL/PCK/ZIP，源码提交与 GitHub Release 二进制附件分离。
+脚本要求 Git 工作树干净，并执行内容校验、核心、无尽关卡/研究、技能交互、视听体验、三系VFX、录音、城防、角色动画、整机UI及分辨率专项、30 编排关 + 9 生成关自动通关、存档槽位、Godot 声明、PCK 预检、许可、清单和模板检查。自 1.7 起，发行资源内嵌进 EXE；导出后直接验证 EXE 内的资源清单，并复制 EXE 到隔离运行目录，确认 `savedata/slot_1.json` 与设置写入 EXE 同级目录。Release ZIP 严格只含 `DefenderGame.exe`、`README.txt`、`GAME_LICENSE.txt` 和 `GODOT_COPYRIGHT.txt` 四项，不含独立 PCK、源码、编辑器、测试日志或玩家存档。独立 PCK 仅用于构建前诊断，不上传发行页。Git 忽略 EXE/DLL/PCK/ZIP，源码提交与 GitHub Release 二进制附件分离。
 
 项目当前采用 `Copyright (c) 2026 bei-li16` 的 MIT 许可。需要为后续项目有意更换许可时，可任选一条命令生成待审阅文件：
 
@@ -189,7 +191,7 @@ user://diagnostics/
 & .\tools\check_release_readiness.ps1
 ```
 
-它会执行 PCK 预检，并将结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。历史的 12/12 不代表本轮工作树已发布就绪；1.7 修改仍需审阅提交后重新构建。未满足条件或跳过动态预检时返回退出码 2；`-SkipPackPreflight` 只检查静态材料，不产生发布就绪结论。
+它会执行 PCK 预检，并将结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。当前1.8.0发行必须从最终干净提交重新构建；历史动画预览通过门禁不能替代本次正式构建。未满足条件或跳过动态预检时返回退出码 2；`-SkipPackPreflight` 只检查静态材料，不产生发布就绪结论。
 
 ## 三系特效专项
 
@@ -204,3 +206,20 @@ user://diagnostics/
 `tests/production_ui_acceptance.gd` 覆盖新城墙/弩机/九宫格/图标资源、安装位置、固定 HUD 内槽、装饰区鼠标穿透、所有研究页及菜单/战斗覆盖层。图形模式追加 `-- --capture`，输出中英文两种分辨率的 64 张非空像素验证截图到 `Builds/production-ui-review/`。`resolution_layout.gd` 另覆盖中英文与 1280x720、1366x768、1920x1080、2560x1440。两者已加入正式构建串行门禁。
 
 `tests/window_mode_acceptance.gd` 必须在图形模式运行；新增音量、画质、自动射击、语言设置不重置最大化窗口的回归。所有 `--script` 测试共享隔离自动化目录，不能并行运行。命令、素材锚点、截图范围和正式发行边界见 [整机 UI 重制](production-ui.md)。
+
+## 当前构建与总设计文档
+
+历史记录：9月27日动画本地预览快照为 `8f3488752fbd463c0a8b1e989e120d9abdc11362`，当时生成 `Builds/Windows/DefenderGame.exe` 和 `Builds/Aegis-of-Ember-creature-animation-Windows-x64.zip`。完整门禁、包资源、EXE图形与启动通过，历史证据见 `Builds/creature-review/verification.json`。已发布v1.7.1对应 `7bf7e38`，不含此动画增量；勿混用包名和验证结果。
+
+1.8.0正式构建输出 `Builds/Windows/DefenderGame.exe` 与 `Builds/Aegis-of-Ember-1.8.0-Windows-x64.zip`；最终日志与SHA-256保存到 `Builds/Release-1.8.0/`，`Builds/latest-rebuild.json`追踪最新交付。发布EXE、便携ZIP与SHA256SUMS.txt；源代码提交不包含这些构建产物。
+
+总设计源文件与交付PDF位于 `docs/DefenderGame-design-architecture.tex` / `.pdf`。编辑时使用内置LaTeX源编辑与预览；若本机内置编译器不可用，可使用已安装的XeLaTeX导出。源文件无外部图片，使用Windows字体及ctex。以下命令在仓库根目录串行执行两遍，再检查日志与整本文档渲染：
+
+```powershell
+New-Item -ItemType Directory -Force Builds/docs-review-20260927 | Out-Null
+xelatex -interaction=nonstopmode -halt-on-error -output-directory=Builds/docs-review-20260927 docs/DefenderGame-design-architecture.tex
+xelatex -interaction=nonstopmode -halt-on-error -output-directory=Builds/docs-review-20260927 docs/DefenderGame-design-architecture.tex
+pdftoppm -r 100 -png Builds/docs-review-20260927/DefenderGame-design-architecture.pdf Builds/docs-review-20260927/page
+```
+
+确认无缺字、未定义引用、越界和分页问题后，将PDF复制回docs；辅助文件和复查图留在忽略的Builds中。更新文档不需要重新生成游戏资产或修改玩家存档。

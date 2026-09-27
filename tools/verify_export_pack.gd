@@ -11,6 +11,9 @@ const REQUIRED_PATHS: Array[String] = [
 	"res://src/presentation/art/spell_visuals.gd",
 	"res://src/presentation/art/spell_icons.gd",
 	"res://src/presentation/art/fortress_visuals.gd",
+	"res://src/presentation/art/creature_animation.gd",
+	"res://src/presentation/art/creature_effects.gd",
+	"res://Gamematerials/Creatures/animation-layouts.json",
 	"res://src/presentation/art/ui_assets.gd",
 	"res://src/presentation/gameplay/hud_meter.gd",
 	"res://Gamematerials/UI/chrome-v2.png",
@@ -38,6 +41,8 @@ const EXCLUDED_PATHS: Array[String] = [
 	"res://tools/verify_export_pack.gd",
 	"res://tools/audio_sources/crossbow_dryshot.flac",
 	"res://tests/combat_audio_acceptance.gd",
+	"res://tests/creature_animation_acceptance.gd",
+	"res://tools/measure_creature_atlases.py",
 	"res://docs/implementation-status.md",
 	"res://release/license-templates/MIT.template.txt",
 	"res://参考/来源清单.csv",
@@ -58,6 +63,16 @@ func _initialize() -> void:
 			if clip == null or clip.format != AudioStreamWAV.FORMAT_16_BITS or clip.mix_rate != 44100:
 				failures.append("missing_or_invalid_recorded_audio:" + path)
 			audio_count += 1
+	var creature_count := 0
+	var layouts: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://Gamematerials/Creatures/animation-layouts.json"))
+	for art in ["snail", "fist", "tentacle", "spike", "mage", "bat", "dragon", "giant", "matron"]:
+		var path := "res://Gamematerials/Creatures/%s-actions-v1.png" % art
+		var sheet := load(path) as Texture2D
+		if sheet == null or sheet.get_width() != 1536 or sheet.get_height() != 1024:
+			failures.append("missing_or_invalid_creature_atlas:" + path)
+		if not layouts is Dictionary or not layouts.has(art) or layouts[art].get("rects", []).size() != 24 or layouts[art].get("pivots", []).size() != 24:
+			failures.append("missing_or_invalid_creature_layout:" + art)
+		creature_count += 1
 	for path in EXCLUDED_PATHS:
 		if _path_exists(path):
 			failures.append("unexpected:" + path)
@@ -87,7 +102,7 @@ func _initialize() -> void:
 
 	for failure in failures:
 		push_error("[PACK PROBE] " + failure)
-	print("[PACK PROBE] required=%d recorded_audio=%d excluded=%d failures=%d" % [REQUIRED_PATHS.size(), audio_count, EXCLUDED_PATHS.size(), failures.size()])
+	print("[PACK PROBE] required=%d recorded_audio=%d creature_atlases=%d excluded=%d failures=%d" % [REQUIRED_PATHS.size(), audio_count, creature_count, EXCLUDED_PATHS.size(), failures.size()])
 	quit(failures.size())
 
 

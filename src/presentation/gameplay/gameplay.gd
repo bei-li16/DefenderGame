@@ -9,6 +9,8 @@ const GameplayHud = preload("res://src/presentation/gameplay/gameplay_hud.gd")
 const Art = preload("res://src/presentation/art/game_art.gd")
 const SpellVisuals = preload("res://src/presentation/art/spell_visuals.gd")
 const CreatureVisuals = preload("res://src/presentation/art/creature_visuals.gd")
+const CreatureAnimation = preload("res://src/presentation/art/creature_animation.gd")
+const CreatureEffects = preload("res://src/presentation/art/creature_effects.gd")
 const CastleView = preload("res://src/presentation/art/castle_view.gd")
 const CourtyardView = preload("res://src/presentation/art/courtyard_view.gd")
 const FortressVisuals = preload("res://src/presentation/art/fortress_visuals.gd")
@@ -28,6 +30,9 @@ var _hud: GameplayHud
 var _pause_overlay: Control
 var _settings_overlay: Control
 var _result_overlay: Control
+var _result_delay := 0.0
+var _pending_result: Dictionary = {}
+var _pending_settlement: Dictionary = {}
 var _tutorial_hint: Control
 var _quick_settings_note: Label
 var _settled: bool = false
@@ -110,6 +115,12 @@ func _process(delta: float) -> void:
 	else:
 		_aim_visual_angle = (get_global_mouse_position() - CastleView.BOW_ORIGIN).angle()
 	_creatures.advance(delta)
+	if _result_delay > 0.0:
+		_result_delay = maxf(0.0, _result_delay - delta)
+		if _result_delay <= 0.0:
+			_show_result(_pending_result, _pending_settlement)
+			_pending_result = {}
+			_pending_settlement = {}
 	_snapshot_blend = minf(1.0, _snapshot_blend + delta * float(Engine.physics_ticks_per_second))
 	_bow_recoil = maxf(0.0, _bow_recoil - delta * 7.0)
 	_tower_flash = maxf(0.0, _tower_flash - delta * 3.0)
@@ -297,10 +308,15 @@ func _on_events(events_value: Array) -> void:
 			"damage":
 				_add_float("-%d" % int(event.get("amount", 0)), _entity_position(int(event.get("entity_id", 0))), _damage_color(str(event.get("source", ""))), 21)
 			"death":
-				_append_effect({"kind": "death", "position": _entity_position(int(event.get("entity_id", 0))), "age": 0.0, "duration": 0.55})
+				# The retained actor performs its complete collapse and debris.
+				if bool(event.get("boss", false)):
+					_shake_strength = maxf(_shake_strength, _quality_shake(9.0))
 			"wall_damage":
 				var attacker := _entity_position(int(event.get("entity_id", 0)))
-				_append_effect({"kind": "enemy_attack", "position": attacker, "age": 0.0, "duration": 0.32})
+				if str(event.get("source", "enemy")) != "boss_special":
+					var actor: Dictionary = _creatures.actors.get(int(event.get("entity_id", 0)), {})
+					var enemy: Dictionary = actor.get("enemy", {})
+					_append_effect({"kind": "enemy_attack", "art": Art.creature(enemy)["art"], "enemy_id": enemy.get("enemy_id", ""), "position": attacker, "age": 0.0, "duration": 0.32})
 				# Armor can absorb all damage. Keep the monster's attack action,
 				# but do not shake the screen or report a misleading HP loss of 0.
 				if int(event.get("amount", 0)) > 0:
@@ -316,7 +332,8 @@ func _on_events(events_value: Array) -> void:
 				_feedback(GameApp.text("feedback.boss"), Color("ff587d"), 3.5, 3)
 			"boss_special":
 				_shake_strength = _quality_shake(18.0)
-				_append_effect({"kind": "boss_wave", "special": event.get("special", ""), "position": _entity_position(int(event.get("entity_id", 0))), "age": 0.0, "duration": 0.8})
+				var special := str(event.get("special", ""))
+				_append_effect({"kind": "boss_wave", "entity_id": int(event.get("entity_id", 0)), "special": special, "position": _entity_position(int(event.get("entity_id", 0))), "age": 0.0, "duration": CreatureEffects.duration(special)})
 			"defense_attack":
 				if str(event.get("defense_id", "")) == "magic_tower":
 					_tower_flash = 1.0
@@ -330,7 +347,17 @@ func _on_run_finished(result: Dictionary) -> void:
 	if session != null:
 		session.export_debug_replay()
 	var settlement := GameApp.settle_run(result)
-	_show_result(result, settlement)
+	# Persist immediately, then let the final enemy actually fall before the
+	# result panel covers the battlefield. No live combat ticks are delayed.
+	if str(result.get("outcome", result.get("status", ""))) == "victory" and not _creatures.retired.is_empty():
+		_pending_result = result.duplicate(true)
+		_pending_settlement = settlement
+		_result_delay = 0.65
+		for corpse in _creatures.retired:
+			if corpse["enemy"].get("tags", []).has("boss"):
+				_result_delay = maxf(_result_delay, 1.25 - float(corpse["death"]))
+	else:
+		_show_result(result, settlement)
 
 
 func _build_hud() -> void:
@@ -821,6 +848,7 @@ func _draw() -> void:
 	# Scorch/frost decals sit on the floor, behind creatures and architecture.
 	for effect in effects:
 		SpellVisuals.ground(self, effect)
+	_creatures.draw_ground(self, float(_quality_profile()["effect_detail"]))
 	_creatures.draw_retired(self)
 	var sorted_enemies: Array = snapshot.get("enemies", []).duplicate()
 	sorted_enemies.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["y_milli"]) < int(b["y_milli"]))
@@ -880,12 +908,18 @@ func _draw_enemy(enemy: Dictionary) -> void:
 
 
 func _draw_enemy_health(enemy: Dictionary) -> void:
+	# Boss health already occupies the dedicated, named top HUD meter.
+	if enemy.get("tags", []).has("boss"):
+		return
 	var position: Vector2 = _creatures.actors.get(int(enemy["entity_id"]), {}).get("position", Vector2(float(enemy["x_milli"]), float(enemy["y_milli"])) / 1000.0)
 	var radius := float(enemy["collision_radius_milli"]) / 1000.0
 	var bar_width := radius * 2.0
 	var art := Art.creature(enemy)
-	var texture := Art.texture(str(art["art"]))
-	var bar_y := position.y - float(art["width"]) * texture.get_height() / texture.get_width() * 0.5 - 8.0
+	var art_key := str(art["art"])
+	# Flying wings reach far above the torso; anchor their bar to the body so
+	# it remains associated with the creature throughout the downstroke.
+	var head_height := 0.62 if art_key == "bat" else 0.85
+	var bar_y := position.y + float(CreatureAnimation.SETTINGS[art_key]["floor"]) - float(CreatureAnimation.SETTINGS[art_key]["size"]) * head_height - 8.0
 	var hp_ratio := float(enemy["hp"]) / maxf(1.0, float(enemy["max_hp"]))
 	draw_rect(Rect2(position.x - radius - 2, bar_y - 2, bar_width + 4, 10), Color("1b1824"))
 	draw_rect(Rect2(position.x - radius - 2, bar_y - 2, bar_width + 4, 10), Color("858b7a"), false, 1)
@@ -911,12 +945,7 @@ func _draw_effect(effect: Dictionary) -> void:
 		return
 	match kind:
 		"enemy_attack":
-			var impact := CastleView.impact_position(position.y)
-			FortressVisuals.wall_hit(self, impact, progress)
-			if position.x > 440.0:
-				var orb := position.lerp(impact, minf(1.0, progress * 2.0))
-				draw_line(orb + Vector2(25, 0), orb, Color(0.7, 0.35, 1.0, 1.0 - progress), 8.0)
-				draw_circle(orb, 9.0, Color(0.85, 0.6, 1.0, 1.0 - progress))
+			CreatureEffects.strike(self, effect, progress, detail)
 		"defense":
 			FortressVisuals.defense(self, str(effect.get("defense_id", "")), position, progress, detail)
 		"hit":
@@ -924,17 +953,12 @@ func _draw_effect(effect: Dictionary) -> void:
 			for ray in range(hit_rays):
 				var direction := Vector2.RIGHT.rotated(float(ray) * TAU / float(hit_rays))
 				draw_line(position, position + direction * (18.0 + 34.0 * (1.0 - progress)), Color(1.0, 0.93, 0.55, 1.0 - progress), 4)
-		"death":
-			draw_arc(position, 24.0 + progress * 70.0, 0, TAU, maxi(10, int(round(24.0 * detail))), Color(1.0, 0.43, 0.22, 1.0 - progress), 8)
 		"boss_wave":
-			var special := str(effect.get("special", ""))
-			var tint := Color("ff7946")
-			if special == "frost_nova":
-				tint = Color("91e2ff")
-				_draw_ice_prison(Vector2(150, 555), 130.0, (1.0 - progress) * 0.55)
-			elif special == "storm_surge":
-				tint = Color("d0a0ff")
-			draw_arc(position, 80.0 + progress * 400.0, 0, TAU, maxi(16, int(round(48.0 * detail))), Color(tint, 1.0 - progress), 9)
+			var live_actor: Dictionary = _creatures.actors.get(int(effect.get("entity_id", -1)), {})
+			var cast := effect.duplicate(false)
+			if not live_actor.is_empty():
+				cast["position"] = live_actor["position"]
+			CreatureEffects.special(self, cast, detail)
 
 
 func _draw_falling_spells() -> void:

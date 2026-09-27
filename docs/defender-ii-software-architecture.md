@@ -1,20 +1,24 @@
 # Defender II Windows / Godot 软件架构
 
-版本：3.2-godot-windows（对应源码 1.7.0）
+版本：3.4-godot-windows（源码 1.8.0，2026-09-27）
 
-文档日期：2026-09-22
+文档日期：2026-09-27
 
 对应分支：`windows-godot`
 
 目标：使用 Godot 4.7.2 和 GDScript 在一台 Windows 电脑上完成轻量、离线、可测试的 2D 单机 MVP
 
-实施状态：本文保留分层设计意图；目录/场景树示意并非全部实际类或节点。当前实现以 `DefenderGame-design-architecture.tex` 及同名 PDF 的模块索引为准。1.7 体验变化见 [`presentation-polish.md`](presentation-polish.md)，测试与发布边界见 [`implementation-status.md`](implementation-status.md) §12。
+实施状态：本文保留分层设计意图；目录/场景树示意并非全部实际类或节点。当前实现以 `DefenderGame-design-architecture.tex` 及同名 PDF 的模块索引为准。总设计 TeX/PDF 已同步至 2026-09-27，覆盖 48 个生产脚本；测试与发布边界见 [实施状态](implementation-status.md) §16–19。
 
 ## 1. 架构目标
 
-2026-09-22 三系补充：`SpellVisuals` 消费 `falling_spells` / `skill_pulse`，通过 `GameArt` 三张透明图集完成飞行、命中、地面残留和状态覆盖；血条位于命中光效之上。`SoundBank` 新增六段发射/命中 PCM，十声部划分为 4 命中 + 2 发射 + 2 武器/界面 + 2 告警/结果。新增 `elemental_vfx_acceptance.gd` 对照双模型事件流、透明度、分组音频和三档预算。详见 [三系视听重制](elemental-vfx.md)；本次表现层补充尚未合并进上一轮总设计 PDF。
+当前表现由共享资源与事件驱动：`SpellVisuals` 绘制三系透明图集，`SpellIcons` 统一九阶技能图标；`UiAssets` 和 `HudMeter` 提供石铁 UI、独立计量条内槽与端帽。`CastleView` 使用固定墙线和完整塔楼区域，`FortressVisuals` 负责弩机回弹、放电、熔岩与受击；城墙两端延伸屏外，内院保持不透明。见 [直墙修正](straight-wall-art.md) 与 [整机 UI](production-ui.md)。
 
-1.7 新增 `ElementIcon`；2026-09-23 城防增量后由 `SpellIcons` 统一九阶图集，供图标、下拉、HUD 与 `MagicCursor` 复用。`FortressVisuals` 只读绘制地面装饰、水晶塔、弩机和受击；`SoundBank` 负责 PCM 生成，`DefenderProceduralAudio` 管理两音乐声部、十个既有事件声部、一个防御声部和一个环境声部。所有视觉和音频相位均不消耗战斗 RNG。`Result` 携带三元素施法数；`mana` 在荣誉叠加完成后初始化；`coin_bounty` 的通关增益限于胜利。`GameApp.menu_destination` 是一次性研究页导航意图，不写进 Profile。新资源、声音生命周期和像素验收详见 [城防视听强化](fortress-art.md)。
+`CreatureAnimation` 选择 9 套共 216 帧的姿势，读取实测 UV/脚底锚点；`CreatureVisuals` 维护插值、动作时钟与尸体；`CreatureEffects` 表现 Boss 蓄力、吐息、冰霜砸地、触手引雷和材质碎屑。普攻与技能释放由真实事件触发，计时器只负责显示。胜利保存立即发生，结果面板等待短暂倒地展示。见 [角色动作重制](creature-animation.md)。
+
+`SoundBank` 加载 24 段 44.1 kHz 录音变体，保留菜单/战斗/Boss 合成配乐和其他事件声音；`DefenderProceduralAudio` 管理 16 个分组事件声部、2 个音乐声部，以及独立防御和环境声部。总线限幅至 -1 dB；变体、动画和音频均不消耗规则 RNG。音色与真实发动/命中对齐，见 [战斗音效](combat-audio.md)。
+
+1.7 已实现的元素施法荣誉、满蓝入场、败局悬赏修正继续保留；`GameApp.menu_destination` 是一次性导航意图，不写入 Profile。
 
 画布改为 `canvas_items + keep`，不扩展规则战场到 1920×1080 以外。失焦暂停只作用于实际活动的战斗场景，测试离屏场景不受窗口焦点干扰。`presentation_polish_acceptance.gd` 提供隔离自动验证、截图与实际输入试玩入口，已加入发布门禁。
 
@@ -80,7 +84,7 @@ src/
     replay/event_hasher.gd
   application/                  # GameSession、RunOrchestrator、Save/Upgrade/Content/ReplayService
   presentation/
-    art/                        # GameArt 素材注册、共享 UV 网格与怪物动作
+    art/                        # 素材注册、角色逐帧图集、城防与元素绘制
     gameplay/                   # 战场渲染与 HUD(CanvasItem 纹理/网格 + 程序特效)
     menus/                      # bootstrap、主菜单、背景
     ui_theme.gd
@@ -183,7 +187,7 @@ func snapshot() -> RunSnapshot:
 
 ### 6.3 Presentation
 
-- `GameplayView`：按只读快照渲染战场。背景/城墙/弩塔/箭矢使用导入纹理，怪物使用共享 ArrayMesh UV 网格动作和快照位置插值，技能/状态继续由 CanvasItem 绘制。无逐实体 Sprite/粒子节点；飘字、特效和死亡立绘队列按预算回收。暂停停止表现层时钟，伤害只来自 core 事件。详见 [素材与动画接入](materials-integration.md)。
+- `GameplayView`：按只读快照渲染战场。背景/城墙/弩塔/箭矢使用导入纹理，怪物使用共享 AtlasTexture 逐帧动作和快照位置插值，技能/状态继续由 CanvasItem 绘制。无逐实体 Sprite/粒子节点；飘字、特效和倒地尸体队列按预算回收。暂停停止表现层时钟，伤害只来自 core 事件。详见 [素材与动画接入](materials-integration.md)。
 - `HudView`：城墙、Mana、Stage、技能、暂停和结算。
 - `MenuController`：主菜单、Stage 选择、升级和设置。
 - `InputController`：InputMap -> 应用命令。
@@ -480,7 +484,9 @@ config_hash
 build_utc
 ```
 
-正式构建在打 ZIP 前校验实际 PCK，将 EXE 复制到隔离目录并用非管理员进程启动，确认槽位与设置写入同级 `savedata/`，隔离 `%APPDATA%` 只承载日志等用户数据。发布 ZIP 包含 EXE、PCK、项目许可、Godot 声明和 README；源许可模板不进入 PCK。不写注册表、不要求管理员权限。1.7 尚未重新导出，代码签名和安装器仍为后续阶段。
+正式构建检查 EXE 内嵌资源，将 EXE 复制到隔离目录并用非管理员进程启动，确认槽位与设置写入同级 `savedata/`；隔离 `%APPDATA%` 承载日志等用户数据。Release ZIP 严格只有 EXE、README、项目许可和 Godot 声明四项，诊断 PCK 不随包发布。源码仓库忽略 EXE/DLL/PCK/ZIP，源许可模板、制作工具与原录音不进入资源包。
+
+1.8.0将角色动作纳入独立发行版本：项目与存档信封1.8.0-windows、PE版本1.8.0.0、ZIP版本1.8.0，config12/schema6不变。正式包从v1.8.0标签对应的干净提交构建，包内manifest记录实际Git SHA。此前v1.7.1为 `7bf7e38`，动画预览为本地快照 `8f3488752fbd463c0a8b1e989e120d9abdc11362`；历史验收不替代最终发行包检查，详见 [实施状态](implementation-status.md) §18、§20。
 
 ## 16. 交付分期
 

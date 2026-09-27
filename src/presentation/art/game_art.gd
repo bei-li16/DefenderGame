@@ -14,6 +14,11 @@ const FILES := {
 	"snail": "红蜗牛龟", "fist": "红拳石怪", "tentacle": "粉色触手怪",
 	"spike": "刺猬球怪", "mage": "法师怪", "bat": "飞行怪",
 	"dragon": "红龙Boss", "giant": "岩石巨人Boss", "matron": "巨型触手领主Boss",
+	"anim_snail": "Creatures/snail-actions-v1", "anim_fist": "Creatures/fist-actions-v1",
+	"anim_tentacle": "Creatures/tentacle-actions-v1", "anim_spike": "Creatures/spike-actions-v1",
+	"anim_mage": "Creatures/mage-actions-v1", "anim_bat": "Creatures/bat-actions-v1",
+	"anim_dragon": "Creatures/dragon-actions-v1", "anim_giant": "Creatures/giant-actions-v1",
+	"anim_matron": "Creatures/matron-actions-v1",
 	# Numbered files were inspected: green=Hurricane, blue=Phantom, red=Power.
 	"basic_bow": "武器图标1", "hurricane_bow": "武器图标2",
 	"phantom_bow": "武器图标3", "power_bow": "武器图标4",
@@ -26,7 +31,7 @@ const CREATURES := {
 	"ember_shaman": {"art": "mage", "motion": "cast", "width": 150.0, "tint": Color(1.0, 0.76, 0.65)},
 	"sky_harrier": {"art": "bat", "motion": "flutter", "width": 148.0},
 	"ember_warlord": {"art": "dragon", "motion": "heavy", "width": 300.0},
-	"frost_titan": {"art": "giant", "motion": "heavy", "width": 282.0, "tint": Color(0.75, 0.9, 1.0)},
+	"frost_titan": {"art": "giant", "motion": "heavy", "width": 282.0},
 	"storm_matron": {"art": "matron", "motion": "tentacle", "width": 282.0},
 }
 static var _textures: Dictionary = {}
