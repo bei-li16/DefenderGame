@@ -16,6 +16,22 @@ static func find(config: Dictionary, id: String) -> Dictionary:
 	return {}
 
 
+static func normalize_weapon_unlocks(config: Dictionary, source: Dictionary) -> Dictionary:
+	# Stage-based legacy saves own bows without the later research unlock node.
+	# Ownership is authoritative; repair only authored unlocks, without charging
+	# again or granting weapons based on stage progress or forge levels.
+	var normalized := source.duplicate(true)
+	var upgrades: Dictionary = normalized.get("upgrades", {}).duplicate(true)
+	var owned: Array = normalized.get("unlocked_weapons", [])
+	for definition in config.get("upgrades", []):
+		var weapon := str(definition.get("weapon_ref", ""))
+		var id := str(definition.get("id", ""))
+		if not weapon.is_empty() and id == "unlock_" + weapon and owned.has(weapon):
+			upgrades[id] = 1
+	normalized["upgrades"] = upgrades
+	return normalized
+
+
 static func is_endless(definition: Dictionary) -> bool:
 	var value: Variant = definition.get("endless", false)
 	return value is bool and value

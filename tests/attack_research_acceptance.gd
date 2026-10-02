@@ -306,6 +306,8 @@ func _check_ui() -> void:
 			await _frames()
 			var detail := menu.find_child("ResearchDetailBody", true, false) as Label
 			_expect(detail.text.contains(str(app.call("text", "skill.current"))) and detail.text.contains(str(app.call("text", "skill.next"))), str(id) + " shows current and next real attributes")
+			if id == "agility":
+				await _capture("agility-" + locale)
 		menu.call("_show_research_page", "attack", "multiple_arrows")
 		await _frames()
 		await _capture("attack-" + locale)

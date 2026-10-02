@@ -1,6 +1,6 @@
 {
-  "config_version": 12,
-  "ruleset_version": "aegis-windows-fallback-presentation-polish-v1",
+  "config_version": 13,
+  "ruleset_version": "aegis-windows-fallback-bolt-cadence-v1",
   "source": "Built-in release fallback configuration",
   "simulation_tick_rate": 30,
   "rules": {"status_resistance_floor_permille": 950},
@@ -88,10 +88,10 @@
     }
   },
   "weapons": [
-    {"id":"basic_bow","name_key":"weapon.basic_bow","description_key":"weapon.basic_bow.desc","unlock_stage":1,"damage":34,"interval_ticks":10,"min_interval_ticks":4,"projectile_speed_milli_per_tick":56000,"collision_radius_milli":26000,"knockback_milli":70000,"power_shot_chance_per_10000":1200,"fatal_chance_per_10000":800,"fatal_multiplier":2,"pierce":0,"projectile_count":1,"spread_milli":0},
-    {"id":"power_bow","name_key":"weapon.power_bow","description_key":"weapon.power_bow.desc","unlock_stage":5,"forge_upgrade_id":"forge_power_bow","damage":50,"interval_ticks":12,"min_interval_ticks":5,"projectile_speed_milli_per_tick":52000,"collision_radius_milli":30000,"knockback_milli":140000,"power_shot_chance_per_10000":2800,"fatal_chance_per_10000":500,"fatal_multiplier":2,"pierce":0,"projectile_count":1,"spread_milli":0},
-    {"id":"hurricane_bow","name_key":"weapon.hurricane_bow","description_key":"weapon.hurricane_bow.desc","unlock_stage":10,"forge_upgrade_id":"forge_hurricane_bow","damage":24,"interval_ticks":12,"min_interval_ticks":5,"projectile_speed_milli_per_tick":58000,"collision_radius_milli":22000,"knockback_milli":40000,"power_shot_chance_per_10000":900,"fatal_chance_per_10000":500,"fatal_multiplier":2,"pierce":0,"projectile_count":3,"spread_milli":42000},
-    {"id":"phantom_bow","name_key":"weapon.phantom_bow","description_key":"weapon.phantom_bow.desc","unlock_stage":15,"forge_upgrade_id":"forge_phantom_bow","damage":38,"interval_ticks":9,"min_interval_ticks":4,"projectile_speed_milli_per_tick":62000,"collision_radius_milli":24000,"knockback_milli":60000,"power_shot_chance_per_10000":1600,"fatal_chance_per_10000":1600,"fatal_multiplier":2,"pierce":2,"projectile_count":1,"spread_milli":0}
+    {"id":"basic_bow","name_key":"weapon.basic_bow","description_key":"weapon.basic_bow.desc","unlock_stage":1,"damage":34,"interval_ticks":8,"min_interval_ticks":2,"projectile_speed_milli_per_tick":56000,"collision_radius_milli":26000,"knockback_milli":70000,"power_shot_chance_per_10000":1200,"fatal_chance_per_10000":800,"fatal_multiplier":2,"pierce":0,"projectile_count":1,"spread_milli":0},
+    {"id":"power_bow","name_key":"weapon.power_bow","description_key":"weapon.power_bow.desc","unlock_stage":5,"forge_upgrade_id":"forge_power_bow","damage":50,"interval_ticks":9,"min_interval_ticks":3,"projectile_speed_milli_per_tick":52000,"collision_radius_milli":30000,"knockback_milli":140000,"power_shot_chance_per_10000":2800,"fatal_chance_per_10000":500,"fatal_multiplier":2,"pierce":0,"projectile_count":1,"spread_milli":0},
+    {"id":"hurricane_bow","name_key":"weapon.hurricane_bow","description_key":"weapon.hurricane_bow.desc","unlock_stage":10,"forge_upgrade_id":"forge_hurricane_bow","damage":24,"interval_ticks":9,"min_interval_ticks":3,"projectile_speed_milli_per_tick":58000,"collision_radius_milli":22000,"knockback_milli":40000,"power_shot_chance_per_10000":900,"fatal_chance_per_10000":500,"fatal_multiplier":2,"pierce":0,"projectile_count":3,"spread_milli":42000},
+    {"id":"phantom_bow","name_key":"weapon.phantom_bow","description_key":"weapon.phantom_bow.desc","unlock_stage":15,"forge_upgrade_id":"forge_phantom_bow","damage":38,"interval_ticks":7,"min_interval_ticks":2,"projectile_speed_milli_per_tick":62000,"collision_radius_milli":24000,"knockback_milli":60000,"power_shot_chance_per_10000":1600,"fatal_chance_per_10000":1600,"fatal_multiplier":2,"pierce":2,"projectile_count":1,"spread_milli":0}
   ],
   "skills": [
     {

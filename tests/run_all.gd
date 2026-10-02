@@ -448,6 +448,10 @@ func _test_upgrade_atomicity(config: Dictionary) -> void:
 
 func _test_data_driven_upgrade_effects(source_config: Dictionary) -> void:
 	var config := source_config.duplicate(true)
+	# Test the authored per-level multiplier independently of live bow tuning
+	# and without the minimum-interval clamp hiding the effect under test.
+	config["weapons"][0]["interval_ticks"] = 10
+	config["weapons"][0]["min_interval_ticks"] = 1
 	config["weapons"][0]["fatal_chance_per_10000"] = 0
 	config["weapons"][0]["power_shot_chance_per_10000"] = 0
 	for definition in config["upgrades"]:

@@ -7,7 +7,8 @@ func purchase(profile: Dictionary, config: Dictionary, upgrade_id: String) -> Di
 	var definition := _find_upgrade(config.get("upgrades", []), upgrade_id)
 	if definition.is_empty():
 		return {"ok": false, "error_code": "unknown_upgrade", "profile": profile}
-	var current_upgrades: Dictionary = profile.get("upgrades", {})
+	var normalized := ResearchCatalog.normalize_weapon_unlocks(config, profile)
+	var current_upgrades: Dictionary = normalized.get("upgrades", {})
 	var current_level := ResearchCatalog.normalize_level(definition, int(current_upgrades.get(upgrade_id, 0)))
 	if not ResearchCatalog.can_upgrade(definition, current_level):
 		return {"ok": false, "error_code": "max_level", "profile": profile}
@@ -20,7 +21,7 @@ func purchase(profile: Dictionary, config: Dictionary, upgrade_id: String) -> Di
 		return {"ok": false, "error_code": "unknown_currency", "price": price, "profile": profile}
 	if int(profile.get(currency, 0)) < price:
 		return {"ok": false, "error_code": "insufficient_" + currency, "price": price, "currency": currency, "profile": profile}
-	var updated := profile.duplicate(true)
+	var updated := normalized
 	updated[currency] = int(updated.get(currency, 0)) - price
 	var updated_upgrades: Dictionary = updated.get("upgrades", {}).duplicate(true)
 	updated_upgrades[upgrade_id] = current_level + 1

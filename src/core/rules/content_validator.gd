@@ -25,6 +25,7 @@ const REQUIRED_UI_KEYS: Array[String] = [
 	"upgrade.unlock_hurricane_bow", "upgrade.forge_hurricane_bow", "upgrade.unlock_phantom_bow", "upgrade.forge_phantom_bow",
 	"feedback.no_mana", "feedback.cooldown", "feedback.invalid_target", "feedback.fatal", "feedback.power", "feedback.boss", "feedback.defense", "feedback.wall_damage", "feedback.save_failed",
 	"feedback.insufficient_coins", "feedback.insufficient_crystals",
+	"feedback.missing_prerequisite", "feedback.upgrade_maxed", "feedback.upgrade_failed",
 	"tutorial.title", "tutorial.body", "dialog.abandon_run",
 	"settings.title", "settings.language", "settings.master", "settings.music", "settings.sfx",
 	"settings.fullscreen", "settings.borderless", "settings.resolution", "settings.aim_assist",

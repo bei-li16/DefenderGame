@@ -81,6 +81,10 @@ func _check_prices_and_purchase() -> void:
 			for prerequisite in definition.get("prerequisites", []):
 				var locked := source.duplicate(true)
 				locked["upgrades"][prerequisite] = 0
+				# An owned legacy bow now satisfies its unlock research. This
+				# fixture must actually lack ownership to test a locked forge.
+				if str(prerequisite).begins_with("unlock_"):
+					locked["unlocked_weapons"].erase(str(definition.get("weapon_ref", "")))
 				_expect(service.purchase(locked, config, id).get("error_code") == "missing_prerequisite", id + " still requires " + str(prerequisite))
 		else:
 			_expect(bought.get("error_code") == "max_level" and source == original, id + " retains its finite cap")

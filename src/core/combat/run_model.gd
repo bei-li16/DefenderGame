@@ -320,6 +320,7 @@ func _fire_arrow(events: Array[Dictionary]) -> void:
 			damage *= 2
 		var projectile := {
 			"entity_id": next_entity_id,
+			"weapon_id": weapon_id,
 			"x_milli": origin_x,
 			"y_milli": origin_y,
 			"vx_milli": int(round(delta_x * speed / arrow_length)),

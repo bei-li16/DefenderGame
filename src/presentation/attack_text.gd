@@ -10,7 +10,7 @@ static func summary(id: String, stats: Dictionary, translate: Callable, tick_rat
 		"strength":
 			return translate.call("attack.damage") % [int(stats["base_damage"]), int(stats["damage"])]
 		"agility":
-			return translate.call("attack.rate") % [float(tick_rate) / int(stats["interval_ticks"]), int(stats["interval_ticks"]), int(stats["min_interval_ticks"])]
+			return translate.call("attack.rate") % [float(tick_rate) / int(stats["interval_ticks"]), float(stats["interval_ticks"]) * 1000.0 / tick_rate, float(tick_rate) / int(stats["min_interval_ticks"])]
 		"power_shot":
 			return translate.call("attack.power") % [float(stats["power_shot_chance_per_10000"]) / 100.0, float(stats["knockback_milli"]) / 1000.0]
 		"poisoned_arrow":

@@ -1,5 +1,5 @@
 AEGIS OF EMBER / 余烬守望
-Version 1.8.0-windows - Windows x86_64
+Version 1.8.1-windows - Windows x86_64
 
 An offline, single-player castle defense game. No account, server, payment,
 telemetry, or mandatory network connection is used.
@@ -17,19 +17,22 @@ Do not place an older DefenderGame.pck beside the new executable.
 升级前关闭游戏并备份 savedata，再将存档复制到新版本的解压目录。
 请勿将旧 DefenderGame.pck 放入新目录。此版本未进行数字签名。
 
-VERSION 1.8.0 / 本版更新
-Nine creature atlases provide 216 distinct poses for movement, attacks,
-hit reactions and death, replacing stretched single-image animation.
-9套角色图集、216个独立姿势，强化小怪与Boss的移动、攻击、受击和倒地。
-Bosses gain distinct claw/fire-breath, punch/frost-slam and club/lightning
-performances synchronized with their existing combat events.
-三位Boss分别强化爪击吐息、重拳冰霜砸地、挥棒触手引雷，与真实技能事件同步。
-Victory rewards save immediately while the final enemy finishes falling.
-Gameplay balance, config v12 and save schema v6 are unchanged.
-胜利奖励立即保存，结算面板等待最后敌人倒地；规则与数值保持不变。
-The design, architecture and animation documentation is updated, including PDF.
-同步更新需求、架构、动作说明以及TeX/PDF总设计文档。
-Existing v6 save slots remain compatible; back up before upgrading.
+VERSION 1.8.1 / 本版更新（config13 / schema6）
+Each bow now fires its own fixed bolt design: gold, red, green or cyan.
+Critical hits and poison no longer recolor bolts in flight.
+四弓分别使用金、红、绿、青制式箭矢；暴击和毒伤不再改变飞行箭颜色。
+Maximum firing rates are 15 volleys/s for Guardian and Phantom bows,
+and 10 volleys/s for Power and Hurricane bows. Flight speed is unchanged.
+守望/幻影满级每秒15轮，震击/飓风每秒10轮；箭速不变。
+Agility research shows volleys/s and milliseconds; lower nodes fit fully.
+敏捷详情显示每秒轮数和毫秒间隔；修正攻击研究底部节点裁切。
+Legacy owned bows now satisfy their unlock research, fixing the misleading
+save-error message when forging the Power Bow without charging another unlock.
+兼容旧档已拥有的长弓，修复震击长弓锻造误报保存失败，不重复扣解锁费。
+Real save failures still roll back the upgrade and currency deduction.
+真正保存失败仍回滚等级和扣款，前置条件不足等错误分别提示。
+Includes the creature and boss animation improvements from version 1.8.0.
+保留1.8.0的小怪与Boss动作强化。现有schema6存档兼容，无需重开档。
 
 MINIMUM TARGET
 Windows 10 x64; dual-core CPU; 4 GB RAM; Intel UHD 630 or equivalent

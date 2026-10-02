@@ -27,7 +27,7 @@ func _run() -> void:
 		var texture := Art.texture(key)
 		_expect(texture != null and texture.get_width() > 0, "imported " + key)
 		if texture != null and not key in ["menu", "battle", "lava"]:
-			_expect(maxi(texture.get_width(), texture.get_height()) <= (2048 if str(key).begins_with("anim_") else 1024), "bounded texture " + key)
+			_expect(maxi(texture.get_width(), texture.get_height()) <= (2048 if str(key).begins_with("anim_") or key == "bolt_types" else 1024), "bounded texture " + key)
 	_expect(Art.FILES["power_bow"] == "武器图标4" and Art.FILES["hurricane_bow"] == "武器图标2", "weapon mapping follows actual colors")
 	_expect(Art.FILES["wall"] == "Environment/citadel-v3" and Art.texture("masonry") != null, "runtime loads the stone towers and continuous wall material")
 	var upper_uv := Rect2(0.05, 0, 0.91, 0.55)

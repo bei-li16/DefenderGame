@@ -551,6 +551,7 @@ func _normalize_profile(source: Dictionary) -> Dictionary:
 			var upgrade_id := str(definition.get("id", ""))
 			upgrades[upgrade_id] = ResearchCatalog.normalize_level(definition, int(upgrades.get(upgrade_id, 0)))
 	normalized["upgrades"] = upgrades
+	normalized = ResearchCatalog.normalize_weapon_unlocks(content.rules, normalized)
 	normalized["equipped_skills"] = SkillCatalog.loadout(content.rules, normalized)
 	var highest := clampi(int(normalized.get("highest_unlocked_stage", 1)), 1, StageCatalog.MAX_STAGE_NUMBER)
 	# Old releases capped a completed stage-30 save at 30. Recover its next

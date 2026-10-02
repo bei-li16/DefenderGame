@@ -469,18 +469,10 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 	detail_equip.visible = false
 	detail_row.add_child(detail_equip)
 
-	var upgrades: Dictionary = GameApp.profile.get("upgrades", {})
+	var upgrades: Dictionary = ResearchCatalog.normalize_weapon_unlocks(GameApp.content.rules, GameApp.profile).get("upgrades", {})
 	var definitions_by_id := {}
 	for definition in page_definitions:
 		definitions_by_id[str(definition.get("id", ""))] = definition
-	# Bows unlocked before the weapons research page existed (stage-based
-	# legacy saves) count as their unlock node already purchased.
-	if page_id == "weapons":
-		upgrades = upgrades.duplicate(true)
-		for weapon_id in GameApp.profile.get("unlocked_weapons", []):
-			var unlock_key := "unlock_" + str(weapon_id)
-			if definitions_by_id.has(unlock_key):
-				upgrades[unlock_key] = 1
 
 	var refresh_detail := func() -> void:
 		var upgrade_id := tree.selected()
@@ -598,8 +590,14 @@ func _show_research_page(page_id: String, selected_id: String = "", saved_scroll
 				operation_error.text = GameApp.text("feedback.insufficient_crystals")
 			elif error_code == "insufficient_coins":
 				operation_error.text = GameApp.text("feedback.insufficient_coins")
-			else:
+			elif error_code == "missing_prerequisite":
+				operation_error.text = GameApp.text("feedback.missing_prerequisite")
+			elif error_code == "max_level":
+				operation_error.text = GameApp.text("feedback.upgrade_maxed")
+			elif purchase_result.get("operation", "") == "purchase_upgrade":
 				operation_error.text = GameApp.text("feedback.save_failed")
+			else:
+				operation_error.text = GameApp.text("feedback.upgrade_failed")
 			operation_error.visible = true
 			return
 		operation_error.visible = false

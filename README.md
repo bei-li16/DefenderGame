@@ -19,7 +19,9 @@ git switch windows-godot
 
 ## Windows / Godot 实现
 
-`windows-godot` 当前包含可直接运行的原创单机游戏《余烬守望 / Aegis of Ember》(源码 1.8.0)：
+`windows-godot` 当前包含可直接运行的原创单机游戏《余烬守望 / Aegis of Ember》(源码 1.8.1)：
+
+1.8.1 / config13：四弓固定制式箭矢、连射提速、兼容旧档已拥有武器的锻造升级，详见[弩箭与锻造修复](docs/bolt-and-forge-fixes.md)。v1.8.0/config12为上一发行基线。
 
 - 无尽关卡：前 30 关保留既有编排，第 31 关起按曲线生成数量、波次、出怪时长和六类普通怪组合；每 10 关恰好一位 Boss，余烬督军→霜痕巨人→风暴女王循环，普通关无 Boss。详见 [无尽关卡规则](docs/endless-stages.md)。
 - 4 把武器:守望长弓、震击长弓(强化击退)、飓风长弓(三连射)、幻影长弓(穿透)。守望长弓初始可用,其余在武器研究中花费金币解锁;顶部弓箭图标展开下拉框切换已解锁弓箭,研究详情也可点击“装备”。两处选择同步保存,并用于随后进入的关卡战斗。
@@ -65,4 +67,4 @@ git switch windows-godot
 & .\tools\build_windows.ps1 -Configuration Release
 ```
 
-当前源码为 1.8.0、config v12（保留独立随机倾泻、小范围成长和无尽玩法；修正元素荣誉、初始魔力与败局金币）。正式构建从干净工作树在 `Builds/` 生成内嵌资源的独立 Windows EXE；便携 ZIP 仅含 EXE、README、项目许可及 Godot 声明。源码仓库不收录 EXE/PCK/ZIP，发行附件见 [GitHub Releases](https://github.com/bei-li16/DefenderGame/releases)。升级请解压到新目录并迁移 `savedata/`，不要混入旧独立 PCK。项目使用 MIT 许可。视听与 UI 验收见 [实施状态 §16–20](docs/implementation-status.md)，构建与验收命令见 [开发指南](docs/development-guide.md)。总设计与架构位于 `docs/DefenderGame-design-architecture.tex` 及同名 PDF，已同步城防、录音音效和216帧角色动作；1.8.0发行基线见上述 Markdown 文档。
+当前源码为 1.8.1、config v13（含弩箭制式、射速与旧档锻造修复；存档schema6兼容）。正式构建从干净工作树在 `Builds/` 生成内嵌资源的独立 Windows EXE；便携 ZIP 仅含 EXE、README、项目许可及 Godot 声明。源码仓库不收录 EXE/PCK/ZIP，发行附件见 [GitHub Releases](https://github.com/bei-li16/DefenderGame/releases)。升级请解压到新目录并迁移 `savedata/`，不要混入旧独立 PCK。项目使用 MIT 许可。视听与 UI 验收见 [实施状态 §16–22](docs/implementation-status.md)，构建与验收命令见 [开发指南](docs/development-guide.md)。总设计与架构位于 `docs/DefenderGame-design-architecture.tex` 及同名 PDF，已同步城防、录音音效和216帧角色动作；1.8.1发行增量见上述 Markdown 文档。

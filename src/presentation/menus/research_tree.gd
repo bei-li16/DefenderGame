@@ -55,9 +55,9 @@ func build(definitions: Array, levels: Dictionary, balances: Dictionary, selecte
 		depths[upgrade_id] = _depth_of(upgrade_id, by_id, depths)
 	var column_rows := {}
 	var max_depth := 0
-	# Richer spell comparisons need a little more vertical room (especially
-	# English descriptions); retain all three primary rows without scrolling.
-	var row_gap := 110.0 if not _definitions.is_empty() and str(_definitions[0].get("page", "")) == "magic" else ROW_GAP
+	# Attribute and spell comparisons need room below the tree. Keep the
+	# three rows fully visible, including the lower frame of attack nodes.
+	var row_gap := 110.0 if not _definitions.is_empty() and str(_definitions[0].get("page", "")) in ["attack", "magic"] else ROW_GAP
 	for definition in _definitions:
 		var upgrade_id := str(definition.get("id", ""))
 		var depth: int = int(definition.get("tree_column", depths[upgrade_id]))

@@ -13,6 +13,8 @@ const REQUIRED_PATHS: Array[String] = [
 	"res://src/presentation/art/fortress_visuals.gd",
 	"res://src/presentation/art/creature_animation.gd",
 	"res://src/presentation/art/creature_effects.gd",
+	"res://src/presentation/art/bolt_visuals.gd",
+	"res://Gamematerials/Weapons/bolts-v1.png",
 	"res://Gamematerials/Creatures/animation-layouts.json",
 	"res://src/presentation/art/ui_assets.gd",
 	"res://src/presentation/gameplay/hud_meter.gd",
@@ -42,6 +44,8 @@ const EXCLUDED_PATHS: Array[String] = [
 	"res://tools/audio_sources/crossbow_dryshot.flac",
 	"res://tests/combat_audio_acceptance.gd",
 	"res://tests/creature_animation_acceptance.gd",
+	"res://tests/bolt_presentation_acceptance.gd",
+	"res://tests/weapon_forge_acceptance.gd",
 	"res://tools/measure_creature_atlases.py",
 	"res://docs/implementation-status.md",
 	"res://release/license-templates/MIT.template.txt",
@@ -56,6 +60,9 @@ func _initialize() -> void:
 		if not _path_exists(path):
 			failures.append("missing:" + path)
 	var audio_count := 0
+	var bolts := load("res://Gamematerials/Weapons/bolts-v1.png") as Texture2D
+	if bolts == null or bolts.get_size() != Vector2(1536, 1024):
+		failures.append("missing_or_invalid_bolt_atlas")
 	for kind in ["shot", "hit", "fire", "ice", "lightning", "fire_launch", "ice_launch", "lightning_launch"]:
 		for variant in range(1, 4):
 			var path := "res://Gamematerials/Audio/%s-%02d.wav" % [kind, variant]

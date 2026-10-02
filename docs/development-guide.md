@@ -1,6 +1,6 @@
 # Windows / Godot 开发指南
 
-文档日期：2026-09-27（源码 1.8.0）
+文档日期：2026-10-03（源码 1.8.1）
 
 分支：`windows-godot`
 
@@ -191,7 +191,7 @@ user://diagnostics/
 & .\tools\check_release_readiness.ps1
 ```
 
-它会执行 PCK 预检，并将结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。当前1.8.0发行必须从最终干净提交重新构建；历史动画预览通过门禁不能替代本次正式构建。未满足条件或跳过动态预检时返回退出码 2；`-SkipPackPreflight` 只检查静态材料，不产生发布就绪结论。
+它会执行 PCK 预检，并将结果汇总到 `Builds/ReleaseReadiness/release-readiness.json`。当前1.8.1发行必须从最终干净提交重新构建；历史本地预览通过门禁不能替代本次正式构建。未满足条件或跳过动态预检时返回退出码 2；`-SkipPackPreflight` 只检查静态材料，不产生发布就绪结论。
 
 ## 三系特效专项
 
@@ -211,7 +211,7 @@ user://diagnostics/
 
 历史记录：9月27日动画本地预览快照为 `8f3488752fbd463c0a8b1e989e120d9abdc11362`，当时生成 `Builds/Windows/DefenderGame.exe` 和 `Builds/Aegis-of-Ember-creature-animation-Windows-x64.zip`。完整门禁、包资源、EXE图形与启动通过，历史证据见 `Builds/creature-review/verification.json`。已发布v1.7.1对应 `7bf7e38`，不含此动画增量；勿混用包名和验证结果。
 
-1.8.0正式构建输出 `Builds/Windows/DefenderGame.exe` 与 `Builds/Aegis-of-Ember-1.8.0-Windows-x64.zip`；最终日志与SHA-256保存到 `Builds/Release-1.8.0/`，`Builds/latest-rebuild.json`追踪最新交付。发布EXE、便携ZIP与SHA256SUMS.txt；源代码提交不包含这些构建产物。
+1.8.1正式构建输出 `Builds/Windows/DefenderGame.exe` 与 `Builds/Aegis-of-Ember-1.8.1-Windows-x64.zip`；最终日志与SHA-256保存到 `Builds/Release-1.8.1/`，`Builds/latest-rebuild.json`追踪最新交付。发布EXE、便携ZIP与SHA256SUMS.txt；源代码提交不包含这些构建产物。
 
 总设计源文件与交付PDF位于 `docs/DefenderGame-design-architecture.tex` / `.pdf`。编辑时使用内置LaTeX源编辑与预览；若本机内置编译器不可用，可使用已安装的XeLaTeX导出。源文件无外部图片，使用Windows字体及ctex。以下命令在仓库根目录串行执行两遍，再检查日志与整本文档渲染：
 

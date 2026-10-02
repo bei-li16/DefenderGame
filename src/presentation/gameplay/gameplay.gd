@@ -11,6 +11,7 @@ const SpellVisuals = preload("res://src/presentation/art/spell_visuals.gd")
 const CreatureVisuals = preload("res://src/presentation/art/creature_visuals.gd")
 const CreatureAnimation = preload("res://src/presentation/art/creature_animation.gd")
 const CreatureEffects = preload("res://src/presentation/art/creature_effects.gd")
+const BoltVisuals = preload("res://src/presentation/art/bolt_visuals.gd")
 const CastleView = preload("res://src/presentation/art/castle_view.gd")
 const CourtyardView = preload("res://src/presentation/art/courtyard_view.gd")
 const FortressVisuals = preload("res://src/presentation/art/fortress_visuals.gd")
@@ -927,13 +928,9 @@ func _draw_enemy_health(enemy: Dictionary) -> void:
 	draw_line(Vector2(position.x - radius, bar_y), Vector2(position.x - radius + bar_width * hp_ratio, bar_y), Color("a7d8ab"), 1)
 
 func _draw_projectile(projectile: Dictionary) -> void:
-	var position := Vector2(float(projectile["x_milli"]) / 1000.0, float(projectile["y_milli"]) / 1000.0)
-	var velocity := Vector2(float(projectile["vx_milli"]), float(projectile["vy_milli"])).normalized()
-	var color := Color.WHITE if not bool(projectile.get("fatal", false)) else Color(1.4, 1.1, 0.6)
-	if int(projectile.get("poison_damage", 0)) > 0:
-		draw_line(position - velocity * 58.0, position - velocity * 24.0, Color("91e76d"), 4.0)
-	# Art faces left; anchor its tip at the collision point, trail behind it.
-	Art.draw_sprite(self, Art.texture("arrow"), position - velocity * 29.0, Vector2(76, 25.3), velocity.angle() + PI, color)
+	# Weapon identity defines the physical bolt. Crit/poison feedback belongs
+	# to impacts and affected enemies, never a random in-flight recoloring.
+	BoltVisuals.draw(self, projectile, str(snapshot.get("weapon_id", "basic_bow")))
 
 func _draw_effect(effect: Dictionary) -> void:
 	var kind := str(effect.get("kind", ""))
